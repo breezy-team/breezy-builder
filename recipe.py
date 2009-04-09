@@ -47,18 +47,23 @@ class _RecipeParser(object):
         self.index = 0
         self.line_index = 0
         self.current_line = self.lines[self.line_index]
-        self.current_indent = ""
+        self.current_indent_level = 0
         self.parse_header()
         last_instruction = None
         active_branches = []
         last_branch = None
         while self.line_index < len(self.lines):
-            old_indent = self.parse_indent()
-            if (old_indent is not None
-                    and len(old_indent) < len(self.current_indent)
+            old_indent_level = self.parse_indent()
+            if old_indent_level is not None:
+                if (old_indent_level < self.current_indent_level
                     and last_instruction != "nest"):
-                self.throw_parse_error("Not allowed to indent unless "
-                        "after a 'nest' line")
+                    self.throw_parse_error("Not allowed to indent unless "
+                            "after a 'nest' line")
+                if old_indent_level < self.current_indent_level:
+                    active_branches.append(last_branch)
+                else:
+                    unindent = self.current_indent_level - old_indent_level
+                    active_branches = active_branches[:unindent]
             comment = self.parse_comment_line()
             if comment is not None:
                 self.new_line()
@@ -186,22 +191,23 @@ class _RecipeParser(object):
         """Parse the indent from the start of the line."""
         # FIXME: should just peek the whitespace
         new_indent = self.parse_whitespace(require=False)
-        if new_indent != self.current_indent:
-           old_indent = self.current_indent
-           self.current_indent = new_indent
-           # FIXME: These checks should probably come after we check whether
-           # any change in indent is legal at this point:
-           # "Indents of 3 spaces aren't allowed" -> make it 2 spaces
-           # -> "oh, you aren't allowed to indent at that point anyway"
-           if "\t" in new_indent:
-               self.throw_parse_error("Indents may not be done by tabs")
-           if (len(new_indent) % 2 != 0):
-               self.throw_parse_error("Indent not a multiple of two spaces")
-           if (len(new_indent) > len(old_indent)
-                   and len(new_indent) - len(old_indent) != 2):
+        # FIXME: These checks should probably come after we check whether
+        # any change in indent is legal at this point:
+        # "Indents of 3 spaces aren't allowed" -> make it 2 spaces
+        # -> "oh, you aren't allowed to indent at that point anyway"
+        if "\t" in new_indent:
+            self.throw_parse_error("Indents may not be done by tabs")
+        if (len(new_indent) % 2 != 0):
+            self.throw_parse_error("Indent not a multiple of two spaces")
+        new_indent_level = len(new_indent) / 2
+        if new_indent_level != self.current_indent_level:
+           old_indent_level = self.current_indent_level
+           self.current_indent_level = new_indent_level
+           if (new_indent_level > old_indent_level
+                   and new_indent_level - old_indent_level != 1):
                self.throw_parse_error("Indented by more than two spaces "
                        "at once")
-           return old_indent
+           return old_indent_level
         return None
 
     def parse_whitespace(self, require=True):

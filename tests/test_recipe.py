@@ -209,3 +209,37 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual("bar", child_branch.name)
         self.assertEqual("http://bar.org", child_branch.url)
         self.assertEqual(0, len(child_branch.child_branches))
+
+    def test_builds_a_merge_in_to_a_nest(self):
+        recipe = self.get_recipe(self.basic_header_and_branch
+                + "nest bar http://bar.org baz\n  merge zam lp:zam")
+        self.assertEqual("", recipe.base_branch.name)
+        self.assertEqual("http://foo.org/", recipe.base_branch.url)
+        self.assertEqual(1, len(recipe.base_branch.child_branches))
+        child_branch, location = recipe.base_branch.child_branches[0]
+        self.assertEqual("baz", location)
+        self.assertEqual("bar", child_branch.name)
+        self.assertEqual("http://bar.org", child_branch.url)
+        self.assertEqual(1, len(child_branch.child_branches))
+        child_branch, location = child_branch.child_branches[0]
+        self.assertEqual(None, location)
+        self.assertEqual("zam", child_branch.name)
+        self.assertEqual("lp:zam", child_branch.url)
+        self.assertEqual(0, len(child_branch.child_branches))
+
+    def tests_builds_nest_into_a_nest(self):
+        recipe = self.get_recipe(self.basic_header_and_branch
+                + "nest bar http://bar.org baz\n  nest zam lp:zam zoo")
+        self.assertEqual("", recipe.base_branch.name)
+        self.assertEqual("http://foo.org/", recipe.base_branch.url)
+        self.assertEqual(1, len(recipe.base_branch.child_branches))
+        child_branch, location = recipe.base_branch.child_branches[0]
+        self.assertEqual("baz", location)
+        self.assertEqual("bar", child_branch.name)
+        self.assertEqual("http://bar.org", child_branch.url)
+        self.assertEqual(1, len(child_branch.child_branches))
+        child_branch, location = child_branch.child_branches[0]
+        self.assertEqual("zoo", location)
+        self.assertEqual("zam", child_branch.name)
+        self.assertEqual("lp:zam", child_branch.url)
+        self.assertEqual(0, len(child_branch.child_branches))
