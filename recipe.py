@@ -73,11 +73,12 @@ class _RecipeParser(object):
                 self.new_line()
             else:
                 instruction = self.parse_instruction()
-                name = self.take_to_whitespace("branch name")
-                url = self.take_to_whitespace("branch url")
+                branch_id = self.parse_branch_id()
+                url = self.parse_branch_url()
                 if instruction == "nest":
-                    location = self.take_to_whitespace("location to nest")
-                last_branch = RecipeBranch(name, url)
+                    self.parse_whitespace()
+                    location = self.parse_branch_location()
+                last_branch = RecipeBranch(branch_id, url)
                 if instruction == "nest":
                     active_branches[-1].nest_branch(location, last_branch)
                 else:
@@ -102,9 +103,24 @@ class _RecipeParser(object):
                     "or 'merge'")
         if instruction == "nest" or instruction == "merge":
             self.take_chars(len(instruction))
+            self.parse_whitespace()
             return instruction
         self.throw_parse_error("Expecting 'nest' or 'merge', got '%s'"
                 % instruction)
+
+    def parse_branch_id(self):
+        branch_id = self.take_to_whitespace("the branch id")
+        self.parse_whitespace()
+        return branch_id
+
+    def parse_branch_url(self):
+        branch_url = self.take_to_whitespace("the branch url")
+        return branch_url
+
+    def parse_branch_location(self):
+        # FIXME: Needs a better term
+        location = self.take_to_whitespace("the location to nest")
+        return location
 
     def throw_parse_error(self, problem):
         raise RecipeParseError(self.filename, self.line_index + 1,
@@ -163,12 +179,13 @@ class _RecipeParser(object):
 
     def parse_indent(self):
         """Parse the indent from the start of the line."""
+        # FIXME: should just peek the whitespace
         new_indent = self.parse_whitespace(require=False)
         if new_indent != self.current_indent:
            old_indent = self.current_indent
            self.current_indent = new_indent
-           # These checks should probably come after we check wheter any
-           # change in indent is legal at this point:
+           # FIXME: These checks should probably come after we check whether
+           # any change in indent is legal at this point:
            # "Indents of 3 spaces aren't allowed" -> make it 2 spaces
            # -> "oh, you aren't allowed to indent at that point anyway"
            if "\t" in new_indent:
@@ -264,6 +281,8 @@ class _RecipeParser(object):
         return ret
 
     def parse_comment_line(self):
+        if self.peek_char() is None:
+            return ""
         if self.peek_char() != "#":
             return None
         comment = self.current_line[self.index:]

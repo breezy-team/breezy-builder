@@ -5,6 +5,7 @@ from bzrlib.plugins.builder.recipe import Recipe, RecipeParseError
 class RecipeParserTests(TestCaseInTempDir):
 
     basic_header = "# bzr-builder format 0.1 deb-version 0.1-{revision}\n"
+    basic_header_and_branch = basic_header + "http://foo.org/\n"
 
     def get_recipe(self, recipe_text):
         return Recipe(recipe_text)
@@ -12,14 +13,13 @@ class RecipeParserTests(TestCaseInTempDir):
     def assertParseError(self, line, char, problem, callable, *args,
             **kwargs):
         exc = self.assertRaises(RecipeParseError, callable, *args, **kwargs)
+        self.assertEqual(problem, exc.problem)
         self.assertEqual(line, exc.line)
         self.assertEqual(char, exc.char)
-        self.assertEqual(problem, exc.problem)
         self.assertEqual("recipe", exc.filename)
 
     def test_parses_most_basic(self):
-        self.get_recipe(self.basic_header +
-                "bzr+ssh://src.upstream.org/trunk")
+        self.get_recipe(self.basic_header_and_branch)
 
     def tests_rejects_non_comment_to_start(self):
         self.assertParseError(1, 1, "Expecting '#', got 'b'",
@@ -72,3 +72,72 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertParseError(2, 17, "Expecting the end of the line, "
                 "got 'foo'", self.get_recipe,
                 self.basic_header + "http://foo.org/ foo")
+
+    def tests_rejects_unknown_instruction(self):
+        self.assertParseError(3, 1, "Expecting 'nest' or 'merge', "
+                "got 'cat'", self.get_recipe,
+                self.basic_header + "http://foo.org/\n" + "cat")
+
+    def test_rejects_merge_no_name(self):
+        self.assertParseError(3, 7, "End of line while looking for "
+                "the branch id", self.get_recipe,
+                self.basic_header_and_branch + "merge ")
+
+    def test_rejects_merge_no_url(self):
+        self.assertParseError(3, 11, "End of line while looking for "
+                "the branch url", self.get_recipe,
+                self.basic_header_and_branch + "merge foo ")
+
+    def test_rejects_text_at_end_of_merge_line(self):
+        self.assertParseError(3, 15, "Expecting the end of the line, "
+                "got 'bar'", self.get_recipe,
+                self.basic_header_and_branch + "merge foo url bar")
+
+    def test_rejects_nest_no_name(self):
+        self.assertParseError(3, 6, "End of line while looking for "
+                "the branch id", self.get_recipe,
+                self.basic_header_and_branch + "nest ")
+
+    def test_rejects_nest_no_url(self):
+        self.assertParseError(3, 10, "End of line while looking for "
+                "the branch url", self.get_recipe,
+                self.basic_header_and_branch + "nest foo ")
+
+    def test_rejects_nest_no_location(self):
+        self.assertParseError(3, 14, "End of line while looking for "
+                "the location to nest", self.get_recipe,
+                self.basic_header_and_branch + "nest foo url ")
+
+    def test_rejects_text_at_end_of_nest_line(self):
+        self.assertParseError(3, 18, "Expecting the end of the line, "
+                "got 'baz'", self.get_recipe,
+                self.basic_header_and_branch + "nest foo url bar baz")
+
+    def test_rejects_indent_after_first_branch(self):
+        self.assertParseError(3, 3, "Not allowed to indent unless after "
+                "a 'nest' line", self.get_recipe,
+                self.basic_header_and_branch + "  nest foo url bar")
+
+    def test_rejects_indent_after_merge(self):
+        self.assertParseError(4, 3, "Not allowed to indent unless after "
+                "a 'nest' line", self.get_recipe,
+                self.basic_header_and_branch + "merge foo url\n"
+                + "  nest baz url bar")
+
+    def test_rejects_tab_indent(self):
+        self.assertParseError(4, 3, "Indents may not be done by tabs",
+                self.get_recipe,
+                self.basic_header_and_branch + "nest foo url bar\n"
+                + "\t\tmerge baz url")
+
+    def test_rejects_odd_space_indent(self):
+        self.assertParseError(4, 2, "Indent not a multiple of two spaces",
+                self.get_recipe,
+                self.basic_header_and_branch + "nest foo url bar\n"
+                + " merge baz url")
+
+    def test_rejects_four_space_indent(self):
+        self.assertParseError(4, 5, "Indented by more than two spaces "
+                "at once", self.get_recipe,
+                self.basic_header_and_branch + "nest foo url bar\n"
+                + "    merge baz url")
