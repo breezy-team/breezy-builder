@@ -8,16 +8,15 @@ class RecipeBranch(object):
     def __init__(self, name, url):
         self.name = name
         self.url = url
-        self.merged_branches = []
-        self.nested_branches = {}
+        self.child_branches = []
 
     def merge_branch(self, branch):
-        self.merged_branches.append(branch)
+        self.child_branches.append((branch, None))
 
     def nest_branch(self, location, branch):
-        assert location not in self.nested_branches,\
+        assert location not in [b[1] for b in self.child_branches],\
             "%s already has branch nested there" % location
-        self.nested_branches[location] = branch
+        self.child_branches.append((branch, location))
 
 
 class RecipeParseError(BzrError):
@@ -42,7 +41,6 @@ class _RecipeParser(object):
         self.filename = filename
         if filename is None:
             self.filename = "recipe"
-        self.parse()
 
     def parse(self):
         self.lines = self.text.split("\n")
@@ -85,6 +83,9 @@ class _RecipeParser(object):
                     active_branches[-1].merge_branch(last_branch)
                 last_instruction = instruction
                 self.new_line()
+        if len(active_branches) == 0:
+            self.throw_parse_error("Empty recipe")
+        return active_branches[0]
 
     def parse_header(self):
         self.parse_char("#", require_whitespace=False)
@@ -293,4 +294,4 @@ class _RecipeParser(object):
 class Recipe(object):
 
     def __init__(self, f):
-        _RecipeParser(f)
+        self.base_branch = _RecipeParser(f).parse()
