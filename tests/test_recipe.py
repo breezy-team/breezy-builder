@@ -175,3 +175,37 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual("bar", child_branch.name)
         self.assertEqual("http://bar.org", child_branch.url)
         self.assertEqual(0, len(child_branch.child_branches))
+
+    def test_builds_recipe_with_nest_then_merge(self):
+        recipe = self.get_recipe(self.basic_header_and_branch
+                + "nest bar http://bar.org baz\nmerge zam lp:zam")
+        self.assertEqual("", recipe.base_branch.name)
+        self.assertEqual("http://foo.org/", recipe.base_branch.url)
+        self.assertEqual(2, len(recipe.base_branch.child_branches))
+        child_branch, location = recipe.base_branch.child_branches[0]
+        self.assertEqual("baz", location)
+        self.assertEqual("bar", child_branch.name)
+        self.assertEqual("http://bar.org", child_branch.url)
+        self.assertEqual(0, len(child_branch.child_branches))
+        child_branch, location = recipe.base_branch.child_branches[1]
+        self.assertEqual(None, location)
+        self.assertEqual("zam", child_branch.name)
+        self.assertEqual("lp:zam", child_branch.url)
+        self.assertEqual(0, len(child_branch.child_branches))
+
+    def test_builds_recipe_with_merge_then_nest(self):
+        recipe = self.get_recipe(self.basic_header_and_branch
+                + "merge zam lp:zam\nnest bar http://bar.org baz")
+        self.assertEqual("", recipe.base_branch.name)
+        self.assertEqual("http://foo.org/", recipe.base_branch.url)
+        self.assertEqual(2, len(recipe.base_branch.child_branches))
+        child_branch, location = recipe.base_branch.child_branches[0]
+        self.assertEqual(None, location)
+        self.assertEqual("zam", child_branch.name)
+        self.assertEqual("lp:zam", child_branch.url)
+        self.assertEqual(0, len(child_branch.child_branches))
+        child_branch, location = recipe.base_branch.child_branches[1]
+        self.assertEqual("baz", location)
+        self.assertEqual("bar", child_branch.name)
+        self.assertEqual("http://bar.org", child_branch.url)
+        self.assertEqual(0, len(child_branch.child_branches))

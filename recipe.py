@@ -70,6 +70,10 @@ class _RecipeParser(object):
                 last_instruction = ""
                 self.new_line()
             else:
+                # FIXME: should parse whitespace before each item, rather
+                # than after, so you can get told what is missing if it
+                # is not there, rather than just that it was looking for
+                # whitespace.
                 instruction = self.parse_instruction()
                 branch_id = self.parse_branch_id()
                 url = self.parse_branch_url()
