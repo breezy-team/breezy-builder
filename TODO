@@ -1,0 +1,8 @@
+- Decide on format for specifying revisions.
+- Implement manifest generation.
+- Implement building the source package from the tree, including adding
+  the changelog entry with the desired version.
+- Implement uploading to a PPA.
+- Work out how to get tarballs for non-native packages if we want that.
+- Decide on error on existing target directory vs. re-use and pull changes.
+- Documentation.
