@@ -1,6 +1,24 @@
 
-from bzrlib.tests import TestCaseInTempDir
-from bzrlib.plugins.builder.recipe import Recipe, RecipeParseError
+import os
+
+from bzrlib import (
+        errors,
+        transport,
+        workingtree,
+        )
+from bzrlib.tests import (
+        TestCaseInTempDir,
+        TestCaseWithTransport,
+        )
+from bzrlib.plugins.builder.recipe import (
+        build_tree,
+        ensure_basedir,
+        pull_or_branch,
+        Recipe,
+        RecipeBranch,
+        RecipeParseError,
+        )
+
 
 class RecipeParserTests(TestCaseInTempDir):
 
@@ -243,3 +261,157 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual("zam", child_branch.name)
         self.assertEqual("lp:zam", child_branch.url)
         self.assertEqual(0, len(child_branch.child_branches))
+
+
+class BuildTreeTests(TestCaseWithTransport):
+
+    def test_ensure_basedir(self):
+        ensure_basedir("a")
+        self.failUnlessExists("a")
+        ensure_basedir("a")
+        self.failUnlessExists("a")
+        e = self.assertRaises(errors.BzrCommandError, ensure_basedir,
+                "b/c")
+        self.assertEqual('Parent of "b/c" does not exist.', str(e))
+
+    def test_build_tree_single_branch(self):
+        source = self.make_branch_and_tree("source")
+        base_branch = RecipeBranch("", "source")
+        build_tree(base_branch, "target")
+        self.failUnlessExists("target")
+
+    def test_build_tree_single_branch_dir_not_branch(self):
+        source = self.make_branch_and_tree("source")
+        # We just create the target as a directory
+        os.mkdir("target")
+        base_branch = RecipeBranch("", "source")
+        build_tree(base_branch, "target")
+        self.failUnlessExists("target")
+
+    def test_build_tree_single_branch_existing_branch(self):
+        source = self.make_branch_and_tree("source")
+        target = self.make_branch_and_tree("target")
+        base_branch = RecipeBranch("", "source")
+        build_tree(base_branch, "target")
+        self.failUnlessExists("target")
+
+    def test_pull_or_branch_branch(self):
+        source = self.make_branch_and_tree("source")
+        source.lock_write()
+        self.addCleanup(source.unlock)
+        self.build_tree(["source/a"])
+        source.add(["a"])
+        rev_id = source.commit("one")
+        source.branch.tags.set_tag("one", rev_id)
+        to_transport = transport.get_transport("target")
+        tree_to, br_to = pull_or_branch(None, None, source.branch,
+                to_transport, None, [])
+        self.addCleanup(tree_to.unlock)
+        self.addCleanup(br_to.unlock)
+        self.assertEqual(rev_id, tree_to.last_revision())
+        self.assertEqual(rev_id, br_to.last_revision())
+        self.assertTrue(tree_to.is_locked())
+        self.assertTrue(br_to.is_locked())
+        self.assertEqual(rev_id, br_to.tags.lookup_tag("one"))
+
+    def test_pull_or_branch_branch_in_no_trees_repo(self):
+        """When in a no-trees repo we need to force a working tree"""
+        repo = self.make_repository(".", shared=True)
+        repo.set_make_working_trees(False)
+        source = self.make_branch_and_tree("source")
+        self.build_tree(["source/a"])
+        source.add(["a"])
+        rev_id = source.commit("one")
+        source.branch.tags.set_tag("one", rev_id)
+        to_transport = transport.get_transport("target")
+        tree_to, br_to = pull_or_branch(None, None, source.branch,
+                to_transport, None, [])
+        self.addCleanup(tree_to.unlock)
+        self.addCleanup(br_to.unlock)
+        self.assertEqual(rev_id, tree_to.last_revision())
+        self.assertEqual(rev_id, br_to.last_revision())
+        self.assertTrue(tree_to.is_locked())
+        self.assertTrue(br_to.is_locked())
+        self.assertEqual(rev_id, br_to.tags.lookup_tag("one"))
+
+    def test_pull_or_branch_pull_with_tree(self):
+        source = self.make_branch_and_tree("source")
+        self.build_tree(["source/a"])
+        source.add(["a"])
+        first_rev_id = source.commit("one")
+        source.branch.tags.set_tag("one", first_rev_id)
+        to_transport = transport.get_transport("target")
+        tree_to, br_to = pull_or_branch(None, None, source.branch,
+                to_transport, None, [])
+        self.addCleanup(tree_to.unlock)
+        self.addCleanup(br_to.unlock)
+        self.build_tree(["source/b"])
+        source.add(["b"])
+        rev_id = source.commit("two")
+        source.branch.tags.set_tag("one", rev_id)
+        tree_to, br_to = pull_or_branch(tree_to, br_to, source.branch,
+                to_transport, source, [])
+        self.assertEqual(rev_id, tree_to.last_revision())
+        self.assertEqual(rev_id, br_to.last_revision())
+        self.assertTrue(tree_to.is_locked())
+        self.assertTrue(br_to.is_locked())
+        # Changed tag isn't overwritten
+        self.assertEqual(first_rev_id, br_to.tags.lookup_tag("one"))
+
+    def test_pull_or_branch_pull_with_no_tree(self):
+        source = self.make_branch_and_tree("source")
+        self.build_tree(["source/a"])
+        source.add(["a"])
+        first_rev_id = source.commit("one")
+        source.branch.tags.set_tag("one", first_rev_id)
+        to_transport = transport.get_transport("target")
+        tree_to, br_to = pull_or_branch(None, None, source.branch,
+                to_transport, None, [])
+        tree_to.unlock()
+        tree_to.bzrdir.destroy_workingtree()
+        self.build_tree(["source/b"])
+        source.add(["b"])
+        rev_id = source.commit("two")
+        source.branch.tags.set_tag("one", rev_id)
+        tree_to, br_to = pull_or_branch(None, br_to, source.branch,
+                to_transport, source, [])
+        self.addCleanup(tree_to.unlock)
+        self.addCleanup(br_to.unlock)
+        self.assertEqual(rev_id, tree_to.last_revision())
+        self.assertEqual(rev_id, br_to.last_revision())
+        self.assertTrue(tree_to.is_locked())
+        self.assertTrue(br_to.is_locked())
+        # Changed tag isn't overwritten
+        self.assertEqual(first_rev_id, br_to.tags.lookup_tag("one"))
+
+    def test_pull_or_branch_pull_with_conflicts(self):
+        source = self.make_branch_and_tree("source")
+        self.build_tree(["source/a"])
+        source.add(["a"])
+        first_rev_id = source.commit("one")
+        source.branch.tags.set_tag("one", first_rev_id)
+        to_transport = transport.get_transport("target")
+        tree_to, br_to = pull_or_branch(None, None, source.branch,
+                to_transport, None, [])
+        self.build_tree(["source/b"])
+        self.build_tree_contents([("target/b", "other contents")])
+        source.add(["b"])
+        rev_id = source.commit("two")
+        source.branch.tags.set_tag("one", rev_id)
+        e = self.assertRaises(errors.BzrCommandError,
+                pull_or_branch, tree_to, br_to, source.branch,
+                to_transport, source, [])
+        self.assertEqual("Conflicts... aborting.", str(e))
+        tree_to.unlock()
+        br_to.unlock()
+        tree_to = workingtree.WorkingTree.open("target")
+        br_to = tree_to.branch
+        self.assertEqual(rev_id, tree_to.last_revision())
+        self.assertEqual(rev_id, br_to.last_revision())
+        # Changed tag isn't overwritten
+        self.assertEqual(first_rev_id, br_to.tags.lookup_tag("one"))
+        self.assertEqual(1, len(tree_to.conflicts()))
+        conflict = tree_to.conflicts()[0]
+        self.assertEqual("duplicate", conflict.typestring)
+        self.assertEqual("b.moved", conflict.path)
+        self.assertEqual("b", conflict.conflict_path)

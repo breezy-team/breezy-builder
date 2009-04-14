@@ -1,6 +1,116 @@
-from bzrlib.errors import BzrError
+import os
 
-import sys
+from bzrlib import (
+        branch,
+        bzrdir,
+        errors,
+        tag,
+        transport,
+        workingtree,
+        )
+
+
+def ensure_basedir(to_location):
+    to_transport = transport.get_transport(to_location)
+    try:
+        to_transport.mkdir('.')
+    except errors.FileExists:
+        pass
+    except errors.NoSuchFile:
+        raise errors.BzrCommandError('Parent of "%s" does not exist.'
+                                     % to_location)
+    return to_transport
+
+
+def pull_or_branch(tree_to, br_to, br_from, to_transport, accelerator_tree,
+        possible_transports):
+    created_tree_to = False
+    created_br_to = False
+    if br_to is None:
+        # We do a "branch"
+        revision_id = br_from.last_revision()
+        dir = br_from.bzrdir.sprout(to_transport.base, revision_id,
+                                    possible_transports=possible_transports,
+                                    accelerator_tree=accelerator_tree,
+                                    stacked=True, source_branch=br_from)
+        try:
+            tree_to = dir.open_workingtree()
+        except errors.NoWorkingTree:
+            # There's no working tree, so it's probably in a no-trees repo,
+            # but the whole point of this is to create trees, so we should
+            # forcibly create one.
+            tree_to = dir.create_workingtree()
+        br_to = tree_to.branch
+        created_br_to = True
+        tag._merge_tags_if_possible(br_from, br_to)
+        created_tree_to = True
+    else:
+        # We do a "pull"
+        if tree_to is not None:
+            # FIXME: should these pulls overwrite?
+            result = tree_to.pull(br_from,
+                    possible_transports=possible_transports)
+        else:
+            result = br_to.pull(br_from,
+                    possible_transports=possible_transports)
+            tree_to = br_to.bzrdir.create_workingtree()
+            # Ugh, we have to assume that the caller replaces their reference
+            # to the branch with the one we return.
+            br_to.unlock()
+            br_to = tree_to.branch
+            br_to.lock_write()
+            created_tree_to = True
+    if created_tree_to:
+        tree_to.lock_write()
+    try:
+        if created_br_to:
+            br_to.lock_write()
+        try:
+            conflicts = tree_to.conflicts()
+            if len(conflicts) > 0:
+                # FIXME: better reporting
+                raise errors.BzrCommandError("Conflicts... aborting.")
+        except:
+            if created_br_to:
+                br_to.unlock()
+            raise
+    except:
+        if created_tree_to:
+            tree_to.unlock()
+        raise
+    return tree_to, br_to
+
+
+def build_tree(base_branch, target_path):
+    to_transport = ensure_basedir(target_path)
+    try:
+        tree_to, br_to = bzrdir.BzrDir.open_tree_or_branch(target_path)
+    except errors.NotBranchError:
+        tree_to = None
+        br_to = None
+    if tree_to is not None:
+        tree_to.lock_write()
+    try:
+        if br_to is not None:
+            br_to.lock_write()
+        try:
+            from_location = base_branch.url
+            accelerator_tree, br_from = bzrdir.BzrDir.open_tree_or_branch(
+                                from_location)
+            br_from.lock_read()
+            try:
+                tree_to, br_to = pull_or_branch(tree_to, br_to, br_from,
+                        to_transport, accelerator_tree,
+                        possible_transports=[to_transport])
+            finally:
+                br_from.unlock()
+        finally:
+            # Is this ok if tree_to is created by pull_or_branch
+            if br_to is not None:
+                br_to.unlock()
+    finally:
+        if tree_to is not None:
+            tree_to.unlock()
 
 
 class RecipeBranch(object):
@@ -19,11 +129,11 @@ class RecipeBranch(object):
         self.child_branches.append((branch, location))
 
 
-class RecipeParseError(BzrError):
+class RecipeParseError(errors.BzrError):
     _fmt = "Error parsing %(filename)s:%(line)s:%(char)s: %(problem)s."
 
     def __init__(self, filename, line, char, problem):
-        BzrError.__init__(self, filename=filename, line=line, char=char,
+        errors.BzrError.__init__(self, filename=filename, line=line, char=char,
                 problem=problem)
 
 
