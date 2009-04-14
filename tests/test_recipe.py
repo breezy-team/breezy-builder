@@ -333,11 +333,9 @@ class BuildTreeTests(TestCaseWithTransport):
         build_tree(base_branch, "target")
         self.failUnlessExists("target")
         tree = workingtree.WorkingTree.open("target")
-        last_revid = tree.last_revision()
-        last_revtree = tree.branch.repository.revision_tree(last_revid)
-        self.assertEqual([source1_rev_id], last_revtree.get_parent_ids())
+        self.assertEqual([source1_rev_id], tree.get_parent_ids())
         tree = workingtree.WorkingTree.open("target/sub")
-        self.assertEqual(source2_rev_id, tree.last_revision())
+        self.assertEqual([source2_rev_id], tree.get_parent_ids())
 
     def test_build_tree_merged(self):
         source1 = self.make_branch_and_tree("source1")
