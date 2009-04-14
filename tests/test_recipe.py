@@ -14,7 +14,7 @@ from bzrlib.plugins.builder.recipe import (
         build_tree,
         ensure_basedir,
         pull_or_branch,
-        Recipe,
+        RecipeParser,
         RecipeBranch,
         RecipeParseError,
         )
@@ -26,7 +26,7 @@ class RecipeParserTests(TestCaseInTempDir):
     basic_header_and_branch = basic_header + "http://foo.org/\n"
 
     def get_recipe(self, recipe_text):
-        return Recipe(recipe_text)
+        return RecipeParser(recipe_text).parse()
 
     def assertParseError(self, line, char, problem, callable, *args,
             **kwargs):
@@ -165,76 +165,76 @@ class RecipeParserTests(TestCaseInTempDir):
                 self.basic_header)
 
     def test_builds_simplest_recipe(self):
-        recipe = self.get_recipe(self.basic_header_and_branch)
-        self.assertEqual("", recipe.base_branch.name)
-        self.assertEqual("http://foo.org/", recipe.base_branch.url)
-        self.assertEqual(0, len(recipe.base_branch.child_branches))
+        base_branch = self.get_recipe(self.basic_header_and_branch)
+        self.assertEqual("", base_branch.name)
+        self.assertEqual("http://foo.org/", base_branch.url)
+        self.assertEqual(0, len(base_branch.child_branches))
 
     def test_builds_recipe_with_merge(self):
-        recipe = self.get_recipe(self.basic_header_and_branch
+        base_branch = self.get_recipe(self.basic_header_and_branch
                 + "merge bar http://bar.org")
-        self.assertEqual("", recipe.base_branch.name)
-        self.assertEqual("http://foo.org/", recipe.base_branch.url)
-        self.assertEqual(1, len(recipe.base_branch.child_branches))
-        child_branch, location = recipe.base_branch.child_branches[0]
+        self.assertEqual("", base_branch.name)
+        self.assertEqual("http://foo.org/", base_branch.url)
+        self.assertEqual(1, len(base_branch.child_branches))
+        child_branch, location = base_branch.child_branches[0]
         self.assertEqual(None, location)
         self.assertEqual("bar", child_branch.name)
         self.assertEqual("http://bar.org", child_branch.url)
         self.assertEqual(0, len(child_branch.child_branches))
 
     def test_builds_recipe_with_nest(self):
-        recipe = self.get_recipe(self.basic_header_and_branch
+        base_branch = self.get_recipe(self.basic_header_and_branch
                 + "nest bar http://bar.org baz")
-        self.assertEqual("", recipe.base_branch.name)
-        self.assertEqual("http://foo.org/", recipe.base_branch.url)
-        self.assertEqual(1, len(recipe.base_branch.child_branches))
-        child_branch, location = recipe.base_branch.child_branches[0]
+        self.assertEqual("", base_branch.name)
+        self.assertEqual("http://foo.org/", base_branch.url)
+        self.assertEqual(1, len(base_branch.child_branches))
+        child_branch, location = base_branch.child_branches[0]
         self.assertEqual("baz", location)
         self.assertEqual("bar", child_branch.name)
         self.assertEqual("http://bar.org", child_branch.url)
         self.assertEqual(0, len(child_branch.child_branches))
 
     def test_builds_recipe_with_nest_then_merge(self):
-        recipe = self.get_recipe(self.basic_header_and_branch
+        base_branch = self.get_recipe(self.basic_header_and_branch
                 + "nest bar http://bar.org baz\nmerge zam lp:zam")
-        self.assertEqual("", recipe.base_branch.name)
-        self.assertEqual("http://foo.org/", recipe.base_branch.url)
-        self.assertEqual(2, len(recipe.base_branch.child_branches))
-        child_branch, location = recipe.base_branch.child_branches[0]
+        self.assertEqual("", base_branch.name)
+        self.assertEqual("http://foo.org/", base_branch.url)
+        self.assertEqual(2, len(base_branch.child_branches))
+        child_branch, location = base_branch.child_branches[0]
         self.assertEqual("baz", location)
         self.assertEqual("bar", child_branch.name)
         self.assertEqual("http://bar.org", child_branch.url)
         self.assertEqual(0, len(child_branch.child_branches))
-        child_branch, location = recipe.base_branch.child_branches[1]
+        child_branch, location = base_branch.child_branches[1]
         self.assertEqual(None, location)
         self.assertEqual("zam", child_branch.name)
         self.assertEqual("lp:zam", child_branch.url)
         self.assertEqual(0, len(child_branch.child_branches))
 
     def test_builds_recipe_with_merge_then_nest(self):
-        recipe = self.get_recipe(self.basic_header_and_branch
+        base_branch = self.get_recipe(self.basic_header_and_branch
                 + "merge zam lp:zam\nnest bar http://bar.org baz")
-        self.assertEqual("", recipe.base_branch.name)
-        self.assertEqual("http://foo.org/", recipe.base_branch.url)
-        self.assertEqual(2, len(recipe.base_branch.child_branches))
-        child_branch, location = recipe.base_branch.child_branches[0]
+        self.assertEqual("", base_branch.name)
+        self.assertEqual("http://foo.org/", base_branch.url)
+        self.assertEqual(2, len(base_branch.child_branches))
+        child_branch, location = base_branch.child_branches[0]
         self.assertEqual(None, location)
         self.assertEqual("zam", child_branch.name)
         self.assertEqual("lp:zam", child_branch.url)
         self.assertEqual(0, len(child_branch.child_branches))
-        child_branch, location = recipe.base_branch.child_branches[1]
+        child_branch, location = base_branch.child_branches[1]
         self.assertEqual("baz", location)
         self.assertEqual("bar", child_branch.name)
         self.assertEqual("http://bar.org", child_branch.url)
         self.assertEqual(0, len(child_branch.child_branches))
 
     def test_builds_a_merge_in_to_a_nest(self):
-        recipe = self.get_recipe(self.basic_header_and_branch
+        base_branch = self.get_recipe(self.basic_header_and_branch
                 + "nest bar http://bar.org baz\n  merge zam lp:zam")
-        self.assertEqual("", recipe.base_branch.name)
-        self.assertEqual("http://foo.org/", recipe.base_branch.url)
-        self.assertEqual(1, len(recipe.base_branch.child_branches))
-        child_branch, location = recipe.base_branch.child_branches[0]
+        self.assertEqual("", base_branch.name)
+        self.assertEqual("http://foo.org/", base_branch.url)
+        self.assertEqual(1, len(base_branch.child_branches))
+        child_branch, location = base_branch.child_branches[0]
         self.assertEqual("baz", location)
         self.assertEqual("bar", child_branch.name)
         self.assertEqual("http://bar.org", child_branch.url)
@@ -246,12 +246,12 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual(0, len(child_branch.child_branches))
 
     def tests_builds_nest_into_a_nest(self):
-        recipe = self.get_recipe(self.basic_header_and_branch
+        base_branch = self.get_recipe(self.basic_header_and_branch
                 + "nest bar http://bar.org baz\n  nest zam lp:zam zoo")
-        self.assertEqual("", recipe.base_branch.name)
-        self.assertEqual("http://foo.org/", recipe.base_branch.url)
-        self.assertEqual(1, len(recipe.base_branch.child_branches))
-        child_branch, location = recipe.base_branch.child_branches[0]
+        self.assertEqual("", base_branch.name)
+        self.assertEqual("http://foo.org/", base_branch.url)
+        self.assertEqual(1, len(base_branch.child_branches))
+        child_branch, location = base_branch.child_branches[0]
         self.assertEqual("baz", location)
         self.assertEqual("bar", child_branch.name)
         self.assertEqual("http://bar.org", child_branch.url)

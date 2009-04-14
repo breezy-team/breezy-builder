@@ -88,6 +88,8 @@ def build_tree(base_branch, target_path):
     to_transport = ensure_basedir(target_path)
     try:
         tree_to, br_to = bzrdir.BzrDir.open_tree_or_branch(target_path)
+        # Should we commit any changes in the tree here? If we don't
+        # then they will get folded up in to the first merge or nest.
     except errors.NotBranchError:
         tree_to = None
         br_to = None
@@ -179,7 +181,7 @@ class RecipeParseError(errors.BzrError):
                 problem=problem)
 
 
-class _RecipeParser(object):
+class RecipeParser(object):
 
     whitespace_chars = " \t"
     eol_char = "\n"
@@ -451,9 +453,3 @@ class _RecipeParser(object):
         comment = self.current_line[self.index:]
         self.new_line()
         return comment
-
-
-class Recipe(object):
-
-    def __init__(self, f):
-        self.base_branch = _RecipeParser(f).parse()
