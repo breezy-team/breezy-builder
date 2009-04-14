@@ -304,6 +304,25 @@ class BuildTreeTests(TestCaseWithTransport):
         tree = workingtree.WorkingTree.open("target")
         self.assertEqual(revid, tree.last_revision())
 
+    def test_build_tree_nested(self):
+        source1 = self.make_branch_and_tree("source1")
+        self.build_tree(["source1/a"])
+        source1.add(["a"])
+        source1_rev_id = source1.commit("one")
+        source2 = self.make_branch_and_tree("source2")
+        self.build_tree(["source2/a"])
+        source2.add(["a"])
+        source2_rev_id = source2.commit("one")
+        base_branch = RecipeBranch("", "source1")
+        nested_branch = RecipeBranch("nested", "source2")
+        base_branch.nest_branch("sub", nested_branch)
+        build_tree(base_branch, "target")
+        self.failUnlessExists("target")
+        tree = workingtree.WorkingTree.open("target")
+        self.assertEqual(source1_rev_id, tree.last_revision())
+        tree = workingtree.WorkingTree.open("target/sub")
+        self.assertEqual(source2_rev_id, tree.last_revision())
+
     def test_pull_or_branch_branch(self):
         source = self.make_branch_and_tree("source")
         source.lock_write()

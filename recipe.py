@@ -104,6 +104,14 @@ def build_tree(base_branch, target_path):
                         possible_transports=[to_transport])
             finally:
                 br_from.unlock()
+            for child_branch, nest_location in base_branch.child_branches:
+                if nest_location is not None:
+                    # FIXME: pass possible_transports around
+                    build_tree(child_branch,
+                            target_path=os.path.join(target_path,
+                                nest_location))
+                else:
+                    raise NotImplementedError("Merges aren't implemented yet")
         finally:
             # Is this ok if tree_to is created by pull_or_branch
             if br_to is not None:
