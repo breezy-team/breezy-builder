@@ -3,6 +3,8 @@
 - Implement building the source package from the tree, including adding
   the changelog entry with the desired version.
 - Implement uploading to a PPA.
+- Documentation.
 - Work out how to get tarballs for non-native packages if we want that.
 - Decide on error on existing target directory vs. re-use and pull changes.
-- Documentation.
+- Decide what should happen if you nest in to a directory that exists in
+  the branch that you are nesting in to.

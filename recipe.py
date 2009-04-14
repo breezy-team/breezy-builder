@@ -29,6 +29,13 @@ from bzrlib import (
 
 
 def ensure_basedir(to_location):
+    """Ensure that the basedir of to_location exists.
+
+    It is allowed to already exist currently, to reuse directories.
+
+    :param to_location: The path to ensure exists.
+    :return: a Transport for that location
+    """
     to_transport = transport.get_transport(to_location)
     try:
         to_transport.mkdir('.')
@@ -42,6 +49,27 @@ def ensure_basedir(to_location):
 
 def pull_or_branch(tree_to, br_to, br_from, to_transport, accelerator_tree,
         possible_transports):
+    """Either pull or branch from a branch.
+
+    Depending on whether the target branch and tree exist already this
+    will either pull from the source branch, or branch from it. If it
+    returns this function will return a branch and tree for the target,
+    after creating either if necessary.
+
+    :param tree_to: The WorkingTree to pull in to, or None. If not None then
+            br_to must not be None.
+    :param br_to: The Branch to pull in to, or None to branch.
+    :param br_from: The Branch to pull/branch from.
+    :param to_transport: A Transport for the root of the target.
+    :param accelerator_tree: A tree to take contents from that is faster than
+            extracting from br_from, or None.
+    :param possible_transports: A list of transports that can be reused, or
+            None.
+    :return: A tuple of (target tree, target branch) which are the updated
+            tree and branch, created if necessary. They are locked, and you
+            should use these instead of tree_to and br_to if they were passed
+            in, including for unlocking.
+    """
     created_tree_to = False
     created_br_to = False
     if br_to is None:
@@ -100,6 +128,16 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, accelerator_tree,
 
 
 def build_tree(base_branch, target_path):
+    """Build the RecipeBranch at a path.
+
+    Follow the instructions embodied in RecipeBranch and build a tree
+    based on them rooted at target_path. If target_path exists and
+    is the root of the branch then the branch will be updated based on
+    what the RecipeBranch requires.
+
+    :param base_branch: a RecipeBranch to build.
+    :param target_path: the path to the base of the desired output.
+    """
     to_transport = ensure_basedir(target_path)
     try:
         tree_to, br_to = bzrdir.BzrDir.open_tree_or_branch(target_path)
@@ -173,16 +211,41 @@ def build_tree(base_branch, target_path):
 
 
 class RecipeBranch(object):
+    """A nested structure that represents a Recipe.
+
+    A RecipeBranch has a name and a url (the name can be None for the
+    root branch), and optionally child branches that are either merged
+    or nested.
+
+    The child_branches attribute is a list of tuples of (RecipeBranch,
+    relative path), where if the relative branch is not None it is the
+    path relative to this branch where the child branch should be placed.
+    If it is None then the child branch should be merged instead.
+    """
 
     def __init__(self, name, url):
+        """Create a RecipeBranch.
+
+        :param name: the name for the branch, or None if it is the root.
+        :param url: the URL from which to retrieve the branch.
+        """
         self.name = name
         self.url = url
         self.child_branches = []
 
     def merge_branch(self, branch):
+        """Merge a child branch in to this one.
+
+        :param branch: the RecipeBranch to merge.
+        """
         self.child_branches.append((branch, None))
 
     def nest_branch(self, location, branch):
+        """Nest a child branch in to this one.
+
+        :parm location: the relative path at which this branch should be nested.
+        :param branch: the RecipeBranch to nest.
+        """
         assert location not in [b[1] for b in self.child_branches],\
             "%s already has branch nested there" % location
         self.child_branches.append((branch, location))
@@ -197,12 +260,23 @@ class RecipeParseError(errors.BzrError):
 
 
 class RecipeParser(object):
+    """Parse a recipe.
+
+    The parse() method is probably the only one that interests you.
+    """
 
     whitespace_chars = " \t"
     eol_char = "\n"
     digit_chars = ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")
 
     def __init__(self, f, filename=None):
+        """Create a RecipeParser.
+
+        :param f: either the recipe as a string, or a file like object to
+            take it from.
+        :param filename: the filename of the recipe if known (for error
+            reporting).
+        """
         if getattr(f, "read", None) is not None:
             self.text = f.read()
         else:
@@ -212,6 +286,10 @@ class RecipeParser(object):
             self.filename = "recipe"
 
     def parse(self):
+        """Parse the recipe.
+
+        :return: a RecipeBranch representing the recipe.
+        """
         self.lines = self.text.split("\n")
         self.index = 0
         self.line_index = 0
