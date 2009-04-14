@@ -319,7 +319,9 @@ class BuildTreeTests(TestCaseWithTransport):
         build_tree(base_branch, "target")
         self.failUnlessExists("target")
         tree = workingtree.WorkingTree.open("target")
-        self.assertEqual(source1_rev_id, tree.last_revision())
+        last_revid = tree.last_revision()
+        last_revtree = tree.branch.repository.revision_tree(last_revid)
+        self.assertEqual([source1_rev_id], last_revtree.get_parent_ids())
         tree = workingtree.WorkingTree.open("target/sub")
         self.assertEqual(source2_rev_id, tree.last_revision())
 
@@ -337,10 +339,40 @@ class BuildTreeTests(TestCaseWithTransport):
         build_tree(base_branch, "target")
         self.failUnlessExists("target")
         tree = workingtree.WorkingTree.open("target")
-        self.assertEqual(source1_rev_id, tree.last_revision())
+        last_revid = tree.last_revision()
+        last_revtree = tree.branch.repository.revision_tree(last_revid)
         self.assertEqual([source1_rev_id, source2_rev_id],
-                tree.get_parent_ids())
+                last_revtree.get_parent_ids())
         self.check_file_contents("target/a", "other change")
+
+    def test_build_tree_merge_twice(self):
+        source1 = self.make_branch_and_tree("source1")
+        self.build_tree(["source1/a"])
+        source1.add(["a"])
+        source1_rev_id = source1.commit("one")
+        source2 = source1.bzrdir.sprout("source2").open_workingtree()
+        self.build_tree_contents([("source2/a", "other change")])
+        source2_rev_id = source2.commit("one")
+        source3 = source2.bzrdir.sprout("source3").open_workingtree()
+        self.build_tree_contents([("source3/a", "third change")])
+        source3_rev_id = source3.commit("one")
+        base_branch = RecipeBranch("", "source1")
+        merged_branch = RecipeBranch("nested", "source2")
+        base_branch.merge_branch(merged_branch)
+        merged_branch = RecipeBranch("nested2", "source3")
+        base_branch.merge_branch(merged_branch)
+        build_tree(base_branch, "target")
+        self.failUnlessExists("target")
+        tree = workingtree.WorkingTree.open("target")
+        last_revid = tree.last_revision()
+        previous_revid = tree.branch.revision_history()[-2]
+        last_revtree = tree.branch.repository.revision_tree(last_revid)
+        previous_revtree = tree.branch.repository.revision_tree(previous_revid)
+        self.assertEqual([previous_revid, source3_rev_id],
+                last_revtree.get_parent_ids())
+        self.assertEqual([source1_rev_id, source2_rev_id],
+                previous_revtree.get_parent_ids())
+        self.check_file_contents("target/a", "third change")
 
     def test_build_tree_merged_with_conflicts(self):
         source1 = self.make_branch_and_tree("source1")

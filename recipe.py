@@ -8,6 +8,7 @@ from bzrlib import (
         tag,
         transport,
         ui,
+        urlutils,
         workingtree,
         )
 
@@ -112,6 +113,10 @@ def build_tree(base_branch, target_path):
                     build_tree(child_branch,
                             target_path=os.path.join(target_path,
                                 nest_location))
+                    tree_to.commit("Nest %s at %s" %
+                            (urlutils.unescape_for_display(
+                                   child_branch.url, 'utf-8'),
+                             nest_location))
                 else:
                     merge_from = branch.Branch.open(child_branch.url)
                     merge_from.lock_read()
@@ -134,6 +139,9 @@ def build_tree(base_branch, target_path):
                             if conflict_count:
                                 # FIXME: better reporting
                                 raise errors.BzrCommandError("Conflicts from merge")
+                            tree_to.commit("Merge %s" %
+                                    urlutils.unescape_for_display(
+                                        child_branch.url, 'utf-8'))
                         finally:
                             pb.finished()
                     finally:
