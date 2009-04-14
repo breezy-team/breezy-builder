@@ -50,6 +50,13 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual(char, exc.char)
         self.assertEqual("recipe", exc.filename)
 
+    def check_recipe_branch(self, branch, name, url, revspec=None,
+            num_child_branches=0):
+        self.assertEqual(name, branch.name)
+        self.assertEqual(url, branch.url)
+        self.assertEqual(revspec, branch.revspec)
+        self.assertEqual(num_child_branches, len(branch.child_branches))
+
     def test_parses_most_basic(self):
         self.get_recipe(self.basic_header_and_branch)
 
@@ -101,9 +108,9 @@ class RecipeParserTests(TestCaseInTempDir):
                 self.basic_header + "  http://foo.org/")
 
     def tests_rejects_text_after_base_branch(self):
-        self.assertParseError(2, 17, "Expecting the end of the line, "
+        self.assertParseError(2, 19, "Expecting the end of the line, "
                 "got 'foo'", self.get_recipe,
-                self.basic_header + "http://foo.org/ foo")
+                self.basic_header + "http://foo.org/ 2 foo")
 
     def tests_rejects_unknown_instruction(self):
         self.assertParseError(3, 1, "Expecting 'nest' or 'merge', "
@@ -121,9 +128,9 @@ class RecipeParserTests(TestCaseInTempDir):
                 self.basic_header_and_branch + "merge foo ")
 
     def test_rejects_text_at_end_of_merge_line(self):
-        self.assertParseError(3, 15, "Expecting the end of the line, "
+        self.assertParseError(3, 17, "Expecting the end of the line, "
                 "got 'bar'", self.get_recipe,
-                self.basic_header_and_branch + "merge foo url bar")
+                self.basic_header_and_branch + "merge foo url 2 bar")
 
     def test_rejects_nest_no_name(self):
         self.assertParseError(3, 6, "End of line while looking for "
@@ -141,9 +148,9 @@ class RecipeParserTests(TestCaseInTempDir):
                 self.basic_header_and_branch + "nest foo url ")
 
     def test_rejects_text_at_end_of_nest_line(self):
-        self.assertParseError(3, 18, "Expecting the end of the line, "
+        self.assertParseError(3, 20, "Expecting the end of the line, "
                 "got 'baz'", self.get_recipe,
-                self.basic_header_and_branch + "nest foo url bar baz")
+                self.basic_header_and_branch + "nest foo url bar 2 baz")
 
     def test_rejects_indent_after_first_branch(self):
         self.assertParseError(3, 3, "Not allowed to indent unless after "
@@ -180,101 +187,90 @@ class RecipeParserTests(TestCaseInTempDir):
 
     def test_builds_simplest_recipe(self):
         base_branch = self.get_recipe(self.basic_header_and_branch)
-        self.assertEqual("", base_branch.name)
-        self.assertEqual("http://foo.org/", base_branch.url)
-        self.assertEqual(0, len(base_branch.child_branches))
+        self.check_recipe_branch(base_branch, None, "http://foo.org/")
 
     def test_builds_recipe_with_merge(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
                 + "merge bar http://bar.org")
-        self.assertEqual("", base_branch.name)
-        self.assertEqual("http://foo.org/", base_branch.url)
-        self.assertEqual(1, len(base_branch.child_branches))
+        self.check_recipe_branch(base_branch, None, "http://foo.org/",
+                num_child_branches=1)
         child_branch, location = base_branch.child_branches[0]
         self.assertEqual(None, location)
-        self.assertEqual("bar", child_branch.name)
-        self.assertEqual("http://bar.org", child_branch.url)
-        self.assertEqual(0, len(child_branch.child_branches))
+        self.check_recipe_branch(child_branch, "bar", "http://bar.org")
 
     def test_builds_recipe_with_nest(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
                 + "nest bar http://bar.org baz")
-        self.assertEqual("", base_branch.name)
-        self.assertEqual("http://foo.org/", base_branch.url)
-        self.assertEqual(1, len(base_branch.child_branches))
+        self.check_recipe_branch(base_branch, None, "http://foo.org/",
+                num_child_branches=1)
         child_branch, location = base_branch.child_branches[0]
         self.assertEqual("baz", location)
-        self.assertEqual("bar", child_branch.name)
-        self.assertEqual("http://bar.org", child_branch.url)
-        self.assertEqual(0, len(child_branch.child_branches))
+        self.check_recipe_branch(child_branch, "bar", "http://bar.org")
 
     def test_builds_recipe_with_nest_then_merge(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
                 + "nest bar http://bar.org baz\nmerge zam lp:zam")
-        self.assertEqual("", base_branch.name)
-        self.assertEqual("http://foo.org/", base_branch.url)
-        self.assertEqual(2, len(base_branch.child_branches))
+        self.check_recipe_branch(base_branch, None, "http://foo.org/",
+                num_child_branches=2)
         child_branch, location = base_branch.child_branches[0]
         self.assertEqual("baz", location)
-        self.assertEqual("bar", child_branch.name)
-        self.assertEqual("http://bar.org", child_branch.url)
-        self.assertEqual(0, len(child_branch.child_branches))
+        self.check_recipe_branch(child_branch, "bar", "http://bar.org")
         child_branch, location = base_branch.child_branches[1]
         self.assertEqual(None, location)
-        self.assertEqual("zam", child_branch.name)
-        self.assertEqual("lp:zam", child_branch.url)
-        self.assertEqual(0, len(child_branch.child_branches))
+        self.check_recipe_branch(child_branch, "zam", "lp:zam")
 
     def test_builds_recipe_with_merge_then_nest(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
                 + "merge zam lp:zam\nnest bar http://bar.org baz")
-        self.assertEqual("", base_branch.name)
-        self.assertEqual("http://foo.org/", base_branch.url)
-        self.assertEqual(2, len(base_branch.child_branches))
+        self.check_recipe_branch(base_branch, None, "http://foo.org/",
+                num_child_branches=2)
         child_branch, location = base_branch.child_branches[0]
         self.assertEqual(None, location)
-        self.assertEqual("zam", child_branch.name)
-        self.assertEqual("lp:zam", child_branch.url)
-        self.assertEqual(0, len(child_branch.child_branches))
+        self.check_recipe_branch(child_branch, "zam", "lp:zam")
         child_branch, location = base_branch.child_branches[1]
         self.assertEqual("baz", location)
-        self.assertEqual("bar", child_branch.name)
-        self.assertEqual("http://bar.org", child_branch.url)
-        self.assertEqual(0, len(child_branch.child_branches))
+        self.check_recipe_branch(child_branch, "bar", "http://bar.org")
 
     def test_builds_a_merge_in_to_a_nest(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
                 + "nest bar http://bar.org baz\n  merge zam lp:zam")
-        self.assertEqual("", base_branch.name)
-        self.assertEqual("http://foo.org/", base_branch.url)
-        self.assertEqual(1, len(base_branch.child_branches))
+        self.check_recipe_branch(base_branch, None, "http://foo.org/",
+                num_child_branches=1)
         child_branch, location = base_branch.child_branches[0]
         self.assertEqual("baz", location)
-        self.assertEqual("bar", child_branch.name)
-        self.assertEqual("http://bar.org", child_branch.url)
-        self.assertEqual(1, len(child_branch.child_branches))
+        self.check_recipe_branch(child_branch, "bar", "http://bar.org",
+                num_child_branches=1)
         child_branch, location = child_branch.child_branches[0]
         self.assertEqual(None, location)
-        self.assertEqual("zam", child_branch.name)
-        self.assertEqual("lp:zam", child_branch.url)
-        self.assertEqual(0, len(child_branch.child_branches))
+        self.check_recipe_branch(child_branch, "zam", "lp:zam")
 
     def tests_builds_nest_into_a_nest(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
                 + "nest bar http://bar.org baz\n  nest zam lp:zam zoo")
-        self.assertEqual("", base_branch.name)
-        self.assertEqual("http://foo.org/", base_branch.url)
-        self.assertEqual(1, len(base_branch.child_branches))
+        self.check_recipe_branch(base_branch, None, "http://foo.org/",
+                num_child_branches=1)
         child_branch, location = base_branch.child_branches[0]
         self.assertEqual("baz", location)
-        self.assertEqual("bar", child_branch.name)
-        self.assertEqual("http://bar.org", child_branch.url)
-        self.assertEqual(1, len(child_branch.child_branches))
+        self.check_recipe_branch(child_branch, "bar", "http://bar.org",
+                num_child_branches=1)
         child_branch, location = child_branch.child_branches[0]
         self.assertEqual("zoo", location)
-        self.assertEqual("zam", child_branch.name)
-        self.assertEqual("lp:zam", child_branch.url)
-        self.assertEqual(0, len(child_branch.child_branches))
+        self.check_recipe_branch(child_branch, "zam", "lp:zam")
+
+    def tests_builds_recipe_with_revspecs(self):
+        base_branch = self.get_recipe(self.basic_header
+                + "http://foo.org/ revid:a\n"
+                + "nest bar http://bar.org baz tag:b\n"
+                + "merge zam lp:zam 2")
+        self.check_recipe_branch(base_branch, None, "http://foo.org/",
+                num_child_branches=2, revspec="revid:a")
+        child_branch, location = base_branch.child_branches[0]
+        self.assertEqual("baz", location)
+        self.check_recipe_branch(child_branch, "bar", "http://bar.org",
+                revspec="tag:b")
+        child_branch, location = base_branch.child_branches[1]
+        self.assertEqual(None, location)
+        self.check_recipe_branch(child_branch, "zam", "lp:zam", revspec="2")
 
 
 class BuildTreeTests(TestCaseWithTransport):
@@ -346,7 +342,7 @@ class BuildTreeTests(TestCaseWithTransport):
         self.build_tree_contents([("source2/a", "other change")])
         source2_rev_id = source2.commit("one")
         base_branch = RecipeBranch("", "source1")
-        merged_branch = RecipeBranch("nested", "source2")
+        merged_branch = RecipeBranch("merged", "source2")
         base_branch.merge_branch(merged_branch)
         build_tree(base_branch, "target")
         self.failUnlessExists("target")
@@ -369,9 +365,9 @@ class BuildTreeTests(TestCaseWithTransport):
         self.build_tree_contents([("source3/a", "third change")])
         source3_rev_id = source3.commit("one")
         base_branch = RecipeBranch("", "source1")
-        merged_branch = RecipeBranch("nested", "source2")
+        merged_branch = RecipeBranch("merged", "source2")
         base_branch.merge_branch(merged_branch)
-        merged_branch = RecipeBranch("nested2", "source3")
+        merged_branch = RecipeBranch("merged2", "source3")
         base_branch.merge_branch(merged_branch)
         build_tree(base_branch, "target")
         self.failUnlessExists("target")
@@ -397,7 +393,7 @@ class BuildTreeTests(TestCaseWithTransport):
         self.build_tree_contents([("source1/a", "trunk change\n")])
         source1_rev_id = source1.commit("two")
         base_branch = RecipeBranch("", "source1")
-        merged_branch = RecipeBranch("nested", "source2")
+        merged_branch = RecipeBranch("merged", "source2")
         base_branch.merge_branch(merged_branch)
         e = self.assertRaises(errors.BzrCommandError, build_tree,
                 base_branch, "target")
@@ -413,6 +409,29 @@ class BuildTreeTests(TestCaseWithTransport):
         self.check_file_contents("target/a", "<<<<<<< TREE\ntrunk change\n"
                 "=======\nother change\n>>>>>>> MERGE-SOURCE\n")
 
+    def test_build_tree_with_revspecs(self):
+        source1 = self.make_branch_and_tree("source1")
+        self.build_tree(["source1/a"])
+        source1.add(["a"])
+        source1_rev_id = source1.commit("one")
+        source2 = source1.bzrdir.sprout("source2").open_workingtree()
+        self.build_tree_contents([("source2/a", "other change\n")])
+        source2_rev_id = source2.commit("one")
+        self.build_tree_contents([("source2/a", "unwanted change\n")])
+        source2.commit("one")
+        self.build_tree_contents([("source1/a", "unwanted trunk change\n")])
+        source1.commit("two")
+        base_branch = RecipeBranch("", "source1", revspec="1")
+        merged_branch = RecipeBranch("merged", "source2", revspec="2")
+        base_branch.merge_branch(merged_branch)
+        build_tree(base_branch, "target")
+        self.failUnlessExists("target")
+        tree = workingtree.WorkingTree.open("target")
+        last_revid = tree.last_revision()
+        last_revtree = tree.branch.repository.revision_tree(last_revid)
+        self.assertEqual([source1_rev_id, source2_rev_id],
+                last_revtree.get_parent_ids())
+
     def test_pull_or_branch_branch(self):
         source = self.make_branch_and_tree("source")
         source.lock_write()
@@ -423,7 +442,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source.branch.tags.set_tag("one", rev_id)
         to_transport = transport.get_transport("target")
         tree_to, br_to = pull_or_branch(None, None, source.branch,
-                to_transport, None, [])
+                to_transport)
         self.addCleanup(tree_to.unlock)
         self.addCleanup(br_to.unlock)
         self.assertEqual(rev_id, tree_to.last_revision())
@@ -443,7 +462,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source.branch.tags.set_tag("one", rev_id)
         to_transport = transport.get_transport("target")
         tree_to, br_to = pull_or_branch(None, None, source.branch,
-                to_transport, None, [])
+                to_transport)
         self.addCleanup(tree_to.unlock)
         self.addCleanup(br_to.unlock)
         self.assertEqual(rev_id, tree_to.last_revision())
@@ -460,7 +479,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source.branch.tags.set_tag("one", first_rev_id)
         to_transport = transport.get_transport("target")
         tree_to, br_to = pull_or_branch(None, None, source.branch,
-                to_transport, None, [])
+                to_transport)
         self.addCleanup(tree_to.unlock)
         self.addCleanup(br_to.unlock)
         self.build_tree(["source/b"])
@@ -468,7 +487,7 @@ class BuildTreeTests(TestCaseWithTransport):
         rev_id = source.commit("two")
         source.branch.tags.set_tag("one", rev_id)
         tree_to, br_to = pull_or_branch(tree_to, br_to, source.branch,
-                to_transport, source, [])
+                to_transport)
         self.assertEqual(rev_id, tree_to.last_revision())
         self.assertEqual(rev_id, br_to.last_revision())
         self.assertTrue(tree_to.is_locked())
@@ -484,7 +503,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source.branch.tags.set_tag("one", first_rev_id)
         to_transport = transport.get_transport("target")
         tree_to, br_to = pull_or_branch(None, None, source.branch,
-                to_transport, None, [])
+                to_transport)
         tree_to.unlock()
         tree_to.bzrdir.destroy_workingtree()
         self.build_tree(["source/b"])
@@ -492,7 +511,7 @@ class BuildTreeTests(TestCaseWithTransport):
         rev_id = source.commit("two")
         source.branch.tags.set_tag("one", rev_id)
         tree_to, br_to = pull_or_branch(None, br_to, source.branch,
-                to_transport, source, [])
+                to_transport)
         self.addCleanup(tree_to.unlock)
         self.addCleanup(br_to.unlock)
         self.assertEqual(rev_id, tree_to.last_revision())
@@ -510,7 +529,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source.branch.tags.set_tag("one", first_rev_id)
         to_transport = transport.get_transport("target")
         tree_to, br_to = pull_or_branch(None, None, source.branch,
-                to_transport, None, [])
+                to_transport)
         self.build_tree(["source/b"])
         self.build_tree_contents([("target/b", "other contents")])
         source.add(["b"])
@@ -518,7 +537,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source.branch.tags.set_tag("one", rev_id)
         e = self.assertRaises(errors.BzrCommandError,
                 pull_or_branch, tree_to, br_to, source.branch,
-                to_transport, source, [])
+                to_transport, accelerator_tree=source)
         self.assertEqual("Conflicts... aborting.", str(e))
         tree_to.unlock()
         br_to.unlock()

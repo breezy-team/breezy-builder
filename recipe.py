@@ -20,6 +20,7 @@ from bzrlib import (
         bzrdir,
         errors,
         merge,
+        revisionspec,
         tag,
         transport,
         ui,
@@ -47,8 +48,8 @@ def ensure_basedir(to_location):
     return to_transport
 
 
-def pull_or_branch(tree_to, br_to, br_from, to_transport, accelerator_tree,
-        possible_transports):
+def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id=None,
+        accelerator_tree=None, possible_transports=None):
     """Either pull or branch from a branch.
 
     Depending on whether the target branch and tree exist already this
@@ -61,6 +62,8 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, accelerator_tree,
     :param br_to: The Branch to pull in to, or None to branch.
     :param br_from: The Branch to pull/branch from.
     :param to_transport: A Transport for the root of the target.
+    :param revision_id: the revision id to pull/branch, or None for the last
+            revision.
     :param accelerator_tree: A tree to take contents from that is faster than
             extracting from br_from, or None.
     :param possible_transports: A list of transports that can be reused, or
@@ -70,11 +73,12 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, accelerator_tree,
             should use these instead of tree_to and br_to if they were passed
             in, including for unlocking.
     """
+    if revision_id is None:
+        revision_id = br_from.last_revision()
     created_tree_to = False
     created_br_to = False
     if br_to is None:
         # We do a "branch"
-        revision_id = br_from.last_revision()
         dir = br_from.bzrdir.sprout(to_transport.base, revision_id,
                                     possible_transports=possible_transports,
                                     accelerator_tree=accelerator_tree,
@@ -94,10 +98,10 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, accelerator_tree,
         # We do a "pull"
         if tree_to is not None:
             # FIXME: should these pulls overwrite?
-            result = tree_to.pull(br_from,
+            result = tree_to.pull(br_from, stop_revision=revision_id,
                     possible_transports=possible_transports)
         else:
-            result = br_to.pull(br_from,
+            result = br_to.pull(br_from, stop_revision=revision_id,
                     possible_transports=possible_transports)
             tree_to = br_to.bzrdir.create_workingtree()
             # Ugh, we have to assume that the caller replaces their reference
@@ -157,8 +161,14 @@ def build_tree(base_branch, target_path):
                                 from_location)
             br_from.lock_read()
             try:
+                revision_id = None
+                if base_branch.revspec is not None:
+                    revspec = revisionspec.RevisionSpec.from_string(
+                            base_branch.revspec)
+                    revision_id = revspec.as_revision_id(br_from)
                 tree_to, br_to = pull_or_branch(tree_to, br_to, br_from,
-                        to_transport, accelerator_tree,
+                        to_transport, revision_id=revision_id,
+                        accelerator_tree=accelerator_tree,
                         possible_transports=[to_transport])
             finally:
                 br_from.unlock()
@@ -175,7 +185,14 @@ def build_tree(base_branch, target_path):
                         pb = ui.ui_factory.nested_progress_bar()
                         try:
                             tag._merge_tags_if_possible(merge_from, br_to)
-                            merge_revid = merge_from.last_revision()
+                            if child_branch.revspec is not None:
+                                merge_revspec = \
+                                    revisionspec.RevisionSpec.from_string(
+                                        child_branch.revspec)
+                                merge_revid = merge_revspec.as_revision_id(
+                                        merge_from)
+                            else:
+                                merge_revid = merge_from.last_revision()
                             merger = merge.Merger.from_revision_ids(pb,
                                     tree_to, merge_revid,
                                     other_branch=merge_from,
@@ -219,14 +236,17 @@ class RecipeBranch(object):
     If it is None then the child branch should be merged instead.
     """
 
-    def __init__(self, name, url):
+    def __init__(self, name, url, revspec=None):
         """Create a RecipeBranch.
 
         :param name: the name for the branch, or None if it is the root.
         :param url: the URL from which to retrieve the branch.
+        :param revspec: a revision specifier for the revision of the branch
+                to use, or None (the default) to use the last revision.
         """
         self.name = name
         self.url = url
+        self.revspec = revspec
         self.child_branches = []
 
     def merge_branch(self, branch):
@@ -313,23 +333,25 @@ class RecipeParser(object):
                 continue
             if last_instruction is None:
                 url = self.take_to_whitespace("branch to start from")
-                last_branch = RecipeBranch("", url)
+                revspec = self.parse_optional_revspec()
+                self.new_line()
+                last_branch = RecipeBranch(None, url, revspec=revspec)
                 active_branches = [last_branch]
                 last_instruction = ""
-                self.new_line()
             else:
                 instruction = self.parse_instruction()
                 branch_id = self.parse_branch_id()
                 url = self.parse_branch_url()
                 if instruction == "nest":
                     location = self.parse_branch_location()
-                last_branch = RecipeBranch(branch_id, url)
+                revspec = self.parse_optional_revspec()
+                self.new_line()
+                last_branch = RecipeBranch(branch_id, url, revspec=revspec)
                 if instruction == "nest":
                     active_branches[-1].nest_branch(location, last_branch)
                 else:
                     active_branches[-1].merge_branch(last_branch)
                 last_instruction = instruction
-                self.new_line()
         if len(active_branches) == 0:
             self.throw_parse_error("Empty recipe")
         return active_branches[0]
@@ -370,6 +392,13 @@ class RecipeParser(object):
         self.parse_whitespace("the location to nest")
         location = self.take_to_whitespace("the location to nest")
         return location
+
+    def parse_optional_revspec(self):
+        self.parse_whitespace(None, require=False)
+        revspec = self.peek_to_whitespace()
+        if revspec is not None:
+            self.take_chars(len(revspec))
+        return revspec
 
     def throw_parse_error(self, problem):
         raise RecipeParseError(self.filename, self.line_index + 1,
