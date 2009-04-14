@@ -244,15 +244,10 @@ class RecipeParser(object):
                 last_instruction = ""
                 self.new_line()
             else:
-                # FIXME: should parse whitespace before each item, rather
-                # than after, so you can get told what is missing if it
-                # is not there, rather than just that it was looking for
-                # whitespace.
                 instruction = self.parse_instruction()
                 branch_id = self.parse_branch_id()
                 url = self.parse_branch_url()
                 if instruction == "nest":
-                    self.parse_whitespace()
                     location = self.parse_branch_location()
                 last_branch = RecipeBranch(branch_id, url)
                 if instruction == "nest":
@@ -266,12 +261,12 @@ class RecipeParser(object):
         return active_branches[0]
 
     def parse_header(self):
-        self.parse_char("#", require_whitespace=False)
-        self.parse_word("bzr-builder")
+        self.parse_char("#")
+        self.parse_word("bzr-builder", require_whitespace=False)
         self.parse_word("format")
-        version = self.parse_float()
-        self.parse_whitespace()
+        version = self.parse_float("format version")
         self.parse_word("deb-version")
+        self.parse_whitespace("a value for 'deb-version'")
         deb_version = self.take_to_whitespace("a value for 'deb-version'")
         self.new_line()
 
@@ -282,22 +277,23 @@ class RecipeParser(object):
                     "or 'merge'")
         if instruction == "nest" or instruction == "merge":
             self.take_chars(len(instruction))
-            self.parse_whitespace()
             return instruction
         self.throw_parse_error("Expecting 'nest' or 'merge', got '%s'"
                 % instruction)
 
     def parse_branch_id(self):
+        self.parse_whitespace("the branch id")
         branch_id = self.take_to_whitespace("the branch id")
-        self.parse_whitespace()
         return branch_id
 
     def parse_branch_url(self):
+        self.parse_whitespace("the branch url")
         branch_url = self.take_to_whitespace("the branch url")
         return branch_url
 
     def parse_branch_location(self):
         # FIXME: Needs a better term
+        self.parse_whitespace("the location to nest")
         location = self.take_to_whitespace("the location to nest")
         return location
 
@@ -314,7 +310,7 @@ class RecipeParser(object):
 
     def new_line(self):
         # Jump over any whitespace
-        self.parse_whitespace(require=False)
+        self.parse_whitespace(None, require=False)
         remaining = self.peek_to_whitespace()
         if remaining != None:
             self.throw_parse_error("Expecting the end of the line, got '%s'"
@@ -346,20 +342,19 @@ class RecipeParser(object):
             return None
         return self.current_line[self.index + skip]
 
-    def parse_char(self, char, require_whitespace=True):
+    def parse_char(self, char):
         actual = self.peek_char()
         if actual is None:
             self.throw_eol(char)
         if actual == char:
             self.take_char()
-            self.parse_whitespace(require=require_whitespace)
             return char
         self.throw_expecting_error(char, actual)
 
     def parse_indent(self):
         """Parse the indent from the start of the line."""
         # FIXME: should just peek the whitespace
-        new_indent = self.parse_whitespace(require=False)
+        new_indent = self.parse_whitespace(None, require=False)
         # FIXME: These checks should probably come after we check whether
         # any change in indent is legal at this point:
         # "Indents of 3 spaces aren't allowed" -> make it 2 spaces
@@ -379,15 +374,15 @@ class RecipeParser(object):
            return old_indent_level
         return None
 
-    def parse_whitespace(self, require=True):
+    def parse_whitespace(self, looking_for, require=True):
         if require:
             actual = self.peek_char()
             if actual is None:
                 self.throw_parse_error("End of line while looking for "
-                        "whitespace")
+                        "%s" % looking_for)
             if actual not in self.whitespace_chars:
-                self.throw_parse_error("Expecting whitespace, got '%s'."
-                        % actual)
+                self.throw_parse_error("Expecting whitespace before %s, "
+                        "got '%s'." % (looking_for, actual))
         ret = ""
         actual = self.peek_char()
         while (actual is not None and actual in self.whitespace_chars):
@@ -396,12 +391,12 @@ class RecipeParser(object):
             actual = self.peek_char()
         return ret
 
-    def parse_word(self, expected):
+    def parse_word(self, expected, require_whitespace=True):
+        self.parse_whitespace("'%s'" % expected, require=require_whitespace)
         length = len(expected)
         actual = self.peek_to_whitespace()
         if actual == expected:
             self.take_chars(length)
-            self.parse_whitespace()
             return expected
         if actual is None:
             self.throw_eol(expected)
@@ -427,7 +422,8 @@ class RecipeParser(object):
         self.take_chars(len(text))
         return text
 
-    def parse_float(self):
+    def parse_float(self, looking_for):
+        self.parse_whitespace(looking_for)
         ret = self._parse_integer()
         if ret == "":
             self.throw_parse_error("Expecting a float, got '%s'" %

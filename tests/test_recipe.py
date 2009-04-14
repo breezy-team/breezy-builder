@@ -86,9 +86,9 @@ class RecipeParserTests(TestCaseInTempDir):
                 "got 'deb'", self.get_recipe, "# bzr-builder format 1 deb")
 
     def tests_rejects_no_deb_version_value(self):
-        self.assertParseError(1, 36, "End of line while looking for "
+        self.assertParseError(1, 35, "End of line while looking for "
                 "a value for 'deb-version'", self.get_recipe,
-                "# bzr-builder format 1 deb-version ")
+                "# bzr-builder format 1 deb-version")
 
     def tests_rejects_extra_text_after_deb_version(self):
         self.assertParseError(1, 38, "Expecting the end of the line, "
