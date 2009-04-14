@@ -4,8 +4,10 @@ from bzrlib import (
         branch,
         bzrdir,
         errors,
+        merge,
         tag,
         transport,
+        ui,
         workingtree,
         )
 
@@ -111,7 +113,31 @@ def build_tree(base_branch, target_path):
                             target_path=os.path.join(target_path,
                                 nest_location))
                 else:
-                    raise NotImplementedError("Merges aren't implemented yet")
+                    merge_from = branch.Branch.open(child_branch.url)
+                    merge_from.lock_read()
+                    try:
+                        pb = ui.ui_factory.nested_progress_bar()
+                        try:
+                            tag._merge_tags_if_possible(merge_from, br_to)
+                            merge_revid = merge_from.last_revision()
+                            merger = merge.Merger.from_revision_ids(pb,
+                                    tree_to, merge_revid,
+                                    other_branch=merge_from,
+                                    tree_branch=br_to)
+                            merger.merge_type = merge.Merge3Merger
+                            if (merger.base_rev_id == merger.other_rev_id and
+                                    merger.other_rev_id is not None):
+                                # Nothing to do.
+                                continue
+                            conflict_count = merger.do_merge()
+                            merger.set_pending()
+                            if conflict_count:
+                                # FIXME: better reporting
+                                raise errors.BzrCommandError("Conflicts from merge")
+                        finally:
+                            pb.finished()
+                    finally:
+                        merge_from.unlock()
         finally:
             # Is this ok if tree_to is created by pull_or_branch
             if br_to is not None:

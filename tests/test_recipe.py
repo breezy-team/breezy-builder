@@ -323,6 +323,52 @@ class BuildTreeTests(TestCaseWithTransport):
         tree = workingtree.WorkingTree.open("target/sub")
         self.assertEqual(source2_rev_id, tree.last_revision())
 
+    def test_build_tree_merged(self):
+        source1 = self.make_branch_and_tree("source1")
+        self.build_tree(["source1/a"])
+        source1.add(["a"])
+        source1_rev_id = source1.commit("one")
+        source2 = source1.bzrdir.sprout("source2").open_workingtree()
+        self.build_tree_contents([("source2/a", "other change")])
+        source2_rev_id = source2.commit("one")
+        base_branch = RecipeBranch("", "source1")
+        merged_branch = RecipeBranch("nested", "source2")
+        base_branch.merge_branch(merged_branch)
+        build_tree(base_branch, "target")
+        self.failUnlessExists("target")
+        tree = workingtree.WorkingTree.open("target")
+        self.assertEqual(source1_rev_id, tree.last_revision())
+        self.assertEqual([source1_rev_id, source2_rev_id],
+                tree.get_parent_ids())
+        self.check_file_contents("target/a", "other change")
+
+    def test_build_tree_merged_with_conflicts(self):
+        source1 = self.make_branch_and_tree("source1")
+        self.build_tree(["source1/a"])
+        source1.add(["a"])
+        source1_rev_id = source1.commit("one")
+        source2 = source1.bzrdir.sprout("source2").open_workingtree()
+        self.build_tree_contents([("source2/a", "other change\n")])
+        source2_rev_id = source2.commit("one")
+        self.build_tree_contents([("source1/a", "trunk change\n")])
+        source1_rev_id = source1.commit("two")
+        base_branch = RecipeBranch("", "source1")
+        merged_branch = RecipeBranch("nested", "source2")
+        base_branch.merge_branch(merged_branch)
+        e = self.assertRaises(errors.BzrCommandError, build_tree,
+                base_branch, "target")
+        self.failUnlessExists("target")
+        tree = workingtree.WorkingTree.open("target")
+        self.assertEqual(source1_rev_id, tree.last_revision())
+        self.assertEqual([source1_rev_id, source2_rev_id],
+                tree.get_parent_ids())
+        self.assertEqual(1, len(tree.conflicts()))
+        conflict = tree.conflicts()[0]
+        self.assertEqual("text conflict", conflict.typestring)
+        self.assertEqual("a", conflict.path)
+        self.check_file_contents("target/a", "<<<<<<< TREE\ntrunk change\n"
+                "=======\nother change\n>>>>>>> MERGE-SOURCE\n")
+
     def test_pull_or_branch_branch(self):
         source = self.make_branch_and_tree("source")
         source.lock_write()
