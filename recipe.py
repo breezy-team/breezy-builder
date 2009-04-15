@@ -223,6 +223,35 @@ def build_tree(base_branch, target_path):
             tree_to.unlock()
 
 
+def _add_child_branches_to_manifest(child_branches, indent_level):
+    manifest = ""
+    for child_branch, nest_location in child_branches:
+        assert child_branch.revid is not None, "Branch hasn't been built"
+        if nest_location is not None:
+            manifest += "%snest %s %s %s revid:%s\n" % \
+                         ("  " * indent_level, child_branch.name,
+                          child_branch.url, nest_location, child_branch.revid)
+            manifest += _add_child_branches_to_manifest(
+                    child_branch.child_branches, indent_level+1)
+        else:
+            manifest += "%smerge %s %s revid:%s\n" % \
+                         ("  " * indent_level, child_branch.name,
+                          child_branch.url, child_branch.revid)
+    return manifest
+
+
+def build_manifest(base_branch):
+    manifest = "# bzr-builder format 0.1 deb-version "
+    # TODO: should we store the expanded version that was used?
+    manifest += "%s\n" % (base_branch.deb_version,)
+    assert base_branch.revid is not None, "Branch hasn't been built"
+    manifest += "%s revid:%s\n" % (base_branch.url, base_branch.revid)
+    manifest += _add_child_branches_to_manifest(base_branch.child_branches, 0)
+    # Sanity check
+    RecipeParser(manifest).parse()
+    return manifest
+
+
 class RecipeBranch(object):
     """A nested structure that represents a Recipe.
 
@@ -239,17 +268,20 @@ class RecipeBranch(object):
     to when the RecipeBranch was built, or None if it has not been built.
     """
 
-    def __init__(self, name, url, revspec=None):
+    def __init__(self, name, url, revspec=None, deb_version=None):
         """Create a RecipeBranch.
 
         :param name: the name for the branch, or None if it is the root.
         :param url: the URL from which to retrieve the branch.
         :param revspec: a revision specifier for the revision of the branch
                 to use, or None (the default) to use the last revision.
+        :param deb_version: the template to use for the version number.
+                Should be None for anything except the root branch.
         """
         self.name = name
         self.url = url
         self.revspec = revspec
+        self.deb_version = deb_version
         self.child_branches = []
         self.revid = None
 
@@ -315,7 +347,7 @@ class RecipeParser(object):
         self.line_index = 0
         self.current_line = self.lines[self.line_index]
         self.current_indent_level = 0
-        self.parse_header()
+        (version, deb_version) = self.parse_header()
         last_instruction = None
         active_branches = []
         last_branch = None
@@ -369,6 +401,7 @@ class RecipeParser(object):
         self.parse_whitespace("a value for 'deb-version'")
         deb_version = self.take_to_whitespace("a value for 'deb-version'")
         self.new_line()
+        return version, deb_version
 
     def parse_instruction(self):
         instruction = self.peek_to_whitespace()

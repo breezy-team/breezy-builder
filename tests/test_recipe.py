@@ -25,6 +25,7 @@ from bzrlib.tests import (
         TestCaseWithTransport,
         )
 from bzrlib.plugins.builder.recipe import (
+        build_manifest,
         build_tree,
         ensure_basedir,
         pull_or_branch,
@@ -566,3 +567,32 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual("duplicate", conflict.typestring)
         self.assertEqual("b.moved", conflict.path)
         self.assertEqual("b", conflict.conflict_path)
+
+
+class BuildManifestTests(TestCaseInTempDir):
+
+    def test_simple_manifest(self):
+        base_branch = RecipeBranch(None, "base_url", deb_version="1")
+        base_branch.revid = "base_revid"
+        manifest = build_manifest(base_branch)
+        self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
+                "base_url revid:base_revid\n", manifest)
+
+    def test_complex_manifest(self):
+        base_branch = RecipeBranch(None, "base_url", deb_version="2")
+        base_branch.revid = "base_revid"
+        nested_branch1 = RecipeBranch("nested1", "nested1_url")
+        nested_branch1.revid = "nested1_revid"
+        base_branch.nest_branch("nested", nested_branch1)
+        nested_branch2 = RecipeBranch("nested2", "nested2_url")
+        nested_branch2.revid = "nested2_revid"
+        nested_branch1.nest_branch("nested2", nested_branch2)
+        merged_branch = RecipeBranch("merged", "merged_url")
+        merged_branch.revid = "merged_revid"
+        base_branch.merge_branch(merged_branch)
+        manifest = build_manifest(base_branch)
+        self.assertEqual("# bzr-builder format 0.1 deb-version 2\n"
+                "base_url revid:base_revid\n"
+                "nest nested1 nested1_url nested revid:nested1_revid\n"
+                "  nest nested2 nested2_url nested2 revid:nested2_revid\n"
+                "merge merged merged_url revid:merged_revid\n", manifest)
