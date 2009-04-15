@@ -1,4 +1,3 @@
-- Decide on format for specifying revisions.
 - Implement manifest generation.
 - Implement building the source package from the tree, including adding
   the changelog entry with the desired version.
