@@ -13,7 +13,19 @@
 # You should have received a copy of the GNU General Public License along 
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+if __name__ == '__main__':
+    import os
+    import subprocess
+    import sys
+    dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plugins")
+    retcode = subprocess.call("bzr selftest -s bzrlib.plugins.builder",
+            shell=True, env={"BZR_PLUGIN_PATH": dir})
+    sys.exit(retcode)
+
 import os
+import subprocess
+
+from debian_bundle import changelog
 
 from bzrlib import (
         errors,
@@ -45,8 +57,17 @@ class cmd_build(Command):
                         "to that specified in the specified manifest."),
                     ]
 
-    def run(self, recipe_file, working_directory, manifest=None,
-            if_changed_from=None):
+    def _write_manifest_to_path(self, path, base_branch):
+        parent_dir = os.path.dirname(path)
+        if parent_dir != '' and not os.path.exists(parent_dir):
+            os.makedirs(parent_dir)
+        manifest_f = open(path, 'wb')
+        try:
+            manifest_f.write(build_manifest(base_branch))
+        finally:
+            manifest_f.close()
+
+    def _get_branch_from_recipe_file(self, recipe_file):
         recipe_transport = transport.get_transport(os.path.dirname(recipe_file))
         try:
             recipe_contents = recipe_transport.get_bytes(
@@ -55,36 +76,71 @@ class cmd_build(Command):
             raise errors.BzrCommandError("Specified recipe does not exist: "
                     "%s" % recipe_file)
         parser = RecipeParser(recipe_contents, filename=recipe_file)
-        base_branch = parser.parse()
+        return parser.parse()
+
+    def _check_changed(self, base_branch, if_changed_from):
+        old_manifest_transport = transport.get_transport(os.path.dirname(
+                    if_changed_from))
+        try:
+            old_manifest_contents = old_manifest_transport.get_bytes(
+                    os.path.basename(if_changed_from))
+        except errors.NoSuchFile:
+            raise errors.BzrCommandError("Specified previous manifest "
+                    "does not exist: %s" % if_changed_from)
+        old_recipe = RecipeParser(old_manifest_contents,
+                filename=if_changed_from).parse()
+        return resolve_revisions_until_different(base_branch,
+                old_recipe)
+
+    def run(self, recipe_file, working_directory, manifest=None,
+            if_changed_from=None):
+        base_branch = self._get_branch_from_recipe_file(recipe_file)
         if if_changed_from is not None:
-            old_manifest_transport = transport.get_transport(os.path.dirname(
-                        if_changed_from))
-            try:
-                old_manifest_contents = old_manifest_transport.get_bytes(
-                        os.path.basename(if_changed_from))
-            except errors.NoSuchFile:
-                raise errors.BzrCommandError("Specified previous manifest "
-                        "does not exist: %s" % if_changed_from)
-            old_recipe = RecipeParser(old_manifest_contents,
-                    filename=if_changed_from).parse()
-            base_branch = resolve_revisions_until_different(base_branch,
-                    old_recipe)
+            base_branch = self._check_changed(base_branch, if_changed_from)
             if base_branch is None:
                 trace.note("Unchanged")
                 return 0
         build_tree(base_branch, working_directory)
         if manifest is not None:
-            parent_dir = os.path.dirname(manifest)
-            if parent_dir != '':
-                os.makedirs(parent_dir)
-            manifest_f = open(manifest, 'wb')
-            try:
-                manifest_f.write(build_manifest(base_branch))
-            finally:
-                manifest_f.close()
+            self._write_manifest_to_path(manifest, base_branch)
+        else:
+            self._write_manifest_to_path(os.path.join(working_directory,
+                        "bzr-builder.manifest"), base_branch)
 
 
 register_command(cmd_build)
+
+
+class cmd_dailydeb(cmd_build):
+    """Build a deb based on a 'recipe'.
+    """
+
+    def run(self, recipe_file, working_directory, manifest=None,
+            if_changed_from=None):
+        base_branch = self._get_branch_from_recipe_file(recipe_file)
+        if if_changed_from is not None:
+            base_branch = self._check_changed(base_branch, if_changed_from)
+            if base_branch is None:
+                trace.note("Unchanged")
+                return 0
+        recipe_name = os.path.basename(recipe_file)
+        if recipe_file.endswith(".recipe"):
+            recipe_file = recipe_file[:-len(".recipe")]
+        version = base_branch.deb_version
+        if "-" in version:
+            version = version[:version.rindex("-")]
+        package_basedir = "%s-%s" % (recipe_file, version)
+        if not os.path.exists(working_directory):
+            os.makedirs(working_directory)
+        package_dir = os.path.join(working_directory, package_basedir)
+        build_tree(base_branch, package_dir)
+        self._write_manifest_to_path(os.path.join(package_dir, "debian",
+                    "bzr-builder.manifest"), base_branch)
+        if manifest is not None:
+            self._write_manifest_to_path(manifest, base_branch)
+
+
+register_command(cmd_dailydeb)
 
 
 def test_suite():

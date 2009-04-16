@@ -26,4 +26,3 @@ def test_suite():
     suite.addTest(loader.loadTestsFromModuleNames(["%s.%s" % (__name__, i)
                                             for i in testmod_names]))
     return suite
-

@@ -50,6 +50,10 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.failUnlessExists("working/a")
         tree = workingtree.WorkingTree.open("working")
         self.assertEqual(revid, tree.last_revision())
+        self.failUnlessExists("working/bzr-builder.manifest")
+        self.check_file_contents("working/bzr-builder.manifest",
+                "# bzr-builder format 0.1 deb-version 1\nsource revid:%s\n"
+                % revid)
 
     def test_cmd_builder_manifest(self):
         self.build_tree_contents([("recipe", "# bzr-builder format 0.1 "
@@ -102,3 +106,21 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.failUnlessExists("manifest")
         self.check_file_contents("manifest", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource revid:%s\n" % revid)
+
+    def test_cmd_dailydeb_construct(self):
+        source = self.make_branch_and_tree("source")
+        self.build_tree(["source/a"])
+        source.add(["a"])
+        revid = source.commit("one")
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
+                    "deb-version 1\nsource 1\n")])
+        out, err = self.run_bzr("dailydeb test.recipe working --manifest manifest")
+        self.failIfExists("working/a")
+        self.failUnlessExists("working/test-1/a")
+        self.failUnlessExists("working/test-1/debian/bzr-builder.manifest")
+        self.failUnlessExists("manifest")
+        self.check_file_contents("manifest", "# bzr-builder format 0.1 "
+                    "deb-version 1\nsource revid:%s\n" % revid)
+        self.check_file_contents("working/test-1/debian/bzr-builder.manifest",
+                "# bzr-builder format 0.1 deb-version 1\nsource revid:%s\n"
+                % revid)
