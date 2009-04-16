@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU General Public License along 
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
+
 from bzrlib import workingtree
 from bzrlib.tests import (
         TestCaseWithTransport,
@@ -107,20 +109,37 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.check_file_contents("manifest", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource revid:%s\n" % revid)
 
-    def test_cmd_dailydeb_construct(self):
+    def test_cmd_dailydeb(self):
+        #TODO: define a test feature for debuild and require it here.
         source = self.make_branch_and_tree("source")
-        self.build_tree(["source/a"])
-        source.add(["a"])
+        self.build_tree(["source/a", "source/debian/"])
+        self.build_tree_contents([("source/debian/rules",
+                    "#!/usr/bin/make -f\nclean:\n"),
+                ("source/debian/control",
+                    "Source: foo\nMaintainer: maint maint@maint.org\n")])
+        source.add(["a", "debian/", "debian/rules", "debian/control"])
         revid = source.commit("one")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
-        out, err = self.run_bzr("dailydeb test.recipe working --manifest manifest")
+        out, err = self.run_bzr("dailydeb test.recipe working "
+                "--manifest manifest --package foo")
         self.failIfExists("working/a")
-        self.failUnlessExists("working/test-1/a")
-        self.failUnlessExists("working/test-1/debian/bzr-builder.manifest")
+        package_root = "working/test-1/"
+        self.failUnlessExists(os.path.join(package_root, "a"))
+        self.failUnlessExists(os.path.join(package_root,
+                    "debian/bzr-builder.manifest"))
         self.failUnlessExists("manifest")
         self.check_file_contents("manifest", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource revid:%s\n" % revid)
-        self.check_file_contents("working/test-1/debian/bzr-builder.manifest",
-                "# bzr-builder format 0.1 deb-version 1\nsource revid:%s\n"
-                % revid)
+        self.check_file_contents(os.path.join(package_root,
+                    "debian/bzr-builder.manifest"),
+                    "# bzr-builder format 0.1 deb-version 1\nsource revid:%s\n"
+                    % revid)
+        cl_path = os.path.join(package_root, "debian/changelog")
+        self.failUnlessExists(cl_path)
+        cl_f = open(cl_path)
+        try:
+            line = cl_f.readline()
+            self.assertEqual("foo (1) jaunty; urgency=low\n", line)
+        finally:
+            cl_f.close()

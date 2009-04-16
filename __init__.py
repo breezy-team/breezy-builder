@@ -22,8 +22,10 @@ if __name__ == '__main__':
             shell=True, env={"BZR_PLUGIN_PATH": dir})
     sys.exit(retcode)
 
+from email import utils
 import os
 import subprocess
+import sys
 
 from debian_bundle import changelog
 
@@ -115,8 +117,70 @@ class cmd_dailydeb(cmd_build):
     """Build a deb based on a 'recipe'.
     """
 
+    takes_options = cmd_build.takes_options + [
+                Option("package", type=str,
+                       help="The package name to use in the changelog entry. "
+                            "If not specified then the package from the "
+                            "previous changelog entry will be used, so it "
+                            "must be specified if there is no changelog."),
+                Option("distribution", type=str,
+                        help="The distribution to target. If not specified "
+                             "then the same distribution as the last entry "
+                             "in debian/changelog will be used."),
+            ]
+
+    def _add_changelog_entry(self, base_branch, basedir, distribution=None,
+            package=None):
+        debian_dir = os.path.join(basedir, "debian")
+        if not os.path.exists(debian_dir):
+            os.makedirs(debian_dir)
+        cl_path = os.path.join(debian_dir, "changelog")
+        if os.path.exists(cl_path):
+            cl_f = open(cl_path)
+            try:
+                cl = changelog.Changelog(file=cl_f)
+            finally:
+                cl_f.close()
+        else:
+            cl = changelog.Changelog()
+        if len(cl._blocks) > 0:
+            if distribution is None:
+                distribution = cl._blocks[0].distributions.split()[0]
+            if package is None:
+                distribution = cl._blocks[0].package
+        else:
+            if package is None:
+                raise errors.BzrCommandError("No previous changelog to "
+                        "take the package name from, and --package not "
+                        "specified.")
+            if distribution is None:
+                distribution = "jaunty"
+        # FIXME: should pick this up from the environment in the same way
+        # as dch. (Should probably be in python-debian)
+        author = "bzr-builder <jamesw@ubuntu.com>"
+        date = utils.formatdate(localtime=True)
+        cl.new_block(package=package, version=base_branch.deb_version,
+                distributions=distribution, urgency="low",
+                changes=['', '  * Auto build.', ''],
+                author=author, date=date)
+        cl_f = open(cl_path, 'wb')
+        try:
+            cl.write_to_open_file(cl_f)
+        finally:
+            cl_f.close()
+
+    def _build_source_package(self, basedir):
+        command = ["debuild", "-S", "-uc", "-us"]
+        proc = subprocess.Popen(command, cwd=basedir,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        retcode = proc.wait()
+        if retcode != 0:
+            output = proc.stdout.read()
+            raise errors.BzrCommandError("Failed to build the source package: "
+                    "%s" % output)
+
     def run(self, recipe_file, working_directory, manifest=None,
-            if_changed_from=None):
+            if_changed_from=None, package=None, distribution=None):
         base_branch = self._get_branch_from_recipe_file(recipe_file)
         if if_changed_from is not None:
             base_branch = self._check_changed(base_branch, if_changed_from)
@@ -138,6 +202,9 @@ class cmd_dailydeb(cmd_build):
                     "bzr-builder.manifest"), base_branch)
         if manifest is not None:
             self._write_manifest_to_path(manifest, base_branch)
+        self._add_changelog_entry(base_branch, package_dir,
+                distribution=distribution, package=package)
+        self._build_source_package(package_dir)
 
 
 register_command(cmd_dailydeb)
