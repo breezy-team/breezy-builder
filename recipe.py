@@ -10,9 +10,10 @@
 # MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR 
 # PURPOSE.  See the GNU General Public License for more details.
 
-# You should have received a copy of the GNU General Public License along 
+# You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import copy
 import os
 
 from bzrlib import (
@@ -43,7 +44,7 @@ def ensure_basedir(to_transport):
         pass
     except errors.NoSuchFile:
         raise errors.BzrCommandError('Parent of "%s" does not exist.'
-                                     % to_location)
+                                     % to_transport.base)
 
 
 def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
@@ -191,7 +192,57 @@ def update_branch(base_branch, tree_to, br_to, to_transport):
     return tree_to, br_to
 
 
-def build_tree(base_branch, target_path, if_changed_from=None):
+def _resolve_revisions_recurse(new_branch, if_changed_from):
+    br_from = branch.Branch.open(new_branch.url)
+    if new_branch.revspec is not None or if_changed_from.revspec is not None:
+        if new_branch.revspec is not None:
+            revspec = revisionspec.RevisionSpec.from_string(new_branch.revspec)
+            revision_id = revspec.as_revision_id(br_from)
+        else:
+            revision_id = br_from.last_revision()
+        if if_changed_from.revspec is not None:
+            changed_revspec = revisionspec.RevisionSpec.from_string(
+                    if_changed_from.revspec)
+            changed_revision_id = changed_revspec.as_revision_id(br_from)
+        else:
+            changed_revision_id = br_from.last_revision()
+        # We should actually collect revision trees, but this is much easier.
+        new_branch.revspec = "revid:%s" % revision_id
+        if revision_id != changed_revision_id:
+            # Do we have a problem with not resolving everything at the same
+            # time?
+            return True
+    for index, (child_branch, nest_location) in \
+        enumerate(new_branch.child_branches):
+        if _resolve_revisions_recurse(child_branch,
+                if_changed_from.child_branches[index]):
+            return True
+    return False
+
+
+def resolve_revisions_until_different(base_branch, if_changed_from):
+    """Compare the two RecipeBranches to see if they differ.
+
+    This walks the two RecipeBranches and if they have the same shape if
+    compares the revisions. If the shape or the revisons differ then it
+    will return a new RecipeBranch to build, with the revspecs pointing
+    to revision ids for any component where the revspec was resolved
+    (so that locks on all branches don't have to be maintained).
+    If they don't differ then None will be returned.
+
+    :param base_branch: the RecipeBranch we plan to build.
+    :param if_changed_from: the RecipeBranch that we want to compare against.
+    :return: a RecipeBranch to build, or None if the two RecipeBranches
+            don't differ.
+    """
+    new_branch = copy.deepcopy(base_branch)
+    changed = _resolve_revisions_recurse(new_branch, if_changed_from)
+    if changed:
+        return new_branch
+    return None
+
+
+def build_tree(base_branch, target_path):
     """Build the RecipeBranch at a path.
 
     Follow the instructions embodied in RecipeBranch and build a tree
@@ -201,9 +252,6 @@ def build_tree(base_branch, target_path, if_changed_from=None):
 
     :param base_branch: a RecipeBranch to build.
     :param target_path: the path to the base of the desired output.
-    :param if_changed_from: an optional RecipeBranch where if supplied
-        changes will not be made if base_branch and if_changed_from
-        are equivalent.
     """
     to_transport = transport.get_transport(target_path)
     try:
@@ -316,6 +364,24 @@ class RecipeBranch(object):
             "%s already has branch nested there" % location
         self.child_branches.append((branch, location))
 
+    def different_shape_to(self, other_branch):
+        """Tests whether the name, url and child_branches are the same"""
+        if self.name != other_branch.name:
+            return True
+        if self.url != other_branch.url:
+            return True
+        if len(self.child_branches) != len(other_branch.child_branches):
+            return True
+        for index, (child_branch, nest_location) in \
+                enumerate(self.child_branches):
+            other_child, other_nest_location = \
+                   other_branch.child_branches[index]
+            if nest_location != other_nest_location:
+                return True
+            if child_branch.different_shape_to(other_child):
+                return True
+        return False
+
 
 class BaseRecipeBranch(RecipeBranch):
     """The RecipeBranch that is at the root of a recipe."""
@@ -328,6 +394,14 @@ class BaseRecipeBranch(RecipeBranch):
         """
         super(BaseRecipeBranch, self).__init__(None, url, revspec=revspec)
         self.deb_version = deb_version
+
+    def different_shape_to(self, other_branch):
+        """Tests whether the name, url and child_branches are the same"""
+        # If the deb_version is stored expanded in the manifest then we
+        # don't want this check
+        if self.deb_version != other_branch.deb_version:
+            return True
+        return super(BaseRecipeBranch, self).different_shape_to(other_branch)
 
 
 class RecipeParseError(errors.BzrError):

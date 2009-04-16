@@ -36,7 +36,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
 
     def test_cmd_builder_nonexistant_recipe(self):
         err = self.run_bzr("build recipe working", retcode=3)[1]
-        self.assertEqual("bzr: ERROR: 'recipe' does not exist\n", err)
+        self.assertEqual("bzr: ERROR: Specified recipe does not exist: "
+                "recipe\n", err)
 
     def test_cmd_builder_simple_recipe(self):
         self.build_tree_contents([("recipe", "# bzr-builder format 0.1 "
@@ -58,6 +59,45 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.add(["a"])
         revid = source.commit("one")
         self.run_bzr("build recipe working --manifest manifest")
+        self.failUnlessExists("working/a")
+        self.failUnlessExists("manifest")
+        self.check_file_contents("manifest", "# bzr-builder format 0.1 "
+                    "deb-version 1\nsource revid:%s\n" % revid)
+
+    def test_cmd_builder_if_changed_does_not_exist(self):
+        self.build_tree_contents([("recipe", "# bzr-builder format 0.1 "
+                    "deb-version 1\nsource\n")])
+        err = self.run_bzr("build recipe working --if-changed-from manifest",
+                retcode=3)[1]
+        self.assertEqual("bzr: ERROR: Specified previous manifest does "
+                "not exist: manifest\n", err)
+
+    def test_cmd_builder_if_changed_not_changed(self):
+        source = self.make_branch_and_tree("source")
+        self.build_tree(["source/a"])
+        source.add(["a"])
+        revid = source.commit("one")
+        self.build_tree_contents([("recipe", "# bzr-builder format 0.1 "
+                    "deb-version 1\nsource 1\n")])
+        self.build_tree_contents([("old-manifest", "# bzr-builder format 0.1 "
+                    "deb-version 1\nsource revid:%s\n" % revid)])
+        out, err = self.run_bzr("build recipe working --manifest manifest "
+                "--if-changed-from old-manifest")
+        self.failIfExists("working")
+        self.failIfExists("manifest")
+        self.assertEqual("Unchanged\n", err)
+
+    def test_cmd_builder_if_changed_changed(self):
+        source = self.make_branch_and_tree("source")
+        self.build_tree(["source/a"])
+        source.add(["a"])
+        revid = source.commit("one")
+        self.build_tree_contents([("recipe", "# bzr-builder format 0.1 "
+                    "deb-version 1\nsource 1\n")])
+        self.build_tree_contents([("old-manifest", "# bzr-builder format 0.1 "
+                    "deb-version 1\nsource revid:foo\n")])
+        out, err = self.run_bzr("build recipe working --manifest manifest "
+                "--if-changed-from old-manifest")
         self.failUnlessExists("working/a")
         self.failUnlessExists("manifest")
         self.check_file_contents("manifest", "# bzr-builder format 0.1 "

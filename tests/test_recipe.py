@@ -33,6 +33,7 @@ from bzrlib.plugins.builder.recipe import (
         RecipeParser,
         RecipeBranch,
         RecipeParseError,
+        resolve_revisions_until_different,
         )
 
 
@@ -55,19 +56,18 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual("recipe", exc.filename)
 
     def check_recipe_branch(self, branch, name, url, revspec=None,
-            num_child_branches=0, revid=None, deb_version=None):
+            num_child_branches=0, revid=None):
         self.assertEqual(name, branch.name)
         self.assertEqual(url, branch.url)
         self.assertEqual(revspec, branch.revspec)
         self.assertEqual(revid, branch.revid)
-        self.assertEqual(deb_version, branch.deb_version)
         self.assertEqual(num_child_branches, len(branch.child_branches))
 
     def check_base_recipe_branch(self, branch, url, revspec=None,
             num_child_branches=0, revid=None, deb_version=deb_version):
         self.check_recipe_branch(branch, None, url, revspec=revspec,
-                num_child_branches=num_child_branches, revid=revid,
-                deb_version=deb_version)
+                num_child_branches=num_child_branches, revid=revid)
+        self.assertEqual(deb_version, branch.deb_version)
 
     def test_parses_most_basic(self):
         self.get_recipe(self.basic_header_and_branch)
@@ -288,13 +288,15 @@ class RecipeParserTests(TestCaseInTempDir):
 class BuildTreeTests(TestCaseWithTransport):
 
     def test_ensure_basedir(self):
-        ensure_basedir("a")
+        to_transport = transport.get_transport("a")
+        ensure_basedir(to_transport)
         self.failUnlessExists("a")
-        ensure_basedir("a")
+        ensure_basedir(to_transport)
         self.failUnlessExists("a")
         e = self.assertRaises(errors.BzrCommandError, ensure_basedir,
-                "b/c")
-        self.assertEqual('Parent of "b/c" does not exist.', str(e))
+                transport.get_transport("b/c"))
+        self.assertTrue('Parent of "' in str(e))
+        self.assertTrue('" does not exist.' in str(e))
 
     def test_build_tree_single_branch(self):
         source = self.make_branch_and_tree("source")
@@ -580,6 +582,35 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual("b", conflict.conflict_path)
 
 
+class ResolveRevisionsTests(TestCaseWithTransport):
+
+    def test_unchanged(self):
+        source =self.make_branch_and_tree("source")
+        revid = source.commit("one")
+        branch1 = RecipeBranch("1", "source", revspec="1")
+        branch2 = RecipeBranch("1", "source", revspec="revid:%s" % revid)
+        self.assertEqual(None,
+                resolve_revisions_until_different(branch1, branch2))
+
+    def test_unchanged_not_explicit(self):
+        source =self.make_branch_and_tree("source")
+        revid = source.commit("one")
+        branch1 = RecipeBranch("1", "source")
+        branch2 = RecipeBranch("1", "source", revspec="revid:%s" % revid)
+        self.assertEqual(None,
+                resolve_revisions_until_different(branch1, branch2))
+
+    def test_changed(self):
+        source =self.make_branch_and_tree("source")
+        revid = source.commit("one")
+        branch1 = RecipeBranch("1", "source", "1")
+        branch2 = RecipeBranch("1", "source", revspec="revid:foo")
+        new_branch = resolve_revisions_until_different(branch1, branch2)
+        self.assertEqual("1", new_branch.name)
+        self.assertEqual("source", new_branch.url)
+        self.assertEqual("revid:%s" % revid, new_branch.revspec)
+
+
 class BuildManifestTests(TestCaseInTempDir):
 
     def test_simple_manifest(self):
@@ -607,3 +638,37 @@ class BuildManifestTests(TestCaseInTempDir):
                 "nest nested1 nested1_url nested revid:nested1_revid\n"
                 "  nest nested2 nested2_url nested2 revid:nested2_revid\n"
                 "merge merged merged_url revid:merged_revid\n", manifest)
+
+
+class RecipeBranchTests(TestCaseInTempDir):
+
+    def test_base_recipe_branch(self):
+        base_branch = BaseRecipeBranch("base_url", "1", revspec="2")
+        self.assertEqual(None, base_branch.name)
+        self.assertEqual("base_url", base_branch.url)
+        self.assertEqual("1", base_branch.deb_version)
+        self.assertEqual("2", base_branch.revspec)
+        self.assertEqual(0, len(base_branch.child_branches))
+        self.assertEqual(None, base_branch.revid)
+
+    def test_recipe_branch(self):
+        branch = RecipeBranch("name", "url", revspec="2")
+        self.assertEqual("name", branch.name)
+        self.assertEqual("url", branch.url)
+        self.assertEqual("2", branch.revspec)
+        self.assertEqual(0, len(branch.child_branches))
+        self.assertEqual(None, branch.revid)
+
+    def test_different_shape_to(self):
+        branch1 = BaseRecipeBranch("base_url", "1", revspec="2")
+        branch2 = BaseRecipeBranch("base_url", "1", revspec="3")
+        self.assertFalse(branch1.different_shape_to(branch2))
+        branch2 = BaseRecipeBranch("base", "1", revspec="2")
+        self.assertTrue(branch1.different_shape_to(branch2))
+        branch2 = BaseRecipeBranch("base_url", "2", revspec="2")
+        self.assertTrue(branch1.different_shape_to(branch2))
+        rbranch1 = RecipeBranch("name", "other_url")
+        rbranch2 = RecipeBranch("name2", "other_url")
+        self.assertTrue(rbranch1.different_shape_to(rbranch2))
+        rbranch2 = RecipeBranch("name", "other_url2")
+        self.assertTrue(rbranch1.different_shape_to(rbranch2))

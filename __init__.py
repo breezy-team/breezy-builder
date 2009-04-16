@@ -17,6 +17,7 @@ import os
 
 from bzrlib import (
         errors,
+        trace,
         transport,
         )
 from bzrlib.commands import Command, register_command
@@ -26,6 +27,7 @@ from bzrlib.plugins.builder.recipe import (
         build_manifest,
         build_tree,
         RecipeParser,
+        resolve_revisions_until_different,
         )
 
 
@@ -37,17 +39,39 @@ class cmd_build(Command):
     takes_args = ["recipe_file", "working_directory"]
     takes_options = [
             Option('manifest', type=str, argname="path",
-                   help="Path to write the manifest to"),
+                   help="Path to write the manifest to."),
+            Option('if-changed-from', type=str, argname="path",
+                   help="Only build if the outcome would be different "
+                        "to that specified in the specified manifest."),
                     ]
 
-    def run(self, recipe_file, working_directory, manifest=None):
+    def run(self, recipe_file, working_directory, manifest=None,
+            if_changed_from=None):
         recipe_transport = transport.get_transport(os.path.dirname(recipe_file))
         try:
-            recipe_contents = recipe_transport.get_bytes(os.path.basename(recipe_file))
+            recipe_contents = recipe_transport.get_bytes(
+                    os.path.basename(recipe_file))
         except errors.NoSuchFile:
-            raise errors.BzrCommandError("'%s' does not exist" % recipe_file)
+            raise errors.BzrCommandError("Specified recipe does not exist: "
+                    "%s" % recipe_file)
         parser = RecipeParser(recipe_contents, filename=recipe_file)
         base_branch = parser.parse()
+        if if_changed_from is not None:
+            old_manifest_transport = transport.get_transport(os.path.dirname(
+                        if_changed_from))
+            try:
+                old_manifest_contents = old_manifest_transport.get_bytes(
+                        os.path.basename(if_changed_from))
+            except errors.NoSuchFile:
+                raise errors.BzrCommandError("Specified previous manifest "
+                        "does not exist: %s" % if_changed_from)
+            old_recipe = RecipeParser(old_manifest_contents,
+                    filename=if_changed_from).parse()
+            base_branch = resolve_revisions_until_different(base_branch,
+                    old_recipe)
+            if base_branch is None:
+                trace.note("Unchanged")
+                return 0
         build_tree(base_branch, working_directory)
         if manifest is not None:
             parent_dir = os.path.dirname(manifest)
