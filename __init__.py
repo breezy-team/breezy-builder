@@ -25,7 +25,6 @@ if __name__ == '__main__':
 from email import utils
 import os
 import subprocess
-import sys
 
 from debian_bundle import changelog
 
@@ -127,7 +126,51 @@ class cmd_dailydeb(cmd_build):
                         help="The distribution to target. If not specified "
                              "then the same distribution as the last entry "
                              "in debian/changelog will be used."),
+                Option("dput", type=str, argname="target",
+                        help="dput the built package to the specified "
+                        "dput target."),
+                Option("key-id", type=str, short_name="k",
+                       help="Sign the packages with the specified GnuPG key, "
+                            "must be specified if you use --dput."),
             ]
+
+    def run(self, recipe_file, working_directory, manifest=None,
+            if_changed_from=None, package=None, distribution=None,
+            dput=None, key_id=None):
+
+        if dput is not None and key_id is None:
+            raise errors.BzrCommandError("You must specify --key-id if you "
+                    "specify --dput.")
+
+        base_branch = self._get_branch_from_recipe_file(recipe_file)
+        if if_changed_from is not None:
+            base_branch = self._check_changed(base_branch, if_changed_from)
+            if base_branch is None:
+                trace.note("Unchanged")
+                return 0
+        recipe_name = os.path.basename(recipe_file)
+        if recipe_file.endswith(".recipe"):
+            recipe_file = recipe_file[:-len(".recipe")]
+        version = base_branch.deb_version
+        if "-" in version:
+            version = version[:version.rindex("-")]
+        package_basedir = "%s-%s" % (recipe_file, version)
+        if not os.path.exists(working_directory):
+            os.makedirs(working_directory)
+        package_dir = os.path.join(working_directory, package_basedir)
+        build_tree(base_branch, package_dir)
+        self._write_manifest_to_path(os.path.join(package_dir, "debian",
+                    "bzr-builder.manifest"), base_branch)
+        if manifest is not None:
+            self._write_manifest_to_path(manifest, base_branch)
+        self._add_changelog_entry(base_branch, package_dir,
+                distribution=distribution, package=package)
+        self._build_source_package(package_dir)
+        if key_id is not None:
+            self._sign_source_package(package_dir, key_id)
+        if dput is not None:
+            self._dput_source_package(package_dir, dput)
+
 
     def _add_changelog_entry(self, base_branch, basedir, distribution=None,
             package=None):
@@ -170,7 +213,7 @@ class cmd_dailydeb(cmd_build):
             cl_f.close()
 
     def _build_source_package(self, basedir):
-        command = ["debuild", "-S", "-uc", "-us"]
+        command = ["/usr/bin/debuild", "-S", "-uc", "-us"]
         proc = subprocess.Popen(command, cwd=basedir,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         retcode = proc.wait()
@@ -179,32 +222,25 @@ class cmd_dailydeb(cmd_build):
             raise errors.BzrCommandError("Failed to build the source package: "
                     "%s" % output)
 
-    def run(self, recipe_file, working_directory, manifest=None,
-            if_changed_from=None, package=None, distribution=None):
-        base_branch = self._get_branch_from_recipe_file(recipe_file)
-        if if_changed_from is not None:
-            base_branch = self._check_changed(base_branch, if_changed_from)
-            if base_branch is None:
-                trace.note("Unchanged")
-                return 0
-        recipe_name = os.path.basename(recipe_file)
-        if recipe_file.endswith(".recipe"):
-            recipe_file = recipe_file[:-len(".recipe")]
-        version = base_branch.deb_version
-        if "-" in version:
-            version = version[:version.rindex("-")]
-        package_basedir = "%s-%s" % (recipe_file, version)
-        if not os.path.exists(working_directory):
-            os.makedirs(working_directory)
-        package_dir = os.path.join(working_directory, package_basedir)
-        build_tree(base_branch, package_dir)
-        self._write_manifest_to_path(os.path.join(package_dir, "debian",
-                    "bzr-builder.manifest"), base_branch)
-        if manifest is not None:
-            self._write_manifest_to_path(manifest, base_branch)
-        self._add_changelog_entry(base_branch, package_dir,
-                distribution=distribution, package=package)
-        self._build_source_package(package_dir)
+    def _sign_source_package(self, basedir, key_id):
+        command = ["/usr/bin/debsign", "-S", "-k", key_id]
+        proc = subprocess.Popen(command, cwd=basedir,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        retcode = proc.wait()
+        if retcode != 0:
+            output = proc.stdout.read()
+            raise errors.BzrCommandError("Signing the package failed: "
+                    "%s" % output)
+
+    def _dput_source_package(self, basedir, target):
+        command = ["/usr/bin/debrelease", "--dput", target]
+        proc = subprocess.Popen(command, cwd=basedir,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        retcode = proc.wait()
+        if retcode != 0:
+            output = proc.stdout.read()
+            raise errors.BzrCommandError("Uploading the package failed: "
+                    "%s" % output)
 
 
 register_command(cmd_dailydeb)
