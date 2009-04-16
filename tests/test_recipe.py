@@ -25,6 +25,7 @@ from bzrlib.tests import (
         TestCaseWithTransport,
         )
 from bzrlib.plugins.builder.recipe import (
+        BaseRecipeBranch,
         build_manifest,
         build_tree,
         ensure_basedir,
@@ -298,7 +299,7 @@ class BuildTreeTests(TestCaseWithTransport):
     def test_build_tree_single_branch(self):
         source = self.make_branch_and_tree("source")
         revid = source.commit("one")
-        base_branch = RecipeBranch("", "source")
+        base_branch = BaseRecipeBranch("source", "1")
         build_tree(base_branch, "target")
         self.failUnlessExists("target")
         tree = workingtree.WorkingTree.open("target")
@@ -310,7 +311,7 @@ class BuildTreeTests(TestCaseWithTransport):
         revid = source.commit("one")
         # We just create the target as a directory
         os.mkdir("target")
-        base_branch = RecipeBranch("", "source")
+        base_branch = BaseRecipeBranch("source", "1")
         build_tree(base_branch, "target")
         self.failUnlessExists("target")
         tree = workingtree.WorkingTree.open("target")
@@ -321,7 +322,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source = self.make_branch_and_tree("source")
         revid = source.commit("one")
         target = self.make_branch_and_tree("target")
-        base_branch = RecipeBranch("", "source")
+        base_branch = BaseRecipeBranch("source", "1")
         build_tree(base_branch, "target")
         self.failUnlessExists("target")
         tree = workingtree.WorkingTree.open("target")
@@ -337,7 +338,7 @@ class BuildTreeTests(TestCaseWithTransport):
         self.build_tree(["source2/a"])
         source2.add(["a"])
         source2_rev_id = source2.commit("one")
-        base_branch = RecipeBranch("", "source1")
+        base_branch = BaseRecipeBranch("source1", "1")
         nested_branch = RecipeBranch("nested", "source2")
         base_branch.nest_branch("sub", nested_branch)
         build_tree(base_branch, "target")
@@ -357,7 +358,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source2 = source1.bzrdir.sprout("source2").open_workingtree()
         self.build_tree_contents([("source2/a", "other change")])
         source2_rev_id = source2.commit("one")
-        base_branch = RecipeBranch("", "source1")
+        base_branch = BaseRecipeBranch("source1", "1")
         merged_branch = RecipeBranch("merged", "source2")
         base_branch.merge_branch(merged_branch)
         build_tree(base_branch, "target")
@@ -382,7 +383,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source3 = source2.bzrdir.sprout("source3").open_workingtree()
         self.build_tree_contents([("source3/a", "third change")])
         source3_rev_id = source3.commit("one")
-        base_branch = RecipeBranch("", "source1")
+        base_branch = BaseRecipeBranch("source1", "1")
         merged_branch1 = RecipeBranch("merged", "source2")
         base_branch.merge_branch(merged_branch1)
         merged_branch2 = RecipeBranch("merged2", "source3")
@@ -413,7 +414,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source2_rev_id = source2.commit("one")
         self.build_tree_contents([("source1/a", "trunk change\n")])
         source1_rev_id = source1.commit("two")
-        base_branch = RecipeBranch("", "source1")
+        base_branch = BaseRecipeBranch("source1", "1")
         merged_branch = RecipeBranch("merged", "source2")
         base_branch.merge_branch(merged_branch)
         e = self.assertRaises(errors.BzrCommandError, build_tree,
@@ -444,7 +445,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source2.commit("one")
         self.build_tree_contents([("source1/a", "unwanted trunk change\n")])
         source1.commit("two")
-        base_branch = RecipeBranch("", "source1", revspec="1")
+        base_branch = BaseRecipeBranch("source1", "1", revspec="1")
         merged_branch = RecipeBranch("merged", "source2", revspec="2")
         base_branch.merge_branch(merged_branch)
         build_tree(base_branch, "target")
@@ -582,14 +583,14 @@ class BuildTreeTests(TestCaseWithTransport):
 class BuildManifestTests(TestCaseInTempDir):
 
     def test_simple_manifest(self):
-        base_branch = RecipeBranch(None, "base_url", deb_version="1")
+        base_branch = BaseRecipeBranch("base_url", "1")
         base_branch.revid = "base_revid"
         manifest = build_manifest(base_branch)
         self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
                 "base_url revid:base_revid\n", manifest)
 
     def test_complex_manifest(self):
-        base_branch = RecipeBranch(None, "base_url", deb_version="2")
+        base_branch = BaseRecipeBranch("base_url", "2")
         base_branch.revid = "base_revid"
         nested_branch1 = RecipeBranch("nested1", "nested1_url")
         nested_branch1.revid = "nested1_revid"

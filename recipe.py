@@ -29,15 +29,14 @@ from bzrlib import (
         )
 
 
-def ensure_basedir(to_location):
-    """Ensure that the basedir of to_location exists.
+def ensure_basedir(to_transport):
+    """Ensure that the basedir of to_transport exists.
 
     It is allowed to already exist currently, to reuse directories.
 
-    :param to_location: The path to ensure exists.
-    :return: a Transport for that location
+    :param to_transport: The Transport to ensure that the basedir of
+            exists.
     """
-    to_transport = transport.get_transport(to_location)
     try:
         to_transport.mkdir('.')
     except errors.FileExists:
@@ -45,7 +44,6 @@ def ensure_basedir(to_location):
     except errors.NoSuchFile:
         raise errors.BzrCommandError('Parent of "%s" does not exist.'
                                      % to_location)
-    return to_transport
 
 
 def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
@@ -76,6 +74,7 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
     created_br_to = False
     if br_to is None:
         # We do a "branch"
+        ensure_basedir(to_transport)
         dir = br_from.bzrdir.sprout(to_transport.base, revision_id,
                                     possible_transports=possible_transports,
                                     accelerator_tree=accelerator_tree,
@@ -129,6 +128,13 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
 
 
 def merge_branch(child_branch, tree_to, br_to):
+    """Merge the branch specified by child_branch.
+
+    :param child_branch: the RecipeBranch to retrieve the branch and revision to
+            merge from.
+    :param tree_to: the WorkingTree to merge in to.
+    :param br_to: the Branch to merge in to.
+    """
     merge_from = branch.Branch.open(child_branch.url)
     merge_from.lock_read()
     try:
@@ -163,7 +169,29 @@ def merge_branch(child_branch, tree_to, br_to):
         merge_from.unlock()
 
 
-def build_tree(base_branch, target_path):
+def update_branch(base_branch, tree_to, br_to, to_transport):
+    from_location = base_branch.url
+    accelerator_tree, br_from = bzrdir.BzrDir.open_tree_or_branch(
+                        from_location)
+    br_from.lock_read()
+    try:
+        if base_branch.revspec is not None:
+            revspec = revisionspec.RevisionSpec.from_string(
+                    base_branch.revspec)
+            revision_id = revspec.as_revision_id(br_from)
+        else:
+            revision_id = br_from.last_revision()
+        base_branch.revid = revision_id
+        tree_to, br_to = pull_or_branch(tree_to, br_to, br_from,
+                to_transport, revision_id,
+                accelerator_tree=accelerator_tree,
+                possible_transports=[to_transport])
+    finally:
+        br_from.unlock()
+    return tree_to, br_to
+
+
+def build_tree(base_branch, target_path, if_changed_from=None):
     """Build the RecipeBranch at a path.
 
     Follow the instructions embodied in RecipeBranch and build a tree
@@ -173,8 +201,11 @@ def build_tree(base_branch, target_path):
 
     :param base_branch: a RecipeBranch to build.
     :param target_path: the path to the base of the desired output.
+    :param if_changed_from: an optional RecipeBranch where if supplied
+        changes will not be made if base_branch and if_changed_from
+        are equivalent.
     """
-    to_transport = ensure_basedir(target_path)
+    to_transport = transport.get_transport(target_path)
     try:
         tree_to, br_to = bzrdir.BzrDir.open_tree_or_branch(target_path)
         # Should we commit any changes in the tree here? If we don't
@@ -188,24 +219,8 @@ def build_tree(base_branch, target_path):
         if br_to is not None:
             br_to.lock_write()
         try:
-            from_location = base_branch.url
-            accelerator_tree, br_from = bzrdir.BzrDir.open_tree_or_branch(
-                                from_location)
-            br_from.lock_read()
-            try:
-                if base_branch.revspec is not None:
-                    revspec = revisionspec.RevisionSpec.from_string(
-                            base_branch.revspec)
-                    revision_id = revspec.as_revision_id(br_from)
-                else:
-                    revision_id = br_from.last_revision()
-                base_branch.revid = revision_id
-                tree_to, br_to = pull_or_branch(tree_to, br_to, br_from,
-                        to_transport, revision_id,
-                        accelerator_tree=accelerator_tree,
-                        possible_transports=[to_transport])
-            finally:
-                br_from.unlock()
+            tree_to, br_to = update_branch(base_branch, tree_to, br_to,
+                    to_transport)
             for child_branch, nest_location in base_branch.child_branches:
                 if nest_location is not None:
                     # FIXME: pass possible_transports around
@@ -215,7 +230,7 @@ def build_tree(base_branch, target_path):
                 else:
                     merge_branch(child_branch, tree_to, br_to)
         finally:
-            # Is this ok if tree_to is created by pull_or_branch
+            # Is this ok if tree_to is created by pull_or_branch?
             if br_to is not None:
                 br_to.unlock()
     finally:
@@ -270,20 +285,17 @@ class RecipeBranch(object):
     to when the RecipeBranch was built, or None if it has not been built.
     """
 
-    def __init__(self, name, url, revspec=None, deb_version=None):
+    def __init__(self, name, url, revspec=None):
         """Create a RecipeBranch.
 
         :param name: the name for the branch, or None if it is the root.
         :param url: the URL from which to retrieve the branch.
         :param revspec: a revision specifier for the revision of the branch
                 to use, or None (the default) to use the last revision.
-        :param deb_version: the template to use for the version number.
-                Should be None for anything except the root branch.
         """
         self.name = name
         self.url = url
         self.revspec = revspec
-        self.deb_version = deb_version
         self.child_branches = []
         self.revid = None
 
@@ -303,6 +315,19 @@ class RecipeBranch(object):
         assert location not in [b[1] for b in self.child_branches],\
             "%s already has branch nested there" % location
         self.child_branches.append((branch, location))
+
+
+class BaseRecipeBranch(RecipeBranch):
+    """The RecipeBranch that is at the root of a recipe."""
+
+    def __init__(self, url, deb_version, revspec=None):
+        """Create a BaseRecipeBranch.
+
+        :param deb_version: the template to use for the version number.
+                Should be None for anything except the root branch.
+        """
+        super(BaseRecipeBranch, self).__init__(None, url, revspec=revspec)
+        self.deb_version = deb_version
 
 
 class RecipeParseError(errors.BzrError):
@@ -373,8 +398,8 @@ class RecipeParser(object):
                 url = self.take_to_whitespace("branch to start from")
                 revspec = self.parse_optional_revspec()
                 self.new_line()
-                last_branch = RecipeBranch(None, url, revspec=revspec,
-                        deb_version=deb_version)
+                last_branch = BaseRecipeBranch(url, deb_version,
+                        revspec=revspec)
                 active_branches = [last_branch]
                 last_instruction = ""
             else:
