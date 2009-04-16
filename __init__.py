@@ -20,8 +20,10 @@ from bzrlib import (
         transport,
         )
 from bzrlib.commands import Command, register_command
+from bzrlib.option import Option
 
 from bzrlib.plugins.builder.recipe import (
+        build_manifest,
         build_tree,
         RecipeParser,
         )
@@ -33,8 +35,12 @@ class cmd_build(Command):
     Pass the name of the recipe file and the directory to work in.
     """
     takes_args = ["recipe_file", "working_directory"]
+    takes_options = [
+            Option('manifest', type=str, argname="path",
+                   help="Path to write the manifest to"),
+                    ]
 
-    def run(self, recipe_file, working_directory):
+    def run(self, recipe_file, working_directory, manifest=None):
         recipe_transport = transport.get_transport(os.path.dirname(recipe_file))
         try:
             recipe_contents = recipe_transport.get_bytes(os.path.basename(recipe_file))
@@ -43,6 +49,15 @@ class cmd_build(Command):
         parser = RecipeParser(recipe_contents, filename=recipe_file)
         base_branch = parser.parse()
         build_tree(base_branch, working_directory)
+        if manifest is not None:
+            parent_dir = os.path.dirname(manifest)
+            if parent_dir != '':
+                os.makedirs(parent_dir)
+            manifest_f = open(manifest, 'wb')
+            try:
+                manifest_f.write(build_manifest(base_branch))
+            finally:
+                manifest_f.close()
 
 
 register_command(cmd_build)

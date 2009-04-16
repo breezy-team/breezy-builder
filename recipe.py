@@ -79,7 +79,7 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
         dir = br_from.bzrdir.sprout(to_transport.base, revision_id,
                                     possible_transports=possible_transports,
                                     accelerator_tree=accelerator_tree,
-                                    stacked=True, source_branch=br_from)
+                                    source_branch=br_from)
         try:
             tree_to = dir.open_workingtree()
         except errors.NoWorkingTree:
@@ -247,7 +247,9 @@ def build_manifest(base_branch):
     assert base_branch.revid is not None, "Branch hasn't been built"
     manifest += "%s revid:%s\n" % (base_branch.url, base_branch.revid)
     manifest += _add_child_branches_to_manifest(base_branch.child_branches, 0)
-    # Sanity check
+    # Sanity check.
+    # TODO: write a function that compares the result of this parse with
+    # the branch that we built it from.
     RecipeParser(manifest).parse()
     return manifest
 
@@ -371,7 +373,8 @@ class RecipeParser(object):
                 url = self.take_to_whitespace("branch to start from")
                 revspec = self.parse_optional_revspec()
                 self.new_line()
-                last_branch = RecipeBranch(None, url, revspec=revspec)
+                last_branch = RecipeBranch(None, url, revspec=revspec,
+                        deb_version=deb_version)
                 active_branches = [last_branch]
                 last_instruction = ""
             else:

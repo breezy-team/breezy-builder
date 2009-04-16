@@ -37,7 +37,9 @@ from bzrlib.plugins.builder.recipe import (
 
 class RecipeParserTests(TestCaseInTempDir):
 
-    basic_header = "# bzr-builder format 0.1 deb-version 0.1-{revision}\n"
+    deb_version = "0.1-{revision}"
+    basic_header = ("# bzr-builder format 0.1 deb-version "
+            + deb_version +"\n")
     basic_header_and_branch = basic_header + "http://foo.org/\n"
 
     def get_recipe(self, recipe_text):
@@ -52,11 +54,19 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual("recipe", exc.filename)
 
     def check_recipe_branch(self, branch, name, url, revspec=None,
-            num_child_branches=0):
+            num_child_branches=0, revid=None, deb_version=None):
         self.assertEqual(name, branch.name)
         self.assertEqual(url, branch.url)
         self.assertEqual(revspec, branch.revspec)
+        self.assertEqual(revid, branch.revid)
+        self.assertEqual(deb_version, branch.deb_version)
         self.assertEqual(num_child_branches, len(branch.child_branches))
+
+    def check_base_recipe_branch(self, branch, url, revspec=None,
+            num_child_branches=0, revid=None, deb_version=deb_version):
+        self.check_recipe_branch(branch, None, url, revspec=revspec,
+                num_child_branches=num_child_branches, revid=revid,
+                deb_version=deb_version)
 
     def test_parses_most_basic(self):
         self.get_recipe(self.basic_header_and_branch)
@@ -188,12 +198,12 @@ class RecipeParserTests(TestCaseInTempDir):
 
     def test_builds_simplest_recipe(self):
         base_branch = self.get_recipe(self.basic_header_and_branch)
-        self.check_recipe_branch(base_branch, None, "http://foo.org/")
+        self.check_base_recipe_branch(base_branch, "http://foo.org/")
 
     def test_builds_recipe_with_merge(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
                 + "merge bar http://bar.org")
-        self.check_recipe_branch(base_branch, None, "http://foo.org/",
+        self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
         child_branch, location = base_branch.child_branches[0]
         self.assertEqual(None, location)
@@ -202,7 +212,7 @@ class RecipeParserTests(TestCaseInTempDir):
     def test_builds_recipe_with_nest(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
                 + "nest bar http://bar.org baz")
-        self.check_recipe_branch(base_branch, None, "http://foo.org/",
+        self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
         child_branch, location = base_branch.child_branches[0]
         self.assertEqual("baz", location)
@@ -211,7 +221,7 @@ class RecipeParserTests(TestCaseInTempDir):
     def test_builds_recipe_with_nest_then_merge(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
                 + "nest bar http://bar.org baz\nmerge zam lp:zam")
-        self.check_recipe_branch(base_branch, None, "http://foo.org/",
+        self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=2)
         child_branch, location = base_branch.child_branches[0]
         self.assertEqual("baz", location)
@@ -223,7 +233,7 @@ class RecipeParserTests(TestCaseInTempDir):
     def test_builds_recipe_with_merge_then_nest(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
                 + "merge zam lp:zam\nnest bar http://bar.org baz")
-        self.check_recipe_branch(base_branch, None, "http://foo.org/",
+        self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=2)
         child_branch, location = base_branch.child_branches[0]
         self.assertEqual(None, location)
@@ -235,7 +245,7 @@ class RecipeParserTests(TestCaseInTempDir):
     def test_builds_a_merge_in_to_a_nest(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
                 + "nest bar http://bar.org baz\n  merge zam lp:zam")
-        self.check_recipe_branch(base_branch, None, "http://foo.org/",
+        self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
         child_branch, location = base_branch.child_branches[0]
         self.assertEqual("baz", location)
@@ -248,7 +258,7 @@ class RecipeParserTests(TestCaseInTempDir):
     def tests_builds_nest_into_a_nest(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
                 + "nest bar http://bar.org baz\n  nest zam lp:zam zoo")
-        self.check_recipe_branch(base_branch, None, "http://foo.org/",
+        self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
         child_branch, location = base_branch.child_branches[0]
         self.assertEqual("baz", location)
@@ -263,7 +273,7 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "http://foo.org/ revid:a\n"
                 + "nest bar http://bar.org baz tag:b\n"
                 + "merge zam lp:zam 2")
-        self.check_recipe_branch(base_branch, None, "http://foo.org/",
+        self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=2, revspec="revid:a")
         child_branch, location = base_branch.child_branches[0]
         self.assertEqual("baz", location)
