@@ -11,6 +11,6 @@ setup(name="bzr-builder",
       url="http://launchpad.net/bzr-builder",
       packages=['bzrlib.plugins.builder',
                 'bzrlib.plugins.builder.tests',
-               ]
+               ],
       package_dir={'bzrlib.plugins.builder': '.'},
      )
