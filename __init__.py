@@ -221,9 +221,12 @@ class cmd_dailydeb(cmd_build):
             cl_f.close()
 
     def _build_source_package(self, basedir):
-        command = ["/usr/bin/debuild", "-S", "-uc", "-us"]
+        trace.note("Building the source package")
+        command = ["/usr/bin/debuild", "--no-tgz-check", "-S", "-uc", "-us"]
         proc = subprocess.Popen(command, cwd=basedir,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                stdin=subprocess.PIPE)
+        proc.stdin.close()
         retcode = proc.wait()
         if retcode != 0:
             output = proc.stdout.read()
@@ -231,9 +234,12 @@ class cmd_dailydeb(cmd_build):
                     "%s" % output)
 
     def _sign_source_package(self, basedir, key_id):
-        command = ["/usr/bin/debsign", "-S", "-k", key_id]
+        trace.note("Signing the source package")
+        command = ["/usr/bin/debsign", "-S", "-k%s" % key_id]
         proc = subprocess.Popen(command, cwd=basedir,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                stdin=subprocess.PIPE)
+        proc.stdin.close()
         retcode = proc.wait()
         if retcode != 0:
             output = proc.stdout.read()
@@ -241,9 +247,12 @@ class cmd_dailydeb(cmd_build):
                     "%s" % output)
 
     def _dput_source_package(self, basedir, target):
+        trace.note("Uploading the source package")
         command = ["/usr/bin/debrelease", "--dput", target]
         proc = subprocess.Popen(command, cwd=basedir,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                stdin=subprocess.PIPE)
+        proc.stdin.close()
         retcode = proc.wait()
         if retcode != 0:
             output = proc.stdout.read()
