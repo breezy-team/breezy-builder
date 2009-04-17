@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU General Public License along 
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import datetime
 import os
 
 from bzrlib import (
@@ -33,13 +34,13 @@ from bzrlib.plugins.builder.recipe import (
         RecipeParser,
         RecipeBranch,
         RecipeParseError,
-        resolve_revisions_until_different,
+        resolve_revisions,
         )
 
 
 class RecipeParserTests(TestCaseInTempDir):
 
-    deb_version = "0.1-{revision}"
+    deb_version = "0.1-{revno}"
     basic_header = ("# bzr-builder format 0.1 deb-version "
             + deb_version +"\n")
     basic_header_and_branch = basic_header + "http://foo.org/\n"
@@ -587,28 +588,69 @@ class ResolveRevisionsTests(TestCaseWithTransport):
     def test_unchanged(self):
         source =self.make_branch_and_tree("source")
         revid = source.commit("one")
-        branch1 = RecipeBranch("1", "source", revspec="1")
-        branch2 = RecipeBranch("1", "source", revspec="revid:%s" % revid)
-        self.assertEqual(None,
-                resolve_revisions_until_different(branch1, branch2))
+        branch1 = BaseRecipeBranch("source", "{revno}", revspec="1")
+        branch2 = BaseRecipeBranch("source", "{revno}",
+                revspec="revid:%s" % revid)
+        self.assertEqual(False, resolve_revisions(branch1,
+                    if_changed_from=branch2))
+        self.assertEqual("source", branch1.url)
+        self.assertEqual(revid, branch1.revid)
+        self.assertEqual("1", branch1.revspec)
+        self.assertEqual("1", branch1.deb_version)
 
     def test_unchanged_not_explicit(self):
         source =self.make_branch_and_tree("source")
         revid = source.commit("one")
-        branch1 = RecipeBranch("1", "source")
-        branch2 = RecipeBranch("1", "source", revspec="revid:%s" % revid)
-        self.assertEqual(None,
-                resolve_revisions_until_different(branch1, branch2))
+        branch1 = BaseRecipeBranch("source", "{revno}")
+        branch2 = BaseRecipeBranch("source", "{revno}",
+                revspec="revid:%s" % revid)
+        self.assertEqual(False, resolve_revisions(branch1,
+                    if_changed_from=branch2))
+        self.assertEqual("source", branch1.url)
+        self.assertEqual(revid, branch1.revid)
+        self.assertEqual(None, branch1.revspec)
+        self.assertEqual("1", branch1.deb_version)
 
     def test_changed(self):
         source =self.make_branch_and_tree("source")
         revid = source.commit("one")
-        branch1 = RecipeBranch("1", "source", "1")
-        branch2 = RecipeBranch("1", "source", revspec="revid:foo")
-        new_branch = resolve_revisions_until_different(branch1, branch2)
-        self.assertEqual("1", new_branch.name)
-        self.assertEqual("source", new_branch.url)
-        self.assertEqual("revid:%s" % revid, new_branch.revspec)
+        branch1 = BaseRecipeBranch("source", "{revno}", revspec="1")
+        branch2 = BaseRecipeBranch("source", "{revno}", revspec="revid:foo")
+        self.assertEqual(True, resolve_revisions(branch1,
+                    if_changed_from=branch2))
+        self.assertEqual("source", branch1.url)
+        self.assertEqual(revid, branch1.revid)
+        self.assertEqual("1", branch1.revspec)
+        self.assertEqual("1", branch1.deb_version)
+
+    def test_changed_shape(self):
+        source =self.make_branch_and_tree("source")
+        revid = source.commit("one")
+        branch1 = BaseRecipeBranch("source", "{revno}", revspec="1")
+        branch2 = BaseRecipeBranch("source", "{revno}",
+                revspec="revid:%s" % revid)
+        branch3 = RecipeBranch("nested", "source")
+        branch1.nest_branch("foo", branch3)
+        self.assertEqual(True, resolve_revisions(branch1,
+                    if_changed_from=branch2))
+        self.assertEqual("source", branch1.url)
+        self.assertEqual(revid, branch1.revid)
+        self.assertEqual("1", branch1.revspec)
+        self.assertEqual("1", branch1.deb_version)
+
+    def test_substitute(self):
+        source =self.make_branch_and_tree("source")
+        revid1 = source.commit("one")
+        revid2 = source.commit("two")
+        branch1 = BaseRecipeBranch("source",
+                "{revno}-{revno:packaging}", revspec="1")
+        branch2 = RecipeBranch("packaging", "source")
+        branch1.nest_branch("debian", branch2)
+        self.assertEqual(True, resolve_revisions(branch1))
+        self.assertEqual("source", branch1.url)
+        self.assertEqual(revid1, branch1.revid)
+        self.assertEqual("1", branch1.revspec)
+        self.assertEqual("1-2", branch1.deb_version)
 
 
 class BuildManifestTests(TestCaseInTempDir):
@@ -666,9 +708,39 @@ class RecipeBranchTests(TestCaseInTempDir):
         branch2 = BaseRecipeBranch("base", "1", revspec="2")
         self.assertTrue(branch1.different_shape_to(branch2))
         branch2 = BaseRecipeBranch("base_url", "2", revspec="2")
-        self.assertTrue(branch1.different_shape_to(branch2))
+        self.assertFalse(branch1.different_shape_to(branch2))
         rbranch1 = RecipeBranch("name", "other_url")
         rbranch2 = RecipeBranch("name2", "other_url")
         self.assertTrue(rbranch1.different_shape_to(rbranch2))
         rbranch2 = RecipeBranch("name", "other_url2")
         self.assertTrue(rbranch1.different_shape_to(rbranch2))
+
+    def test_substitute_time(self):
+        time = datetime.datetime.fromtimestamp(1)
+        base_branch = BaseRecipeBranch("base_url", "1-{time}")
+        base_branch.substitute_time(time)
+        self.assertEqual("1-197001010100", base_branch.deb_version)
+        base_branch.substitute_time(time)
+        self.assertEqual("1-197001010100", base_branch.deb_version)
+
+    def test_substitute_revno(self):
+        base_branch = BaseRecipeBranch("base_url", "1")
+        base_branch.substitute_revno(None, None)
+        self.assertEqual("1", base_branch.deb_version)
+        base_branch.substitute_revno(None, None)
+        self.assertEqual("1", base_branch.deb_version)
+        base_branch = BaseRecipeBranch("base_url", "{revno}")
+        base_branch.substitute_revno(None, lambda: "2")
+        self.assertEqual("2", base_branch.deb_version)
+        base_branch.substitute_revno(None, lambda: "2")
+        self.assertEqual("2", base_branch.deb_version)
+        base_branch = BaseRecipeBranch("base_url", "{revno}")
+        base_branch.substitute_revno("foo", None)
+        self.assertEqual("{revno}", base_branch.deb_version)
+        base_branch.substitute_revno("foo", None)
+        self.assertEqual("{revno}", base_branch.deb_version)
+        base_branch = BaseRecipeBranch("base_url", "{revno:foo}")
+        base_branch.substitute_revno("foo", lambda: "3")
+        self.assertEqual("3", base_branch.deb_version)
+        base_branch.substitute_revno("foo", lambda: "3")
+        self.assertEqual("3", base_branch.deb_version)

@@ -192,54 +192,89 @@ def update_branch(base_branch, tree_to, br_to, to_transport):
     return tree_to, br_to
 
 
-def _resolve_revisions_recurse(new_branch, if_changed_from):
+def _resolve_revisions_recurse(new_branch, substitute_revno,
+        if_changed_from=None):
+    changed = False
     br_from = branch.Branch.open(new_branch.url)
-    if new_branch.revspec is not None or if_changed_from.revspec is not None:
+    br_from.lock_read()
+    try:
         if new_branch.revspec is not None:
-            revspec = revisionspec.RevisionSpec.from_string(new_branch.revspec)
+            revspec = revisionspec.RevisionSpec.from_string(
+                    new_branch.revspec)
             revision_id = revspec.as_revision_id(br_from)
         else:
             revision_id = br_from.last_revision()
-        if if_changed_from.revspec is not None:
-            changed_revspec = revisionspec.RevisionSpec.from_string(
-                    if_changed_from.revspec)
-            changed_revision_id = changed_revspec.as_revision_id(br_from)
-        else:
-            changed_revision_id = br_from.last_revision()
-        # We should actually collect revision trees, but this is much easier.
-        new_branch.revspec = "revid:%s" % revision_id
-        if revision_id != changed_revision_id:
-            # Do we have a problem with not resolving everything at the same
-            # time?
-            return True
-    for index, (child_branch, nest_location) in \
-        enumerate(new_branch.child_branches):
-        if _resolve_revisions_recurse(child_branch,
-                if_changed_from.child_branches[index]):
-            return True
-    return False
+        new_branch.revid = revision_id
+        def get_revno():
+            try:
+                revno = br_from.revision_id_to_revno(revision_id)
+                return "%s" % revno
+            except errors.NoSuchRevision:
+                # We need to load and use the full revno map after all
+                result = br_from.get_revision_id_to_revno_map().get(
+                        revision_id)
+            if result is None:
+                return result
+            return ".".join(result)
+        substitute_revno(new_branch.name, get_revno)
+        if (if_changed_from is not None
+                and (new_branch.revspec is not None
+                        or if_changed_from.revspec is not None)):
+            if if_changed_from.revspec is not None:
+                changed_revspec = revisionspec.RevisionSpec.from_string(
+                        if_changed_from.revspec)
+                changed_revision_id = changed_revspec.as_revision_id(
+                        br_from)
+            else:
+                changed_revision_id = br_from.last_revision()
+            if revision_id != changed_revision_id:
+                changed = True
+        for index, (child_branch, nest_location) in \
+            enumerate(new_branch.child_branches):
+            if_changed_child = None
+            if if_changed_from is not None:
+                if_changed_child = if_changed_from.child_branches[index]
+            child_changed = _resolve_revisions_recurse(child_branch,
+                    substitute_revno,
+                    if_changed_from=if_changed_child)
+            if child_changed:
+                changed = child_changed
+        return changed
+    finally:
+        br_from.unlock()
 
 
-def resolve_revisions_until_different(base_branch, if_changed_from):
-    """Compare the two RecipeBranches to see if they differ.
+def resolve_revisions(base_branch, if_changed_from=None):
+    """Resolve all the unknowns in base_branch.
 
-    This walks the two RecipeBranches and if they have the same shape if
-    compares the revisions. If the shape or the revisons differ then it
-    will return a new RecipeBranch to build, with the revspecs pointing
-    to revision ids for any component where the revspec was resolved
-    (so that locks on all branches don't have to be maintained).
-    If they don't differ then None will be returned.
+    This walks the RecipeBranch and substitutes in revnos and deb_version.
+
+    If if_changed_from is not None then it should be a second RecipeBranch
+    to compare base_branch against. If the shape, or the revision ids differ
+    then the function will return True.
 
     :param base_branch: the RecipeBranch we plan to build.
     :param if_changed_from: the RecipeBranch that we want to compare against.
-    :return: a RecipeBranch to build, or None if the two RecipeBranches
-            don't differ.
+    :return: False if if_changed_from is not None, and the shape and revisions
+        of the two branches don't differ. True otherwise.
     """
-    new_branch = copy.deepcopy(base_branch)
-    changed = _resolve_revisions_recurse(new_branch, if_changed_from)
+    changed = False
+    if if_changed_from is not None:
+        changed = base_branch.different_shape_to(if_changed_from)
+    if_changed_from_revisions = if_changed_from
     if changed:
-        return new_branch
-    return None
+        if_changed_from_revisions = None
+    changed_revisions = _resolve_revisions_recurse(base_branch,
+            base_branch.substitute_revno,
+            if_changed_from=if_changed_from_revisions)
+    if not changed:
+        changed = changed_revisions
+    if "{" in base_branch.deb_version:
+        raise errors.BzrCommandError("deb-version not fully "
+                "expanded: %s" % base_branch.deb_version)
+    if if_changed_from is not None and not changed:
+        return False
+    return True
 
 
 def build_tree(base_branch, target_path):
@@ -395,13 +430,36 @@ class BaseRecipeBranch(RecipeBranch):
         super(BaseRecipeBranch, self).__init__(None, url, revspec=revspec)
         self.deb_version = deb_version
 
-    def different_shape_to(self, other_branch):
-        """Tests whether the name, url and child_branches are the same"""
-        # If the deb_version is stored expanded in the manifest then we
-        # don't want this check
-        if self.deb_version != other_branch.deb_version:
-            return True
-        return super(BaseRecipeBranch, self).different_shape_to(other_branch)
+    def substitute_revno(self, branch_name, get_revno_cb):
+        """Substitute the revno for the given branch name in deb_version.
+
+        Where deb_version has a place to substitute the revno for a branch
+        this will substitute it for the given branch name.
+
+        :param branch_name: the name of the RecipeBranch to substitute.
+        :param get_revno_cb: a callback to get the revno for that branch if
+            needed.
+        """
+        if branch_name is None:
+            subst_string = "{revno}"
+        else:
+            subst_string = "{revno:%s}" % branch_name
+        if subst_string in self.deb_version:
+            revno = get_revno_cb()
+            if revno is None:
+                raise errors.BzrCommandError("Can't substitute revno of "
+                        "branch %s in deb-version, as it's revno can't be "
+                        "determined")
+            self.deb_version = self.deb_version.replace(subst_string, revno)
+
+    def substitute_time(self, time):
+        """Substitute the time in to deb_version if needed.
+
+        :param time: a datetime.datetime with the desired time.
+        """
+        if "{time}" in self.deb_version:
+            self.deb_version = self.deb_version.replace("{time}",
+                    time.strftime("%Y%m%d%H%M"))
 
 
 class RecipeParseError(errors.BzrError):

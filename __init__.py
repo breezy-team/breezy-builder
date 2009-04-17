@@ -22,6 +22,7 @@ if __name__ == '__main__':
             shell=True, env={"BZR_PLUGIN_PATH": dir})
     sys.exit(retcode)
 
+import datetime
 from email import utils
 import os
 import subprocess
@@ -40,7 +41,7 @@ from bzrlib.plugins.builder.recipe import (
         build_manifest,
         build_tree,
         RecipeParser,
-        resolve_revisions_until_different,
+        resolve_revisions,
         )
 
 
@@ -79,7 +80,7 @@ class cmd_build(Command):
         parser = RecipeParser(recipe_contents, filename=recipe_file)
         return parser.parse()
 
-    def _check_changed(self, base_branch, if_changed_from):
+    def _get_old_recipe(self, if_changed_from):
         old_manifest_transport = transport.get_transport(os.path.dirname(
                     if_changed_from))
         try:
@@ -90,17 +91,20 @@ class cmd_build(Command):
                     "does not exist: %s" % if_changed_from)
         old_recipe = RecipeParser(old_manifest_contents,
                 filename=if_changed_from).parse()
-        return resolve_revisions_until_different(base_branch,
-                old_recipe)
+        return old_recipe
 
     def run(self, recipe_file, working_directory, manifest=None,
             if_changed_from=None):
         base_branch = self._get_branch_from_recipe_file(recipe_file)
+        time = datetime.datetime.utcnow()
+        base_branch.substitute_time(time)
+        old_recipe = None
         if if_changed_from is not None:
-            base_branch = self._check_changed(base_branch, if_changed_from)
-            if base_branch is None:
-                trace.note("Unchanged")
-                return 0
+            old_recipe = self._get_old_recipe(if_changed_from)
+        changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
+        if not changed:
+            trace.note("Unchanged")
+            return 0
         build_tree(base_branch, working_directory)
         if manifest is not None:
             self._write_manifest_to_path(manifest, base_branch)
@@ -143,11 +147,15 @@ class cmd_dailydeb(cmd_build):
                     "specify --dput.")
 
         base_branch = self._get_branch_from_recipe_file(recipe_file)
+        time = datetime.datetime.utcnow()
+        base_branch.substitute_time(time)
+        old_recipe = None
         if if_changed_from is not None:
-            base_branch = self._check_changed(base_branch, if_changed_from)
-            if base_branch is None:
-                trace.note("Unchanged")
-                return 0
+            old_recipe = self._get_old_recipe(if_changed_from)
+        changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
+        if not changed:
+            trace.note("Unchanged")
+            return 0
         recipe_name = os.path.basename(recipe_file)
         if recipe_file.endswith(".recipe"):
             recipe_file = recipe_file[:-len(".recipe")]
