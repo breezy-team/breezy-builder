@@ -13,6 +13,92 @@
 # You should have received a copy of the GNU General Public License along 
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+"""The bzr-builder plugin allows you to construct a branch from a 'recipe'.
+
+The recipe is a series of pointers to branches and instructions for how they
+should be combined. There are two ways to combine branches, by merging, and
+by nesting, allowing much flexibility.
+
+A recipe is just a text file that starts with a line such as
+
+# bzr-builder format 0.1 deb-version 1.0+{revno}-{revno:packaging}
+
+The format specifier is there to allow the syntax to be changed in later
+versions, and the meaning of "deb-version" will be explained later.
+
+The next step is the define the base branch, this is the branch that will
+be places at the root, e.g. just put
+
+lp:foo
+
+to use the trunk of "foo" hosted on LaunchPad.
+
+Next comes any number of lines of other branches to be merged in, but using
+a slightly different format. To merge a branch in to the base specify
+something like
+
+merge packaging lp:~foo-dev/foo/packaging
+
+which specifies we are merging a branch we will refer to as "packaging", which
+can be found at the given URI. The name you give to the branch as the second
+item doesn't have to match anything else, it's just an identifier specific
+to the recipe.
+
+If you wish to nest a branch then you use a similar line
+
+nest artwork lp:foo-images images
+
+This specifies that we are nesting the branch at lp:foo-images, which we will
+call "artwork", and we will place it locally in to the "images" directory.
+
+You can then continue in this fashion for as many branches as you like. It
+is also possible to nest and merge branches in to nested branches. For example
+to merge a branch in to the "artwork" branch we put the following on the line
+below that one, indented by two spaces.
+
+  merge artwork-fixes lp:~bob/foo-images/fix-12345
+
+which will merge Bob's fixes branch in to the "artwork" branch which we nested
+at "images".
+
+It is also possible to specify particular revisions of a branch by appending
+a revisionspec to the line. For instance
+
+nest docs lp:foo-docs doc tag:1.0
+
+will nest the revision pointed to by the "1.0" tag of that branch. The format
+for the revisionspec is indentical to that taken by the "--revision" argument
+to many bzr commands, see "bzr help revisionspec".
+
+You can then build this branch by running
+
+bzr build foo.recipe working-dir
+
+(assuming you saved it as foo.recipe in your current directory).
+
+Once the command finished it will have placed the result in "working-dir".
+
+It is also possible to produce Debian source packages from a recipe, assuming
+that one of the branches in the recipe contains some appropriate packaging.
+You can do this using the "bzr dailydeb" command, which takes the same
+arguments as "build". Only this time im working dir you will find a source
+package and a directory containing the code that the packages was built from
+once it is done. Also take a look at the "--key-id" and "--dput" arguments
+to have "bzr dailydeb" sign and upload the source package somewhere.
+
+To build Debian source package that you desire you should make sure that
+"deb-version" is set to an appropriate value on the first line of your
+recipe. This will be used as the version number of the package. The
+value you put there also allows for substution of values in to it based
+on various things when the recipe is processed:
+
+  * {time} will be substituted with the current date and time, such as
+    200908191512.
+  * {revno} will be the revno of the base branch (the first specified).
+  * {revno:<branch name>} will be substituted with the revno for the
+    branch named <branch name> in the recipe.
+"""
+
 if __name__ == '__main__':
     import os
     import subprocess
@@ -49,6 +135,8 @@ class cmd_build(Command):
     """Build a tree based on a 'recipe'.
 
     Pass the name of the recipe file and the directory to work in.
+
+    See "bzr help builder" for more information on what a recipe is.
     """
     takes_args = ["recipe_file", "working_directory"]
     takes_options = [
@@ -118,6 +206,8 @@ register_command(cmd_build)
 
 class cmd_dailydeb(cmd_build):
     """Build a deb based on a 'recipe'.
+
+    See "bzr help builder" for more information on what a recipe is.
     """
 
     takes_options = cmd_build.takes_options + [
