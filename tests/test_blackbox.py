@@ -1,4 +1,4 @@
-# bzr-builder: a bzr plugin to constuct trees based on recipes
+# bzr-builter: a bzr plugin to constuct trees based on recipes
 # Copyright 2009 Canonical Ltd.
 
 # This program is free software: you can redistribute it and/or modify it 
@@ -124,7 +124,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         out, err = self.run_bzr("dailydeb test.recipe working "
                 "--manifest manifest --package foo")
         self.failIfExists("working/a")
-        package_root = "working/test-1/"
+        package_root = "working/foo-1/"
         self.failUnlessExists(os.path.join(package_root, "a"))
         self.failUnlessExists(os.path.join(package_root,
                     "debian/bzr-builder.manifest"))

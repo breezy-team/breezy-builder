@@ -162,7 +162,7 @@ class cmd_dailydeb(cmd_build):
         version = base_branch.deb_version
         if "-" in version:
             version = version[:version.rindex("-")]
-        package_basedir = "%s-%s" % (recipe_file, version)
+        package_basedir = "%s-%s" % (package or recipe_file, version)
         if not os.path.exists(working_directory):
             os.makedirs(working_directory)
         package_dir = os.path.join(working_directory, package_basedir)
