@@ -338,7 +338,7 @@ class cmd_dailydeb(cmd_build):
 
     def _dput_source_package(self, basedir, target):
         trace.note("Uploading the source package")
-        command = ["/usr/bin/debrelease", "--dput", target]
+        command = ["/usr/bin/debrelease", "-S", "--dput", target]
         proc = subprocess.Popen(command, cwd=basedir,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 stdin=subprocess.PIPE)
