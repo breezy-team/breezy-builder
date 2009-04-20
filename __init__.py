@@ -312,7 +312,8 @@ class cmd_dailydeb(cmd_build):
 
     def _build_source_package(self, basedir):
         trace.note("Building the source package")
-        command = ["/usr/bin/debuild", "--no-tgz-check", "-S", "-uc", "-us"]
+        command = ["/usr/bin/debuild", "--no-tgz-check", "-i", "-I", "-S",
+                        "-uc", "-us"]
         proc = subprocess.Popen(command, cwd=basedir,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 stdin=subprocess.PIPE)
