@@ -233,7 +233,7 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
             enumerate(new_branch.child_branches):
             if_changed_child = None
             if if_changed_from is not None:
-                if_changed_child = if_changed_from.child_branches[index]
+                if_changed_child = if_changed_from.child_branches[index][0]
             child_changed = _resolve_revisions_recurse(child_branch,
                     substitute_revno,
                     if_changed_from=if_changed_child)

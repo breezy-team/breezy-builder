@@ -611,6 +611,29 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         self.assertEqual(None, branch1.revspec)
         self.assertEqual("1", branch1.deb_version)
 
+    def test_unchanged_multilevel(self):
+        source =self.make_branch_and_tree("source")
+        revid = source.commit("one")
+        branch1 = BaseRecipeBranch("source", "{revno}")
+        branch2 = RecipeBranch("nested1", "source")
+        branch3 = RecipeBranch("nested2", "source")
+        branch2.nest_branch("bar", branch3)
+        branch1.nest_branch("foo", branch2)
+        branch4 = BaseRecipeBranch("source", "{revno}",
+                revspec="revid:%s" % revid)
+        branch5 = RecipeBranch("nested1", "source",
+                revspec="revid:%s" % revid)
+        branch6 = RecipeBranch("nested2", "source",
+                revspec="revid:%s" % revid)
+        branch5.nest_branch("bar", branch6)
+        branch4.nest_branch("foo", branch5)
+        self.assertEqual(False, resolve_revisions(branch1,
+                    if_changed_from=branch4))
+        self.assertEqual("source", branch1.url)
+        self.assertEqual(revid, branch1.revid)
+        self.assertEqual(None, branch1.revspec)
+        self.assertEqual("1", branch1.deb_version)
+
     def test_changed(self):
         source =self.make_branch_and_tree("source")
         revid = source.commit("one")
