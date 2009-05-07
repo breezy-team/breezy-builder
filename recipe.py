@@ -76,9 +76,16 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
     if br_to is None:
         # We do a "branch"
         ensure_basedir(to_transport)
+        stacked = False
+        br_format = br_from._format
+        repo_format = br_from.repository._format
+        if (repo_format.supports_external_lookups
+                and br_format.supports_stacking()):
+            stacked = True
         dir = br_from.bzrdir.sprout(to_transport.base, revision_id,
                                     possible_transports=possible_transports,
                                     accelerator_tree=accelerator_tree,
+                                    stacked=stacked,
                                     source_branch=br_from)
         try:
             tree_to = dir.open_workingtree()
