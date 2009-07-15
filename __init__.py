@@ -259,8 +259,6 @@ class cmd_dailydeb(cmd_build):
         build_tree(base_branch, package_dir)
         self._write_manifest_to_path(os.path.join(package_dir, "debian",
                     "bzr-builder.manifest"), base_branch)
-        if manifest is not None:
-            self._write_manifest_to_path(manifest, base_branch)
         self._add_changelog_entry(base_branch, package_dir,
                 distribution=distribution, package=package)
         self._build_source_package(package_dir)
@@ -268,6 +266,8 @@ class cmd_dailydeb(cmd_build):
             self._sign_source_package(package_dir, key_id)
         if dput is not None:
             self._dput_source_package(package_dir, dput)
+        if manifest is not None:
+            self._write_manifest_to_path(manifest, base_branch)
 
 
     def _add_changelog_entry(self, base_branch, basedir, distribution=None,
