@@ -177,8 +177,7 @@ class cmd_build(Command):
             old_manifest_contents = old_manifest_transport.get_bytes(
                     os.path.basename(if_changed_from))
         except errors.NoSuchFile:
-            raise errors.BzrCommandError("Specified previous manifest "
-                    "does not exist: %s" % if_changed_from)
+            return None
         old_recipe = RecipeParser(old_manifest_contents,
                 filename=if_changed_from).parse()
         return old_recipe

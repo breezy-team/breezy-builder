@@ -73,10 +73,12 @@ class BlackboxBuilderTests(TestCaseWithTransport):
     def test_cmd_builder_if_changed_does_not_exist(self):
         self.build_tree_contents([("recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource\n")])
-        err = self.run_bzr("build recipe working --if-changed-from manifest",
-                retcode=3)[1]
-        self.assertEqual("bzr: ERROR: Specified previous manifest does "
-                "not exist: manifest\n", err)
+        source = self.make_branch_and_tree("source")
+        self.build_tree(["source/a"])
+        source.add(["a"])
+        revid = source.commit("one")
+        out, err = self.run_bzr("build recipe working "
+                "--if-changed-from manifest")
 
     def test_cmd_builder_if_changed_not_changed(self):
         source = self.make_branch_and_tree("source")
@@ -158,3 +160,18 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "deb-version 1\nsource 1\n")])
         out, err = self.run_bzr("dailydeb test.recipe "
                 "--manifest manifest --package foo")
+
+    def test_cmd_dailydeb_if_changed_from_non_existant(self):
+        #TODO: define a test feature for debuild and require it here.
+        source = self.make_branch_and_tree("source")
+        self.build_tree(["source/a", "source/debian/"])
+        self.build_tree_contents([("source/debian/rules",
+                    "#!/usr/bin/make -f\nclean:\n"),
+                ("source/debian/control",
+                    "Source: foo\nMaintainer: maint maint@maint.org\n")])
+        source.add(["a", "debian/", "debian/rules", "debian/control"])
+        revid = source.commit("one")
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
+                    "deb-version 1\nsource 1\n")])
+        out, err = self.run_bzr("dailydeb test.recipe "
+                "--manifest manifest --package foo --if-changed-from bar")
