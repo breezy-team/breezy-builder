@@ -111,7 +111,9 @@ if __name__ == '__main__':
 import datetime
 from email import utils
 import os
+import shutil
 import subprocess
+import tempfile
 
 from debian_bundle import changelog
 
@@ -208,6 +210,10 @@ class cmd_dailydeb(cmd_build):
     """Build a deb based on a 'recipe'.
 
     See "bzr help builder" for more information on what a recipe is.
+
+    If you do not specify a working directory then a temporary
+    directory will be used and it will be removed when the command
+    finishes.
     """
 
     takes_options = cmd_build.takes_options + [
@@ -228,7 +234,9 @@ class cmd_dailydeb(cmd_build):
                             "must be specified if you use --dput."),
             ]
 
-    def run(self, recipe_file, working_directory, manifest=None,
+    takes_args = ["recipe_file", "working_directory?"]
+
+    def run(self, recipe_file, working_directory=None, manifest=None,
             if_changed_from=None, package=None, distribution=None,
             dput=None, key_id=None):
 
@@ -253,21 +261,30 @@ class cmd_dailydeb(cmd_build):
         if "-" in version:
             version = version[:version.rindex("-")]
         package_basedir = "%s-%s" % (package or recipe_name, version)
-        if not os.path.exists(working_directory):
-            os.makedirs(working_directory)
-        package_dir = os.path.join(working_directory, package_basedir)
-        build_tree(base_branch, package_dir)
-        self._write_manifest_to_path(os.path.join(package_dir, "debian",
-                    "bzr-builder.manifest"), base_branch)
-        self._add_changelog_entry(base_branch, package_dir,
-                distribution=distribution, package=package)
-        self._build_source_package(package_dir)
-        if key_id is not None:
-            self._sign_source_package(package_dir, key_id)
-        if dput is not None:
-            self._dput_source_package(package_dir, dput)
-        if manifest is not None:
-            self._write_manifest_to_path(manifest, base_branch)
+        if working_directory is None:
+            temp_dir = tempfile.mkdtemp(prefix="bzr-builder-")
+            working_directory = temp_dir
+        else:
+            temp_dir = None
+            if not os.path.exists(working_directory):
+                os.makedirs(working_directory)
+        try:
+            package_dir = os.path.join(working_directory, package_basedir)
+            build_tree(base_branch, package_dir)
+            self._write_manifest_to_path(os.path.join(package_dir, "debian",
+                        "bzr-builder.manifest"), base_branch)
+            self._add_changelog_entry(base_branch, package_dir,
+                    distribution=distribution, package=package)
+            self._build_source_package(package_dir)
+            if key_id is not None:
+                self._sign_source_package(package_dir, key_id)
+            if dput is not None:
+                self._dput_source_package(package_dir, dput)
+            if manifest is not None:
+                self._write_manifest_to_path(manifest, base_branch)
+        finally:
+            if temp_dir is not None:
+                shutil.rmtree(temp_dir)
 
 
     def _add_changelog_entry(self, base_branch, basedir, distribution=None,

@@ -143,3 +143,18 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             self.assertEqual("foo (1) jaunty; urgency=low\n", line)
         finally:
             cl_f.close()
+
+    def test_cmd_dailydeb_no_work_dir(self):
+        #TODO: define a test feature for debuild and require it here.
+        source = self.make_branch_and_tree("source")
+        self.build_tree(["source/a", "source/debian/"])
+        self.build_tree_contents([("source/debian/rules",
+                    "#!/usr/bin/make -f\nclean:\n"),
+                ("source/debian/control",
+                    "Source: foo\nMaintainer: maint maint@maint.org\n")])
+        source.add(["a", "debian/", "debian/rules", "debian/control"])
+        revid = source.commit("one")
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
+                    "deb-version 1\nsource 1\n")])
+        out, err = self.run_bzr("dailydeb test.recipe "
+                "--manifest manifest --package foo")
