@@ -304,7 +304,7 @@ class cmd_dailydeb(cmd_build):
             if distribution is None:
                 distribution = cl._blocks[0].distributions.split()[0]
             if package is None:
-                distribution = cl._blocks[0].package
+                package = cl._blocks[0].package
         else:
             if package is None:
                 raise errors.BzrCommandError("No previous changelog to "

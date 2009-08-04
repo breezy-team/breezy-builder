@@ -175,3 +175,32 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "deb-version 1\nsource 1\n")])
         out, err = self.run_bzr("dailydeb test.recipe "
                 "--manifest manifest --package foo --if-changed-from bar")
+
+    def test_cmd_dailydeb_with_package_from_changelog(self):
+        #TODO: define a test feature for debuild and require it here.
+        source = self.make_branch_and_tree("source")
+        self.build_tree(["source/a", "source/debian/"])
+        cl_contents = ("package (0.1-1) unstable; urgency=low\n  * foo\n"
+                    " -- maint <maint@maint.org>  Tue, 04 Aug 2009 "
+                    "10:03:10 +0100\n")
+        self.build_tree_contents([("source/debian/rules",
+                    "#!/usr/bin/make -f\nclean:\n"),
+                ("source/debian/control",
+                    "Source: package\nMaintainer: maint maint@maint.org\n"),
+                ("source/debian/changelog", cl_contents)])
+        source.add(["a", "debian/", "debian/rules", "debian/control",
+                "debian/changelog"])
+        revid = source.commit("one")
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
+                    "deb-version 1\nsource 1\n")])
+        out, err = self.run_bzr("dailydeb test.recipe "
+                "--manifest manifest --if-changed-from bar working")
+        new_cl_contents = ("package (1) unstable; urgency=low\n\n"
+                "  * Auto build.\n\n -- bzr-builder <jamesw@ubuntu.com>  ")
+        f = open("working/test-1/debian/changelog")
+        try:
+            actual_cl_contents = f.read()
+        finally:
+            f.close()
+        self.assertEqual(new_cl_contents,
+                actual_cl_contents[:len(new_cl_contents)])
