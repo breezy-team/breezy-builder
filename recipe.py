@@ -769,5 +769,5 @@ class RecipeParser(object):
         if self.peek_char() != "#":
             return None
         comment = self.current_line[self.index:]
-        self.new_line()
+        self.index += len(comment)
         return comment
