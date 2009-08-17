@@ -202,6 +202,11 @@ class RecipeParserTests(TestCaseInTempDir):
         base_branch = self.get_recipe(self.basic_header_and_branch)
         self.check_base_recipe_branch(base_branch, "http://foo.org/")
 
+    def test_skips_comments(self):
+        base_branch = self.get_recipe(self.basic_header + "# comment\n"
+                + "http://foo.org/\n")
+        self.check_base_recipe_branch(base_branch, "http://foo.org/")
+
     def test_builds_recipe_with_merge(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
                 + "merge bar http://bar.org")
