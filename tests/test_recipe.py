@@ -304,6 +304,13 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual(None, child_branch)
         self.assertEqual("touch test", command)
 
+    def test_old_format_rejects_run(self):
+        header = ("# bzr-builder format 0.1 deb-version "
+                + self.deb_version +"\n")
+        self.assertParseError(3, 1, "Expecting 'merge' or 'nest', got 'run'"
+                , self.get_recipe, header + "http://foo.org/\n"
+                + "run touch test \n")
+
 
 class BuildTreeTests(TestCaseWithTransport):
 
