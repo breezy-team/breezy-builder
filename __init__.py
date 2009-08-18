@@ -70,6 +70,16 @@ will nest the revision pointed to by the "1.0" tag of that branch. The format
 for the revisionspec is indentical to that taken by the "--revision" argument
 to many bzr commands, see "bzr help revisionspec".
 
+It is also possible to run an arbitrary command at a particular point in the
+construction process.
+
+run autoreconf -i
+
+will run autotools at a particular point. Doing things with branches is usually
+preferred, but sometimes it is the easier or only way to achieve something.
+Note that you usually shouldn't rely on having general Internet access when
+assembling the recipe, so commands that would require it should be avoided.
+
 You can then build this branch by running
 
 bzr build foo.recipe working-dir
