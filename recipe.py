@@ -13,8 +13,9 @@
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import copy
 import os
+import signal
+import subprocess
 
 from bzrlib import (
         branch,
@@ -26,8 +27,25 @@ from bzrlib import (
         transport,
         ui,
         urlutils,
-        workingtree,
         )
+
+
+def subprocess_setup():
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
+
+MERGE_INSTRUCTION = "merge"
+NEST_INSTRUCTION = "nest"
+RUN_INSTRUCTION = "run"
+
+
+class CommandFailedError(errors.BzrError):
+
+    _fmt = "The command \"%(command)s\" failed."
+
+    def __init__(self, command):
+        super(CommandFailedError, self).__init__()
+        self.command = command
 
 
 def ensure_basedir(to_transport):
@@ -234,11 +252,12 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
             if_changed_child = None
             if if_changed_from is not None:
                 if_changed_child = if_changed_from.child_branches[index][0]
-            child_changed = _resolve_revisions_recurse(child_branch,
-                    substitute_revno,
-                    if_changed_from=if_changed_child)
-            if child_changed:
-                changed = child_changed
+            if child_branch is not None:
+                child_changed = _resolve_revisions_recurse(child_branch,
+                        substitute_revno,
+                        if_changed_from=if_changed_child)
+                if child_changed:
+                    changed = child_changed
         return changed
     finally:
         br_from.unlock()
@@ -305,7 +324,15 @@ def build_tree(base_branch, target_path):
             tree_to, br_to = update_branch(base_branch, tree_to, br_to,
                     to_transport)
             for child_branch, nest_location in base_branch.child_branches:
-                if nest_location is not None:
+                if child_branch is None:
+                    # it's a command
+                    proc = subprocess.Popen(nest_location, cwd=target_path,
+                            preexec_fn=subprocess_setup, shell=True,
+                            stdin=subprocess.PIPE)
+                    proc.communicate()
+                    if proc.returncode != 0:
+                        raise CommandFailedError(nest_location)
+                elif nest_location is not None:
                     # FIXME: pass possible_transports around
                     build_tree(child_branch,
                             target_path=os.path.join(target_path,
@@ -324,17 +351,24 @@ def build_tree(base_branch, target_path):
 def _add_child_branches_to_manifest(child_branches, indent_level):
     manifest = ""
     for child_branch, nest_location in child_branches:
-        assert child_branch.revid is not None, "Branch hasn't been built"
-        if nest_location is not None:
-            manifest += "%snest %s %s %s revid:%s\n" % \
-                         ("  " * indent_level, child_branch.name,
-                          child_branch.url, nest_location, child_branch.revid)
-            manifest += _add_child_branches_to_manifest(
-                    child_branch.child_branches, indent_level+1)
+        if child_branch is None:
+            manifest += "%s%s %s\n" % ("  " * indent_level, RUN_INSTRUCTION,
+                    nest_location)
         else:
-            manifest += "%smerge %s %s revid:%s\n" % \
-                         ("  " * indent_level, child_branch.name,
-                          child_branch.url, child_branch.revid)
+            assert child_branch.revid is not None, "Branch hasn't been built"
+            if nest_location is not None:
+                manifest += "%s%s %s %s %s revid:%s\n" % \
+                             ("  " * indent_level, NEST_INSTRUCTION,
+                              child_branch.name,
+                              child_branch.url, nest_location,
+                              child_branch.revid)
+                manifest += _add_child_branches_to_manifest(
+                        child_branch.child_branches, indent_level+1)
+            else:
+                manifest += "%s%s %s %s revid:%s\n" % \
+                             ("  " * indent_level, MERGE_INSTRUCTION,
+                              child_branch.name,
+                              child_branch.url, child_branch.revid)
     return manifest
 
 
@@ -392,12 +426,19 @@ class RecipeBranch(object):
     def nest_branch(self, location, branch):
         """Nest a child branch in to this one.
 
-        :parm location: the relative path at which this branch should be nested.
+        :param location: the relative path at which this branch should be nested.
         :param branch: the RecipeBranch to nest.
         """
         assert location not in [b[1] for b in self.child_branches],\
             "%s already has branch nested there" % location
         self.child_branches.append((branch, location))
+
+    def run_command(self, command):
+        """Set a command to be run.
+
+        :param command: the command to be run
+        """
+        self.child_branches.append((None, command))
 
     def different_shape_to(self, other_branch):
         """Tests whether the name, url and child_branches are the same"""
@@ -412,6 +453,9 @@ class RecipeBranch(object):
             other_child, other_nest_location = \
                    other_branch.child_branches[index]
             if nest_location != other_nest_location:
+                return True
+            if ((child_branch is None and other_child is not None)
+                    or (child_branch is not None and other_child is None)):
                 return True
             if child_branch.different_shape_to(other_child):
                 return True
@@ -514,9 +558,9 @@ class RecipeParser(object):
             old_indent_level = self.parse_indent()
             if old_indent_level is not None:
                 if (old_indent_level < self.current_indent_level
-                    and last_instruction != "nest"):
+                    and last_instruction != NEST_INSTRUCTION):
                     self.throw_parse_error("Not allowed to indent unless "
-                            "after a 'nest' line")
+                            "after a '%s' line" % NEST_INSTRUCTION)
                 if old_indent_level < self.current_indent_level:
                     active_branches.append(last_branch)
                 else:
@@ -536,17 +580,23 @@ class RecipeParser(object):
                 last_instruction = ""
             else:
                 instruction = self.parse_instruction()
-                branch_id = self.parse_branch_id()
-                url = self.parse_branch_url()
-                if instruction == "nest":
-                    location = self.parse_branch_location()
-                revspec = self.parse_optional_revspec()
-                self.new_line()
-                last_branch = RecipeBranch(branch_id, url, revspec=revspec)
-                if instruction == "nest":
-                    active_branches[-1].nest_branch(location, last_branch)
+                if instruction == RUN_INSTRUCTION:
+                    self.parse_whitespace("the command")
+                    command = self.take_to_newline().strip()
+                    self.new_line()
+                    active_branches[-1].run_command(command)
                 else:
-                    active_branches[-1].merge_branch(last_branch)
+                    branch_id = self.parse_branch_id()
+                    url = self.parse_branch_url()
+                    if instruction == NEST_INSTRUCTION:
+                        location = self.parse_branch_location()
+                    revspec = self.parse_optional_revspec()
+                    self.new_line()
+                    last_branch = RecipeBranch(branch_id, url, revspec=revspec)
+                    if instruction == NEST_INSTRUCTION:
+                        active_branches[-1].nest_branch(location, last_branch)
+                    else:
+                        active_branches[-1].merge_branch(last_branch)
                 last_instruction = instruction
         if len(active_branches) == 0:
             self.throw_parse_error("Empty recipe")
@@ -566,13 +616,16 @@ class RecipeParser(object):
     def parse_instruction(self):
         instruction = self.peek_to_whitespace()
         if instruction is None:
-            self.throw_parse_error("End of line while looking for 'nest' "
-                    "or 'merge'")
-        if instruction == "nest" or instruction == "merge":
+            self.throw_parse_error("End of line while looking for '%s', '%s' "
+                    "or '%s'" % (MERGE_INSTRUCTION, NEST_INSTRUCTION,
+                        RUN_INSTRUCTION))
+        if instruction in (NEST_INSTRUCTION, MERGE_INSTRUCTION,
+                RUN_INSTRUCTION):
             self.take_chars(len(instruction))
             return instruction
-        self.throw_parse_error("Expecting 'nest' or 'merge', got '%s'"
-                % instruction)
+        self.throw_parse_error("Expecting '%s', '%s' or '%s', got '%s'"
+                % (MERGE_INSTRUCTION, NEST_INSTRUCTION, RUN_INSTRUCTION,
+                    instruction))
 
     def parse_branch_id(self):
         self.parse_whitespace("the branch id")
@@ -755,6 +808,11 @@ class RecipeParser(object):
                     self.peek_to_whitespace())
         self.take_chars(len(ret))
         return ret
+
+    def take_to_newline(self):
+        text = self.current_line[self.index:]
+        self.index += len(text)
+        return text
 
     def parse_comment_line(self):
         if self.peek_char() is None:

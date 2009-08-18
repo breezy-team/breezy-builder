@@ -126,7 +126,7 @@ class RecipeParserTests(TestCaseInTempDir):
                 self.basic_header + "http://foo.org/ 2 foo")
 
     def tests_rejects_unknown_instruction(self):
-        self.assertParseError(3, 1, "Expecting 'nest' or 'merge', "
+        self.assertParseError(3, 1, "Expecting 'merge', 'nest' or 'run', "
                 "got 'cat'", self.get_recipe,
                 self.basic_header + "http://foo.org/\n" + "cat")
 
@@ -289,6 +289,16 @@ class RecipeParserTests(TestCaseInTempDir):
         child_branch, location = base_branch.child_branches[1]
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "zam", "lp:zam", revspec="2")
+
+    def test_builds_recipe_with_commands(self):
+        base_branch = self.get_recipe(self.basic_header
+                + "http://foo.org/\n"
+                + "run touch test \n")
+        self.check_base_recipe_branch(base_branch, "http://foo.org/",
+                num_child_branches=1)
+        child_branch, command = base_branch.child_branches[0]
+        self.assertEqual(None, child_branch)
+        self.assertEqual("touch test", command)
 
 
 class BuildTreeTests(TestCaseWithTransport):
@@ -587,6 +597,18 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual("b.moved", conflict.path)
         self.assertEqual("b", conflict.conflict_path)
 
+    def test_build_tree_runs_commands(self):
+        source = self.make_branch_and_tree("source")
+        revid = source.commit("one")
+        base_branch = BaseRecipeBranch("source", "1")
+        base_branch.run_command("touch test")
+        build_tree(base_branch, "target")
+        self.failUnlessExists("target")
+        self.failUnlessExists("target/test")
+        tree = workingtree.WorkingTree.open("target")
+        self.assertEqual(revid, tree.last_revision())
+        self.assertEqual(revid, base_branch.revid)
+
 
 class ResolveRevisionsTests(TestCaseWithTransport):
 
@@ -666,6 +688,17 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         self.assertEqual("1", branch1.revspec)
         self.assertEqual("1", branch1.deb_version)
 
+    def test_changed_command(self):
+        source =self.make_branch_and_tree("source")
+        revid = source.commit("one")
+        branch1 = BaseRecipeBranch("source", "{revno}")
+        branch2 = BaseRecipeBranch("source", "{revno}")
+        branch1.run_command("touch test1")
+        branch2.run_command("touch test2")
+        self.assertEqual(True, resolve_revisions(branch1,
+                    if_changed_from=branch2))
+        self.assertEqual("source", branch1.url)
+
     def test_substitute(self):
         source =self.make_branch_and_tree("source")
         revid1 = source.commit("one")
@@ -708,6 +741,15 @@ class BuildManifestTests(TestCaseInTempDir):
                 "nest nested1 nested1_url nested revid:nested1_revid\n"
                 "  nest nested2 nested2_url nested2 revid:nested2_revid\n"
                 "merge merged merged_url revid:merged_revid\n", manifest)
+
+    def test_manifest_with_command(self):
+        base_branch = BaseRecipeBranch("base_url", "1")
+        base_branch.revid = "base_revid"
+        base_branch.run_command("touch test")
+        manifest = build_manifest(base_branch)
+        self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
+                "base_url revid:base_revid\n"
+                "run touch test\n", manifest)
 
 
 class RecipeBranchTests(TestCaseInTempDir):
