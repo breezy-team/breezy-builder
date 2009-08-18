@@ -41,7 +41,7 @@ from bzrlib.plugins.builder.recipe import (
 class RecipeParserTests(TestCaseInTempDir):
 
     deb_version = "0.1-{revno}"
-    basic_header = ("# bzr-builder format 0.1 deb-version "
+    basic_header = ("# bzr-builder format 0.2 deb-version "
             + deb_version +"\n")
     basic_header_and_branch = basic_header + "http://foo.org/\n"
 
@@ -101,19 +101,23 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertParseError(1, 22, "Expecting a float, got '1.'",
                 self.get_recipe, "# bzr-builder format 1.")
 
+    def test_unknown_format_version(self):
+        self.assertParseError(1, 22, "Unknown format: '10000'",
+                self.get_recipe, "# bzr-builder format 10000 deb-version 1\n")
+
     def test_rejects_invalid_deb_version_marker(self):
-        self.assertParseError(1, 24, "Expecting 'deb-version', "
-                "got 'deb'", self.get_recipe, "# bzr-builder format 1 deb")
+        self.assertParseError(1, 26, "Expecting 'deb-version', "
+                "got 'deb'", self.get_recipe, "# bzr-builder format 0.1 deb")
 
     def tests_rejects_no_deb_version_value(self):
-        self.assertParseError(1, 35, "End of line while looking for "
+        self.assertParseError(1, 37, "End of line while looking for "
                 "a value for 'deb-version'", self.get_recipe,
-                "# bzr-builder format 1 deb-version")
+                "# bzr-builder format 0.1 deb-version")
 
     def tests_rejects_extra_text_after_deb_version(self):
-        self.assertParseError(1, 38, "Expecting the end of the line, "
+        self.assertParseError(1, 40, "Expecting the end of the line, "
                 "got 'foo'", self.get_recipe,
-                "# bzr-builder format 1 deb-version 1 foo")
+                "# bzr-builder format 0.1 deb-version 1 foo")
 
     def tests_rejects_indented_base_branch(self):
         self.assertParseError(2, 3, "Not allowed to indent unless after "
@@ -317,7 +321,7 @@ class BuildTreeTests(TestCaseWithTransport):
     def test_build_tree_single_branch(self):
         source = self.make_branch_and_tree("source")
         revid = source.commit("one")
-        base_branch = BaseRecipeBranch("source", "1")
+        base_branch = BaseRecipeBranch("source", "1", 0.2)
         build_tree(base_branch, "target")
         self.failUnlessExists("target")
         tree = workingtree.WorkingTree.open("target")
@@ -329,7 +333,7 @@ class BuildTreeTests(TestCaseWithTransport):
         revid = source.commit("one")
         # We just create the target as a directory
         os.mkdir("target")
-        base_branch = BaseRecipeBranch("source", "1")
+        base_branch = BaseRecipeBranch("source", "1", 0.2)
         build_tree(base_branch, "target")
         self.failUnlessExists("target")
         tree = workingtree.WorkingTree.open("target")
@@ -340,7 +344,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source = self.make_branch_and_tree("source")
         revid = source.commit("one")
         target = self.make_branch_and_tree("target")
-        base_branch = BaseRecipeBranch("source", "1")
+        base_branch = BaseRecipeBranch("source", "1", 0.2)
         build_tree(base_branch, "target")
         self.failUnlessExists("target")
         tree = workingtree.WorkingTree.open("target")
@@ -356,7 +360,7 @@ class BuildTreeTests(TestCaseWithTransport):
         self.build_tree(["source2/a"])
         source2.add(["a"])
         source2_rev_id = source2.commit("one")
-        base_branch = BaseRecipeBranch("source1", "1")
+        base_branch = BaseRecipeBranch("source1", "1", 0.2)
         nested_branch = RecipeBranch("nested", "source2")
         base_branch.nest_branch("sub", nested_branch)
         build_tree(base_branch, "target")
@@ -376,7 +380,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source2 = source1.bzrdir.sprout("source2").open_workingtree()
         self.build_tree_contents([("source2/a", "other change")])
         source2_rev_id = source2.commit("one")
-        base_branch = BaseRecipeBranch("source1", "1")
+        base_branch = BaseRecipeBranch("source1", "1", 0.2)
         merged_branch = RecipeBranch("merged", "source2")
         base_branch.merge_branch(merged_branch)
         build_tree(base_branch, "target")
@@ -401,7 +405,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source3 = source2.bzrdir.sprout("source3").open_workingtree()
         self.build_tree_contents([("source3/a", "third change")])
         source3_rev_id = source3.commit("one")
-        base_branch = BaseRecipeBranch("source1", "1")
+        base_branch = BaseRecipeBranch("source1", "1", 0.2)
         merged_branch1 = RecipeBranch("merged", "source2")
         base_branch.merge_branch(merged_branch1)
         merged_branch2 = RecipeBranch("merged2", "source3")
@@ -432,7 +436,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source2_rev_id = source2.commit("one")
         self.build_tree_contents([("source1/a", "trunk change\n")])
         source1_rev_id = source1.commit("two")
-        base_branch = BaseRecipeBranch("source1", "1")
+        base_branch = BaseRecipeBranch("source1", "1", 0.2)
         merged_branch = RecipeBranch("merged", "source2")
         base_branch.merge_branch(merged_branch)
         e = self.assertRaises(errors.BzrCommandError, build_tree,
@@ -463,7 +467,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source2.commit("one")
         self.build_tree_contents([("source1/a", "unwanted trunk change\n")])
         source1.commit("two")
-        base_branch = BaseRecipeBranch("source1", "1", revspec="1")
+        base_branch = BaseRecipeBranch("source1", "1", 0.2, revspec="1")
         merged_branch = RecipeBranch("merged", "source2", revspec="2")
         base_branch.merge_branch(merged_branch)
         build_tree(base_branch, "target")
@@ -600,7 +604,7 @@ class BuildTreeTests(TestCaseWithTransport):
     def test_build_tree_runs_commands(self):
         source = self.make_branch_and_tree("source")
         revid = source.commit("one")
-        base_branch = BaseRecipeBranch("source", "1")
+        base_branch = BaseRecipeBranch("source", "1", 0.2)
         base_branch.run_command("touch test")
         build_tree(base_branch, "target")
         self.failUnlessExists("target")
@@ -615,8 +619,8 @@ class ResolveRevisionsTests(TestCaseWithTransport):
     def test_unchanged(self):
         source =self.make_branch_and_tree("source")
         revid = source.commit("one")
-        branch1 = BaseRecipeBranch("source", "{revno}", revspec="1")
-        branch2 = BaseRecipeBranch("source", "{revno}",
+        branch1 = BaseRecipeBranch("source", "{revno}", 0.2, revspec="1")
+        branch2 = BaseRecipeBranch("source", "{revno}", 0.2,
                 revspec="revid:%s" % revid)
         self.assertEqual(False, resolve_revisions(branch1,
                     if_changed_from=branch2))
@@ -628,8 +632,8 @@ class ResolveRevisionsTests(TestCaseWithTransport):
     def test_unchanged_not_explicit(self):
         source =self.make_branch_and_tree("source")
         revid = source.commit("one")
-        branch1 = BaseRecipeBranch("source", "{revno}")
-        branch2 = BaseRecipeBranch("source", "{revno}",
+        branch1 = BaseRecipeBranch("source", "{revno}", 0.2)
+        branch2 = BaseRecipeBranch("source", "{revno}", 0.2,
                 revspec="revid:%s" % revid)
         self.assertEqual(False, resolve_revisions(branch1,
                     if_changed_from=branch2))
@@ -641,12 +645,12 @@ class ResolveRevisionsTests(TestCaseWithTransport):
     def test_unchanged_multilevel(self):
         source =self.make_branch_and_tree("source")
         revid = source.commit("one")
-        branch1 = BaseRecipeBranch("source", "{revno}")
+        branch1 = BaseRecipeBranch("source", "{revno}", 0.2)
         branch2 = RecipeBranch("nested1", "source")
         branch3 = RecipeBranch("nested2", "source")
         branch2.nest_branch("bar", branch3)
         branch1.nest_branch("foo", branch2)
-        branch4 = BaseRecipeBranch("source", "{revno}",
+        branch4 = BaseRecipeBranch("source", "{revno}", 0.2,
                 revspec="revid:%s" % revid)
         branch5 = RecipeBranch("nested1", "source",
                 revspec="revid:%s" % revid)
@@ -664,8 +668,9 @@ class ResolveRevisionsTests(TestCaseWithTransport):
     def test_changed(self):
         source =self.make_branch_and_tree("source")
         revid = source.commit("one")
-        branch1 = BaseRecipeBranch("source", "{revno}", revspec="1")
-        branch2 = BaseRecipeBranch("source", "{revno}", revspec="revid:foo")
+        branch1 = BaseRecipeBranch("source", "{revno}", 0.2, revspec="1")
+        branch2 = BaseRecipeBranch("source", "{revno}", 0.2,
+                revspec="revid:foo")
         self.assertEqual(True, resolve_revisions(branch1,
                     if_changed_from=branch2))
         self.assertEqual("source", branch1.url)
@@ -676,8 +681,8 @@ class ResolveRevisionsTests(TestCaseWithTransport):
     def test_changed_shape(self):
         source =self.make_branch_and_tree("source")
         revid = source.commit("one")
-        branch1 = BaseRecipeBranch("source", "{revno}", revspec="1")
-        branch2 = BaseRecipeBranch("source", "{revno}",
+        branch1 = BaseRecipeBranch("source", "{revno}", 0.2, revspec="1")
+        branch2 = BaseRecipeBranch("source", "{revno}", 0.2,
                 revspec="revid:%s" % revid)
         branch3 = RecipeBranch("nested", "source")
         branch1.nest_branch("foo", branch3)
@@ -691,8 +696,8 @@ class ResolveRevisionsTests(TestCaseWithTransport):
     def test_changed_command(self):
         source =self.make_branch_and_tree("source")
         revid = source.commit("one")
-        branch1 = BaseRecipeBranch("source", "{revno}")
-        branch2 = BaseRecipeBranch("source", "{revno}")
+        branch1 = BaseRecipeBranch("source", "{revno}", 0.2)
+        branch2 = BaseRecipeBranch("source", "{revno}", 0.2)
         branch1.run_command("touch test1")
         branch2.run_command("touch test2")
         self.assertEqual(True, resolve_revisions(branch1,
@@ -704,7 +709,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         revid1 = source.commit("one")
         revid2 = source.commit("two")
         branch1 = BaseRecipeBranch("source",
-                "{revno}-{revno:packaging}", revspec="1")
+                "{revno}-{revno:packaging}", 0.2, revspec="1")
         branch2 = RecipeBranch("packaging", "source")
         branch1.nest_branch("debian", branch2)
         self.assertEqual(True, resolve_revisions(branch1))
@@ -717,14 +722,14 @@ class ResolveRevisionsTests(TestCaseWithTransport):
 class BuildManifestTests(TestCaseInTempDir):
 
     def test_simple_manifest(self):
-        base_branch = BaseRecipeBranch("base_url", "1")
+        base_branch = BaseRecipeBranch("base_url", "1", 0.1)
         base_branch.revid = "base_revid"
         manifest = build_manifest(base_branch)
         self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
                 "base_url revid:base_revid\n", manifest)
 
     def test_complex_manifest(self):
-        base_branch = BaseRecipeBranch("base_url", "2")
+        base_branch = BaseRecipeBranch("base_url", "2", 0.2)
         base_branch.revid = "base_revid"
         nested_branch1 = RecipeBranch("nested1", "nested1_url")
         nested_branch1.revid = "nested1_revid"
@@ -736,18 +741,18 @@ class BuildManifestTests(TestCaseInTempDir):
         merged_branch.revid = "merged_revid"
         base_branch.merge_branch(merged_branch)
         manifest = build_manifest(base_branch)
-        self.assertEqual("# bzr-builder format 0.1 deb-version 2\n"
+        self.assertEqual("# bzr-builder format 0.2 deb-version 2\n"
                 "base_url revid:base_revid\n"
                 "nest nested1 nested1_url nested revid:nested1_revid\n"
                 "  nest nested2 nested2_url nested2 revid:nested2_revid\n"
                 "merge merged merged_url revid:merged_revid\n", manifest)
 
     def test_manifest_with_command(self):
-        base_branch = BaseRecipeBranch("base_url", "1")
+        base_branch = BaseRecipeBranch("base_url", "1", 0.2)
         base_branch.revid = "base_revid"
         base_branch.run_command("touch test")
         manifest = build_manifest(base_branch)
-        self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
+        self.assertEqual("# bzr-builder format 0.2 deb-version 1\n"
                 "base_url revid:base_revid\n"
                 "run touch test\n", manifest)
 
@@ -755,7 +760,7 @@ class BuildManifestTests(TestCaseInTempDir):
 class RecipeBranchTests(TestCaseInTempDir):
 
     def test_base_recipe_branch(self):
-        base_branch = BaseRecipeBranch("base_url", "1", revspec="2")
+        base_branch = BaseRecipeBranch("base_url", "1", 0.2, revspec="2")
         self.assertEqual(None, base_branch.name)
         self.assertEqual("base_url", base_branch.url)
         self.assertEqual("1", base_branch.deb_version)
@@ -772,12 +777,12 @@ class RecipeBranchTests(TestCaseInTempDir):
         self.assertEqual(None, branch.revid)
 
     def test_different_shape_to(self):
-        branch1 = BaseRecipeBranch("base_url", "1", revspec="2")
-        branch2 = BaseRecipeBranch("base_url", "1", revspec="3")
+        branch1 = BaseRecipeBranch("base_url", "1", 0.2, revspec="2")
+        branch2 = BaseRecipeBranch("base_url", "1", 0.2, revspec="3")
         self.assertFalse(branch1.different_shape_to(branch2))
-        branch2 = BaseRecipeBranch("base", "1", revspec="2")
+        branch2 = BaseRecipeBranch("base", "1", 0.2, revspec="2")
         self.assertTrue(branch1.different_shape_to(branch2))
-        branch2 = BaseRecipeBranch("base_url", "2", revspec="2")
+        branch2 = BaseRecipeBranch("base_url", "2", 0.2, revspec="2")
         self.assertFalse(branch1.different_shape_to(branch2))
         rbranch1 = RecipeBranch("name", "other_url")
         rbranch2 = RecipeBranch("name2", "other_url")
@@ -787,29 +792,29 @@ class RecipeBranchTests(TestCaseInTempDir):
 
     def test_substitute_time(self):
         time = datetime.datetime.utcfromtimestamp(1)
-        base_branch = BaseRecipeBranch("base_url", "1-{time}")
+        base_branch = BaseRecipeBranch("base_url", "1-{time}", 0.2)
         base_branch.substitute_time(time)
         self.assertEqual("1-197001010000", base_branch.deb_version)
         base_branch.substitute_time(time)
         self.assertEqual("1-197001010000", base_branch.deb_version)
 
     def test_substitute_revno(self):
-        base_branch = BaseRecipeBranch("base_url", "1")
+        base_branch = BaseRecipeBranch("base_url", "1", 0.2)
         base_branch.substitute_revno(None, None)
         self.assertEqual("1", base_branch.deb_version)
         base_branch.substitute_revno(None, None)
         self.assertEqual("1", base_branch.deb_version)
-        base_branch = BaseRecipeBranch("base_url", "{revno}")
+        base_branch = BaseRecipeBranch("base_url", "{revno}", 0.2)
         base_branch.substitute_revno(None, lambda: "2")
         self.assertEqual("2", base_branch.deb_version)
         base_branch.substitute_revno(None, lambda: "2")
         self.assertEqual("2", base_branch.deb_version)
-        base_branch = BaseRecipeBranch("base_url", "{revno}")
+        base_branch = BaseRecipeBranch("base_url", "{revno}", 0.2)
         base_branch.substitute_revno("foo", None)
         self.assertEqual("{revno}", base_branch.deb_version)
         base_branch.substitute_revno("foo", None)
         self.assertEqual("{revno}", base_branch.deb_version)
-        base_branch = BaseRecipeBranch("base_url", "{revno:foo}")
+        base_branch = BaseRecipeBranch("base_url", "{revno:foo}", 0.2)
         base_branch.substitute_revno("foo", lambda: "3")
         self.assertEqual("3", base_branch.deb_version)
         base_branch.substitute_revno("foo", lambda: "3")

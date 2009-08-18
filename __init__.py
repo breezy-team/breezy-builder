@@ -21,7 +21,7 @@ by nesting, allowing much flexibility.
 
 A recipe is just a text file that starts with a line such as
 
-# bzr-builder format 0.1 deb-version 1.0+{revno}-{revno:packaging}
+# bzr-builder format 0.2 deb-version 1.0+{revno}-{revno:packaging}
 
 The format specifier is there to allow the syntax to be changed in later
 versions, and the meaning of "deb-version" will be explained later.
@@ -107,6 +107,11 @@ on various things when the recipe is processed:
   * {revno} will be the revno of the base branch (the first specified).
   * {revno:<branch name>} will be substituted with the revno for the
     branch named <branch name> in the recipe.
+
+Format versions:
+
+  0.1 - original format.
+  0.2 - added "run" instruction.
 """
 
 if __name__ == '__main__':

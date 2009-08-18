@@ -373,7 +373,7 @@ def _add_child_branches_to_manifest(child_branches, indent_level):
 
 
 def build_manifest(base_branch):
-    manifest = "# bzr-builder format 0.1 deb-version "
+    manifest = "# bzr-builder format %s deb-version " % str(base_branch.format)
     # TODO: should we store the expanded version that was used?
     manifest += "%s\n" % (base_branch.deb_version,)
     assert base_branch.revid is not None, "Branch hasn't been built"
@@ -465,7 +465,7 @@ class RecipeBranch(object):
 class BaseRecipeBranch(RecipeBranch):
     """The RecipeBranch that is at the root of a recipe."""
 
-    def __init__(self, url, deb_version, revspec=None):
+    def __init__(self, url, deb_version, format, revspec=None):
         """Create a BaseRecipeBranch.
 
         :param deb_version: the template to use for the version number.
@@ -473,6 +473,7 @@ class BaseRecipeBranch(RecipeBranch):
         """
         super(BaseRecipeBranch, self).__init__(None, url, revspec=revspec)
         self.deb_version = deb_version
+        self.format = format
 
     def substitute_revno(self, branch_name, get_revno_cb):
         """Substitute the revno for the given branch name in deb_version.
@@ -524,6 +525,8 @@ class RecipeParser(object):
     eol_char = "\n"
     digit_chars = ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")
 
+    NEWEST_VERSION = 0.2
+
     def __init__(self, f, filename=None):
         """Create a RecipeParser.
 
@@ -551,6 +554,7 @@ class RecipeParser(object):
         self.current_line = self.lines[self.line_index]
         self.current_indent_level = 0
         (version, deb_version) = self.parse_header()
+        self.version = version
         last_instruction = None
         active_branches = []
         last_branch = None
@@ -575,7 +579,7 @@ class RecipeParser(object):
                 revspec = self.parse_optional_revspec()
                 self.new_line()
                 last_branch = BaseRecipeBranch(url, deb_version,
-                        revspec=revspec)
+                        self.version, revspec=revspec)
                 active_branches = [last_branch]
                 last_instruction = ""
             else:
@@ -606,7 +610,10 @@ class RecipeParser(object):
         self.parse_char("#")
         self.parse_word("bzr-builder", require_whitespace=False)
         self.parse_word("format")
-        version = self.parse_float("format version")
+        version, version_str = self.peek_float("format version")
+        if version > self.NEWEST_VERSION:
+            self.throw_parse_error("Unknown format: '%s'" % str(version))
+        self.take_chars(len(version_str))
         self.parse_word("deb-version")
         self.parse_whitespace("a value for 'deb-version'")
         deb_version = self.take_to_whitespace("a value for 'deb-version'")
@@ -614,18 +621,21 @@ class RecipeParser(object):
         return version, deb_version
 
     def parse_instruction(self):
+        if self.version < 0.2:
+            options = (MERGE_INSTRUCTION, NEST_INSTRUCTION)
+            options_str = "'%s' or '%s'" % options
+        else:
+            options = (MERGE_INSTRUCTION, NEST_INSTRUCTION, RUN_INSTRUCTION)
+            options_str = "'%s', '%s' or '%s'" % options
         instruction = self.peek_to_whitespace()
         if instruction is None:
-            self.throw_parse_error("End of line while looking for '%s', '%s' "
-                    "or '%s'" % (MERGE_INSTRUCTION, NEST_INSTRUCTION,
-                        RUN_INSTRUCTION))
-        if instruction in (NEST_INSTRUCTION, MERGE_INSTRUCTION,
-                RUN_INSTRUCTION):
+            self.throw_parse_error("End of line while looking for %s"
+                    % options_str)
+        if instruction in options:
             self.take_chars(len(instruction))
             return instruction
-        self.throw_parse_error("Expecting '%s', '%s' or '%s', got '%s'"
-                % (MERGE_INSTRUCTION, NEST_INSTRUCTION, RUN_INSTRUCTION,
-                    instruction))
+        self.throw_parse_error("Expecting %s, got '%s'"
+                % (options_str, instruction))
 
     def parse_branch_id(self):
         self.parse_whitespace("the branch id")
@@ -775,20 +785,25 @@ class RecipeParser(object):
         self.take_chars(len(text))
         return text
 
-    def parse_float(self, looking_for):
+    def peek_float(self, looking_for):
         self.parse_whitespace(looking_for)
         ret = self._parse_integer()
+        conv_fn = int
         if ret == "":
             self.throw_parse_error("Expecting a float, got '%s'" %
                     self.peek_to_whitespace())
         if self.peek_char(skip=len(ret)) == ".":
+            conv_fn = float
             ret2 = self._parse_integer(skip=len(ret)+1)
             if ret2 == "":
                 self.throw_parse_error("Expecting a float, got '%s'" %
                     self.peek_to_whitespace())
             ret += "." + ret2
-        self.take_chars(len(ret))
-        return ret
+        try:
+            fl = conv_fn(ret)
+        except ValueError:
+            self.throw_parse_error("Expecting a float, got '%s'" % ret)
+        return (fl, ret)
 
     def _parse_integer(self, skip=0):
         i = skip
