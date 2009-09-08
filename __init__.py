@@ -327,9 +327,11 @@ class cmd_dailydeb(cmd_build):
                         "specified.")
             if distribution is None:
                 distribution = "jaunty"
-        # FIXME: should pick this up from the environment in the same way
-        # as dch. (Should probably be in python-debian)
-        author = "bzr-builder <jamesw@ubuntu.com>"
+        # Use debian packaging environment variables
+        # or default values if they don't exist
+        author = "%s <%s>" % (os.environ.get('DEBFULLNAME', 'bzr-builder'),
+                              os.environ.get('DEBEMAIL', 'jamesw@ubuntu.com')))
+
         date = utils.formatdate(localtime=True)
         cl.new_block(package=package, version=base_branch.deb_version,
                 distributions=distribution, urgency="low",
