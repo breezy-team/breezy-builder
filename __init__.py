@@ -330,7 +330,7 @@ class cmd_dailydeb(cmd_build):
         # Use debian packaging environment variables
         # or default values if they don't exist
         author = "%s <%s>" % (os.environ.get('DEBFULLNAME', 'bzr-builder'),
-                              os.environ.get('DEBEMAIL', 'jamesw@ubuntu.com')))
+                              os.environ.get('DEBEMAIL', 'jamesw@ubuntu.com'))
 
         date = utils.formatdate(localtime=True)
         cl.new_block(package=package, version=base_branch.deb_version,
