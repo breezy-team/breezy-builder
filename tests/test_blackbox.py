@@ -23,6 +23,13 @@ from bzrlib.tests import (
 
 class BlackboxBuilderTests(TestCaseWithTransport):
 
+    def setUp(self):
+        super(BlackboxBuilderTests, self).setUp()
+        # Replace DEBEMAIL and DEBFULLNAME so that they are known values
+        # for the changelog checks.
+        self._captureVar("DEBEMAIL", "maint@maint.org")
+        self._captureVar("DEBFULLNAME", "M. Maintainer")
+
     def test_cmd_builder_exists(self):
         self.run_bzr("build --help")
 
@@ -196,7 +203,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         out, err = self.run_bzr("dailydeb test.recipe "
                 "--manifest manifest --if-changed-from bar working")
         new_cl_contents = ("package (1) unstable; urgency=low\n\n"
-                "  * Auto build.\n\n -- bzr-builder <jamesw@ubuntu.com>  ")
+                "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
         f = open("working/test-1/debian/changelog")
         try:
             actual_cl_contents = f.read()
