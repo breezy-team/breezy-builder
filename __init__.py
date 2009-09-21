@@ -126,6 +126,9 @@ if __name__ == '__main__':
 import datetime
 from email import utils
 import os
+import pwd
+import re
+import socket
 import shutil
 import subprocess
 import tempfile
@@ -329,8 +332,7 @@ class cmd_dailydeb(cmd_build):
                 distribution = "jaunty"
         # Use debian packaging environment variables
         # or default values if they don't exist
-        author = "%s <%s>" % (os.environ.get('DEBFULLNAME', 'bzr-builder'),
-                              os.environ.get('DEBEMAIL', 'jamesw@ubuntu.com'))
+        author = "%s <%s>" % self._get_maintainer()
 
         date = utils.formatdate(localtime=True)
         cl.new_block(package=package, version=base_branch.deb_version,
@@ -342,6 +344,69 @@ class cmd_dailydeb(cmd_build):
             cl.write_to_open_file(cl_f)
         finally:
             cl_f.close()
+
+
+    def _get_maintainer(self):
+        """
+        Create maintainer string using the same algorithm as in dch
+        """
+        env = os.environ
+        regex = re.compile(r"^(.*)\s+<(.*)>$")
+
+        # Split email and name
+        if 'DEBEMAIL' in env:
+            match_obj = regex.match(env['DEBEMAIL'])
+            if match_obj:
+                if not 'DEBFULLNAME' in env:
+                    env['DEBFULLNAME'] = match_obj.group(1)
+                env['DEBEMAIL'] = match_obj.group(2)
+        if 'DEBEMAIL' not in env or 'DEBFULLNAME' not in env:
+            if 'EMAIL' in env:
+                match_obj = regex.match(env('EMAIL'))
+                if match_obj:
+                    if not 'DEBFULLNAME' in env:
+                        env['DEBFULLNAME'] = match_obj.group(1)
+                    env['EMAIL'] = match_obj.group(2)
+
+        # Get maintainer's name
+        if 'DEBFULLNAME' in env:
+            maintainer = env['DEBFULLNAME']
+        elif 'NAME' in env:
+            maintainer = env['NAME']
+        else:
+            # Use password database if no data in environment variables
+            try:
+                maintainer = re.sub(r',.*', '', pwd.getpwuid(os.getuid()).pw_gecos)
+            except KeyError, AttributeError:
+                # TBD: Use last changelog entry value
+                pass
+
+        # Get maintainer's mail address
+        if 'DEBEMAIL' in env:
+            email = env['DEBEMAIL']
+        elif 'MAIL' in env:
+            email = env['MAIL']
+        else:
+            addr = None
+            with open('/etc/mailname') as f:
+                addr = f.readline.strip()
+            if not addr:
+                addr = socket.getfqdn()
+            if addr:
+                user = pwd.getpwuid(os.getuid()).pw_name
+                if not user:
+                    addr = None
+                else:
+                    addr = "%s@%s" % (user, addr)
+
+            if addr:
+                email = addr
+            else:
+                # TBD: Use last changelog entry value
+                pass
+
+        return (maintainer, email)
+
 
     def _build_source_package(self, basedir):
         trace.note("Building the source package")
