@@ -362,7 +362,7 @@ class cmd_dailydeb(cmd_build):
                 env['DEBEMAIL'] = match_obj.group(2)
         if 'DEBEMAIL' not in env or 'DEBFULLNAME' not in env:
             if 'EMAIL' in env:
-                match_obj = regex.match(env('EMAIL'))
+                match_obj = regex.match(env['EMAIL'])
                 if match_obj:
                     if not 'DEBFULLNAME' in env:
                         env['DEBFULLNAME'] = match_obj.group(1)
