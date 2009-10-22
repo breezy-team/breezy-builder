@@ -249,17 +249,23 @@ class cmd_dailydeb(cmd_build):
                 Option("key-id", type=str, short_name="k",
                        help="Sign the packages with the specified GnuPG key, "
                             "must be specified if you use --dput."),
+                Option("watch-ppa", help="Watch the PPA the package was "
+                    "dput to and exit with 0 only if it builds and "
+                    "publishes successfully."),
             ]
 
     takes_args = ["recipe_file", "working_directory?"]
 
     def run(self, recipe_file, working_directory=None, manifest=None,
             if_changed_from=None, package=None, distribution=None,
-            dput=None, key_id=None):
+            dput=None, key_id=None, watch_ppa=False):
 
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
                     "specify --dput.")
+        if not dput and watch_ppa:
+            raise errors.BzrCommandError(
+                "cannot watch a ppa without doing dput.")
 
         base_branch = self._get_branch_from_recipe_file(recipe_file)
         time = datetime.datetime.utcnow()
@@ -297,6 +303,10 @@ class cmd_dailydeb(cmd_build):
                 self._sign_source_package(package_dir, key_id)
             if dput is not None:
                 self._dput_source_package(package_dir, dput)
+                if watch_ppa:
+                    from bzrlib.plugins.builder.ppa import watch
+                    watch(dput, package or recipe_name,
+                        base_branch.deb_version)
             if manifest is not None:
                 self._write_manifest_to_path(manifest, base_branch)
         finally:
