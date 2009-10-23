@@ -313,8 +313,7 @@ class cmd_dailydeb(cmd_build):
         if watch_ppa:
             from bzrlib.plugins.builder.ppa import watch
             target = target_from_dput(dput)
-            return watch(target, package or recipe_name,
-                base_branch.deb_version)
+            return watch(target, self.package, base_branch.deb_version)
 
 
     def _add_changelog_entry(self, base_branch, basedir, distribution=None,
@@ -343,6 +342,7 @@ class cmd_dailydeb(cmd_build):
                         "specified.")
             if distribution is None:
                 distribution = "jaunty"
+        self.package = package
         # Use debian packaging environment variables
         # or default values if they don't exist
         author = "%s <%s>" % self._get_maintainer()
