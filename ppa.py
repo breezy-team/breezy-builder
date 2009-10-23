@@ -50,9 +50,12 @@ def watch(target, package_name, version):
     owner = launchpad.people[owner_name]
     archive = owner.getPPAByName(name=archive_name)
     end_states = ['failedtobuild', 'fullybuilt']
+    print "Waiting for", version, "of", package_name, "to build."
     while True:
         sourceRecords = [s for s in
-            archive.getPublishedSources(source_name=package_name)
+            archive.getPublishedSources(source_name=package_name)]
+        # print [s.source_package_version for s in sourceRecords]
+        sourceRecords = [s for s in sourceRecords
             if s.source_package_version == version]
         if not sourceRecords:
             time.sleep(60)
