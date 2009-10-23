@@ -52,6 +52,7 @@ def watch(target, package_name, version):
     end_states = ['failedtobuild', 'fullybuilt']
     important_arches = ['amd64', 'i386', 'lpia', 'armel']
     print "Waiting for", version, "of", package_name, "to build."
+    start = time.time()
     while True:
         sourceRecords = [s for s in
             archive.getPublishedSources(source_name=package_name)]
@@ -59,6 +60,12 @@ def watch(target, package_name, version):
         sourceRecords = [s for s in sourceRecords
             if s.source_package_version == version]
         if not sourceRecords:
+            if time.time() - 900 > start:
+                # Over 15 minutes and no source yet, upload FAIL.
+                raise errors.BzrCommandError("No source record in %s for "
+                    "package %s=%s after 15 minutes." % (target, package_name,
+                    version))
+                return 2
             time.sleep(60)
             continue
         pkg = sourceRecords[0]

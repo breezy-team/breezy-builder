@@ -263,11 +263,13 @@ class cmd_dailydeb(cmd_build):
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
                     "specify --dput.")
-        if not dput and watch_ppa:
-            raise errors.BzrCommandError(
-                "cannot watch a ppa without doing dput.")
-        elif dput:
-            target_from_dput(dput)
+        if watch_ppa:
+            if not dput:
+                raise errors.BzrCommandError(
+                    "cannot watch a ppa without doing dput.")
+            else:
+                # Check we can calculate a PPA url.
+                target_from_dput(dput)
 
         base_branch = self._get_branch_from_recipe_file(recipe_file)
         time = datetime.datetime.utcnow()
@@ -476,7 +478,9 @@ def target_from_dput(dput):
     :return: A LP API target like team-name/ppa.
     """
     if not dput.startswith('ppa:'):
-        raise errors.BzrCommandError('not a ppa %s' % dput)
+        raise errors.BzrCommandError('%r does not appear to be a PPA.'
+            'A dput target like ppa:user[/name] must be used.' % dput)
+    # ppa: is 4 characters long.
     base, _, suffix = dput[4:].partition('/')
     if not suffix:
         suffix = 'ppa'
