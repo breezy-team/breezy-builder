@@ -26,7 +26,7 @@ from launchpadlib.credentials import Credentials
 def watch(target, package_name, version):
     """Watch a package build.
 
-    :return: True once the package built and published completely ok or False
+    :return: 0 once the package built and published completely ok or 2
         otherwise.
     """
     # See https://help.launchpad.net/API
@@ -85,5 +85,12 @@ def watch(target, package_name, version):
         print "%s: %s" % (pkg.display_name, buildSummaries['status']), extra
         time.sleep(60)
     print "%s: %s" % (pkg.display_name, buildSummaries['status'])
-    return (buildSummaries['status'] == 'fullybuilt' and 
-        pkg.status.lower() == 'published')
+    result = 0
+    if pkg.status.lower() != 'published':
+        result = 2
+    if buildSummaries['status'] != 'FULLYBUILT':
+        if buildSummaries['status'] == 'NEEDSBUILD':
+            import pdb;pdb.set_trace()
+        else:
+            result = 2
+    return result
