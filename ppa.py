@@ -50,6 +50,7 @@ def watch(target, package_name, version):
     owner = launchpad.people[owner_name]
     archive = owner.getPPAByName(name=archive_name)
     end_states = ['failedtobuild', 'fullybuilt']
+    important_arches = ['amd64', 'i386', 'lpia', 'armel']
     print "Waiting for", version, "of", package_name, "to build."
     while True:
         sourceRecords = [s for s in
@@ -75,7 +76,7 @@ def watch(target, package_name, version):
             missing = []
             for build in buildSummaries['builds']:
                 arch = build['arch_tag']
-                if arch in ['amd64', 'i386', 'lpia', 'armel']:
+                if arch in important_arches:
                     missing.append(arch)
             if not missing:
                 break
@@ -90,7 +91,12 @@ def watch(target, package_name, version):
         result = 2
     if buildSummaries['status'] != 'FULLYBUILT':
         if buildSummaries['status'] == 'NEEDSBUILD':
-            import pdb;pdb.set_trace()
+            # We're stopping early cause the important_arches are built.
+            builds = pkg.getBuilds()
+            for build in builds:
+                if build.arch_tag in important_arches:
+                    if build.buildstate == 'Failed to build':
+                        result = 2
         else:
             result = 2
     return result
