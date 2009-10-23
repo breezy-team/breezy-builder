@@ -35,7 +35,7 @@ def watch(target, package_name, version):
     try:
         credentials.load(open(oauth_file))
         launchpad = Launchpad(credentials, EDGE_SERVICE_ROOT)
-    except:
+    except Exception:
         cachedir = os.path.expanduser("~/.launchpadlib/cache/")
         launchpad = Launchpad.get_token_and_login('get-build-status', EDGE_SERVICE_ROOT, cachedir)
         launchpad.credentials.save(file(oauth_file, "w"))
