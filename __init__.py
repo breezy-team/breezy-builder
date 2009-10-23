@@ -266,6 +266,8 @@ class cmd_dailydeb(cmd_build):
         if not dput and watch_ppa:
             raise errors.BzrCommandError(
                 "cannot watch a ppa without doing dput.")
+        elif dput:
+            target_from_dput(dput)
 
         base_branch = self._get_branch_from_recipe_file(recipe_file)
         time = datetime.datetime.utcnow()
@@ -303,15 +305,16 @@ class cmd_dailydeb(cmd_build):
                 self._sign_source_package(package_dir, key_id)
             if dput is not None:
                 self._dput_source_package(package_dir, dput)
-                if watch_ppa:
-                    from bzrlib.plugins.builder.ppa import watch
-                    watch(dput, package or recipe_name,
-                        base_branch.deb_version)
             if manifest is not None:
                 self._write_manifest_to_path(manifest, base_branch)
         finally:
             if temp_dir is not None:
                 shutil.rmtree(temp_dir)
+        if watch_ppa:
+            from bzrlib.plugins.builder.ppa import watch
+            target = target_from_dput(dput)
+            return watch(target, package or recipe_name,
+                base_branch.deb_version)
 
 
     def _add_changelog_entry(self, base_branch, basedir, distribution=None,
@@ -464,6 +467,20 @@ class cmd_dailydeb(cmd_build):
 
 
 register_command(cmd_dailydeb)
+
+
+def target_from_dput(dput):
+    """Convert a dput specification to a LP API specification.
+
+    :param dput: A dput command spec like ppa:team-name.
+    :return: A LP API target like team-name/ppa.
+    """
+    if not dput.startswith('ppa:'):
+        raise errors.BzrCommandError('not a ppa %s' % dput)
+    base, _, suffix = dput[4:].partition('/')
+    if not suffix:
+        suffix = 'ppa'
+    return base + '/' + suffix
 
 
 def test_suite():

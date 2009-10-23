@@ -1,4 +1,4 @@
-# bzr-builder: a bzr plugin to constuct trees based on recipes
+# bzr-builder: a bzr plugin to construct trees based on recipes
 # Copyright 2009 Canonical Ltd.
 
 # This program is free software: you can redistribute it and/or modify it 
@@ -13,17 +13,19 @@
 # You should have received a copy of the GNU General Public License along 
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from unittest import TestSuite
-from bzrlib.tests import TestUtil
+import os
 
-def test_suite():
-    loader = TestUtil.TestLoader()
-    suite = TestSuite()
-    testmod_names = [
-            'blackbox',
-            'ppa',
-            'recipe',
-            ]
-    suite.addTest(loader.loadTestsFromModuleNames(["%s.test_%s" % (__name__, i)
-                                            for i in testmod_names]))
-    return suite
+from bzrlib import workingtree
+from bzrlib.plugins.builder import target_from_dput
+from bzrlib.tests import (
+        TestCase,
+        )
+
+
+class TestTargetFromDPut(TestCase):
+
+    def test_default_ppa(self):
+        self.assertEqual('team-name/ppa', target_from_dput('ppa:team-name'))
+
+    def test_named_ppa(self):
+        self.assertEqual('team/ppa2', target_from_dput('ppa:team/ppa2'))
