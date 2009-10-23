@@ -70,6 +70,15 @@ def watch(target, package_name, version):
         print "%s: %s" % (pkg.display_name, buildSummaries['status'])
         if buildSummaries['status'] in end_states:
             break
+        if buildSummaries['status'] == 'NEEDSBUILD':
+            # We ignore non-virtual PPA architectures that are sparsely
+            # supplied with buildds.
+            wait = False
+            for build in buildSummaries['builds']:
+                if build['arch_tag'] in ['amd64', 'i386', 'lpia', 'armel']:
+                    wait = True
+            if not wait:
+                break
         time.sleep(60)
     return (buildSummaries['status'] == 'fullybuilt' and 
         pkg.status.lower() == 'published')
