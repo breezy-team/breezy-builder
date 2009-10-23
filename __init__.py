@@ -225,8 +225,8 @@ def get_maintainer():
     # Get maintainer's mail address
     if 'DEBEMAIL' in env:
         email = env['DEBEMAIL']
-    elif 'MAIL' in env:
-        email = env['MAIL']
+    elif 'EMAIL' in env:
+        email = env['EMAIL']
     else:
         addr = None
         if os.path.exists('/etc/mailname'):
