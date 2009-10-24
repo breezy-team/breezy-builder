@@ -477,11 +477,12 @@ def target_from_dput(dput):
     :param dput: A dput command spec like ppa:team-name.
     :return: A LP API target like team-name/ppa.
     """
-    if not dput.startswith('ppa:'):
-        raise errors.BzrCommandError('%r does not appear to be a PPA.'
-            'A dput target like ppa:user[/name] must be used.' % dput)
-    # ppa: is 4 characters long.
-    base, _, suffix = dput[4:].partition('/')
+    ppa_prefix = 'ppa:'
+    if not dput.startswith(ppa_prefix):
+        raise errors.BzrCommandError('%r does not appear to be a PPA. '
+            'A dput target like \'%suser[/name]\' must be used.'
+            % (dput, ppa_prefix))
+    base, _, suffix = dput[len(ppa_prefix):].partition('/')
     if not suffix:
         suffix = 'ppa'
     return base + '/' + suffix
