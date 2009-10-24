@@ -14,14 +14,19 @@
 # You should have received a copy of the GNU General Public License along 
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from optparse import OptionParser
 import os
 import sys
 import time
 
+
 from launchpadlib.launchpad import (
-    Launchpad, STAGING_SERVICE_ROOT, EDGE_SERVICE_ROOT)
+    Launchpad,
+    EDGE_SERVICE_ROOT,
+    )
 from launchpadlib.credentials import Credentials
+
+from bzrlib import errors
+
 
 def watch(target, package_name, version):
     """Watch a package build.
@@ -39,14 +44,14 @@ def watch(target, package_name, version):
         cachedir = os.path.expanduser("~/.launchpadlib/cache/")
         launchpad = Launchpad.get_token_and_login('get-build-status', EDGE_SERVICE_ROOT, cachedir)
         launchpad.credentials.save(file(oauth_file, "w"))
-    
+
     try:
         owner_name, archive_name = target.split('/', 2)
     except ValueError:
             print "E: Failed to parse archive identifier."
             print "Syntax of target archive: <owner>/<archive>"
             sys.exit(1)
-    
+
     owner = launchpad.people[owner_name]
     archive = owner.getPPAByName(name=archive_name)
     end_states = ['failedtobuild', 'fullybuilt']
