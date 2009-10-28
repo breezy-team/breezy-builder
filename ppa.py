@@ -23,12 +23,19 @@ from launchpadlib.launchpad import (
     Launchpad, STAGING_SERVICE_ROOT, EDGE_SERVICE_ROOT)
 from launchpadlib.credentials import Credentials
 
+from bzrlib import (
+    errors,
+    trace,
+    )
+
 def watch(target, package_name, version):
     """Watch a package build.
 
     :return: 0 once the package built and published completely ok or 2
         otherwise.
     """
+    version = str(version)
+    trace.note("logging into launchpad")
     # See https://help.launchpad.net/API
     credentials = Credentials()
     oauth_file = os.path.expanduser('~/.cache/edge_oauth.txt')
@@ -51,14 +58,11 @@ def watch(target, package_name, version):
     archive = owner.getPPAByName(name=archive_name)
     end_states = ['failedtobuild', 'fullybuilt']
     important_arches = ['amd64', 'i386', 'lpia', 'armel']
-    print "Waiting for", version, "of", package_name, "to build."
+    trace.note("Waiting for %s of %s to build." % (version, package_name))
     start = time.time()
     while True:
-        sourceRecords = [s for s in
-            archive.getPublishedSources(source_name=package_name)]
-        # print [s.source_package_version for s in sourceRecords]
-        sourceRecords = [s for s in sourceRecords
-            if s.source_package_version == version]
+        sourceRecords = list(archive.getPublishedSources(
+            source_name=package_name, version=version))
         if not sourceRecords:
             if time.time() - 900 > start:
                 # Over 15 minutes and no source yet, upload FAIL.
@@ -66,10 +70,12 @@ def watch(target, package_name, version):
                     "package %s=%s after 15 minutes." % (target, package_name,
                     version))
                 return 2
+            trace.note("Source not available yet - waiting.")
             time.sleep(60)
             continue
         pkg = sourceRecords[0]
         if pkg.status.lower() not in ('published', 'pending'):
+            trace.note("pkg status: %s" % (pkg.status,))
             time.sleep(60)
             continue
         source_id = str(pkg.self).rsplit('/', 1)[1]
@@ -88,11 +94,14 @@ def watch(target, package_name, version):
             if not missing:
                 break
             extra = ', '.join(missing)
+        elif buildSummaries['status'] == 'FULLYBUILT':
+            break
         else:
             extra = ''
-        print "%s: %s" % (pkg.display_name, buildSummaries['status']), extra
+        trace.note("%s: %s %s" % (pkg.display_name, buildSummaries['status'],
+            extra))
         time.sleep(60)
-    print "%s: %s" % (pkg.display_name, buildSummaries['status'])
+    trace.note("%s: %s" % (pkg.display_name, buildSummaries['status']))
     result = 0
     if pkg.status.lower() != 'published':
         result = 2
