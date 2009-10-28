@@ -399,8 +399,6 @@ class cmd_dailydeb(cmd_build):
         # Get maintainer's mail address
         if 'DEBEMAIL' in env:
             email = env['DEBEMAIL']
-        elif 'MAIL' in env:
-            email = env['MAIL']
         else:
             addr = None
             if os.path.exists('/etc/mailname'):
@@ -458,14 +456,18 @@ class cmd_dailydeb(cmd_build):
         trace.note("Uploading the source package")
         command = ["/usr/bin/debrelease", "-S", "--dput", target]
         proc = subprocess.Popen(command, cwd=basedir,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 stdin=subprocess.PIPE)
-        proc.stdin.close()
-        retcode = proc.wait()
+        trace.note("1")
+        output, err = proc.communicate()
+        print output, err
+        trace.note("2")
+        retcode = proc.returncode
         if retcode != 0:
-            output = proc.stdout.read()
+            trace.note("3")
             raise errors.BzrCommandError("Uploading the package failed: "
                     "%s" % output)
+        trace.note("Uploaded the source package")
 
 
 register_command(cmd_dailydeb)
