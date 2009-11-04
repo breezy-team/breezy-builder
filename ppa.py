@@ -56,7 +56,7 @@ def watch(target, package_name, version):
     
     owner = launchpad.people[owner_name]
     archive = owner.getPPAByName(name=archive_name)
-    end_states = ['failedtobuild', 'fullybuilt']
+    end_states = ['FAILEDTOBUILD', 'FULLYBUILT']
     important_arches = ['amd64', 'i386', 'lpia', 'armel']
     trace.note("Waiting for %s of %s to build." % (version, package_name))
     start = time.time()
@@ -94,8 +94,6 @@ def watch(target, package_name, version):
             if not missing:
                 break
             extra = ', '.join(missing)
-        elif buildSummaries['status'] == 'FULLYBUILT':
-            break
         else:
             extra = ''
         trace.note("%s: %s %s" % (pkg.display_name, buildSummaries['status'],
@@ -104,7 +102,7 @@ def watch(target, package_name, version):
     trace.note("%s: %s" % (pkg.display_name, buildSummaries['status']))
     result = 0
     if pkg.status.lower() != 'published':
-        result = 2
+        result = 2 # should this perhaps keep waiting?
     if buildSummaries['status'] != 'FULLYBUILT':
         if buildSummaries['status'] == 'NEEDSBUILD':
             # We're stopping early cause the important_arches are built.
