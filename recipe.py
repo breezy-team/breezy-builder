@@ -226,7 +226,7 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
         def get_revno():
             try:
                 revno = br_from.revision_id_to_revno(revision_id)
-                return "%s" % revno
+                return str(revno)
             except errors.NoSuchRevision:
                 # We need to load and use the full revno map after all
                 result = br_from.get_revision_id_to_revno_map().get(
