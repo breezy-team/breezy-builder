@@ -283,11 +283,9 @@ class cmd_dailydeb(cmd_build):
             temp_dir = None
             if not os.path.exists(working_basedir):
                 os.makedirs(working_basedir)
-        # calculates the package name too.
-        package_dir = self._calculate_package_dir(recipe_file,
-            base_branch, working_basedir, package)
+        self._calculate_package_name(recipe_file, package)
         working_directory = os.path.join(working_basedir,
-            "%s-%s" % (self._package_name,self._template_version))
+            "%s-%s" % (self._package_name, self._template_version))
         try:
             # we want to use a consistent package_dir always to support
             # updates in place, but debuild etc want PACKAGE-UPSTREAMVERSION
@@ -298,8 +296,11 @@ class cmd_dailydeb(cmd_build):
                 "bzr-builder.manifest")
             build_tree(base_branch, working_directory)
             self._write_manifest_to_path(manifest_path, base_branch)
+            # Add changelog also substitutes {debupstream}.
             self._add_changelog_entry(base_branch, working_directory,
                     distribution=distribution, package=package)
+            package_dir = self._calculate_package_dir(base_branch,
+                working_basedir)
             # working_directory -> package_dir: after this debian stuff works.
             os.rename(working_directory, package_dir)
             try:
@@ -337,11 +338,19 @@ class cmd_dailydeb(cmd_build):
                 distribution = cl._blocks[0].distributions.split()[0]
             if package is None:
                 package = cl._blocks[0].package
+            if "{debupstream}" in base_branch.deb_version:
+                cl_version = cl._blocks[0].version
+                base_branch.deb_version = base_branch.deb_version.replace(
+                    "{debupstream}", cl_version.upstream_version)
         else:
             if package is None:
                 raise errors.BzrCommandError("No previous changelog to "
                         "take the package name from, and --package not "
                         "specified.")
+            if "{debupstream}" in base_branch.deb_version:
+                raise errors.BzrCommandError("No previous changelog to "
+                        "take the upstream version from - {debupstream} was "
+                        "used.")
             if distribution is None:
                 distribution = "jaunty"
         # Use debian packaging environment variables
@@ -359,19 +368,21 @@ class cmd_dailydeb(cmd_build):
         finally:
             cl_f.close()
 
-    def _calculate_package_dir(self, recipe_file, base_branch,
-        working_basedir, package):
+    def _calculate_package_dir(self, base_branch, working_basedir):
         """Calculate the directory name that should be used while debuilding."""
-        recipe_name = os.path.basename(recipe_file)
-        if recipe_name.endswith(".recipe"):
-            recipe_name = recipe_name[:-len(".recipe")]
-        self._package_name = package or recipe_name
         version = base_branch.deb_version
         if "-" in version:
             version = version[:version.rindex("-")]
         package_basedir = "%s-%s" % (self._package_name, version)
         package_dir = os.path.join(working_basedir, package_basedir)
         return package_dir
+
+    def _calculate_package_name(self, recipe_file, package):
+        """Calculate the directory name that should be used while debuilding."""
+        recipe_name = os.path.basename(recipe_file)
+        if recipe_name.endswith(".recipe"):
+            recipe_name = recipe_name[:-len(".recipe")]
+        self._package_name = package or recipe_name
 
     def _get_maintainer(self):
         """

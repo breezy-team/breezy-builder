@@ -288,7 +288,11 @@ def resolve_revisions(base_branch, if_changed_from=None):
             if_changed_from=if_changed_from_revisions)
     if not changed:
         changed = changed_revisions
-    if "{" in base_branch.deb_version:
+    ok_to_preserve = ["{debupstream}"]
+    checked_version = base_branch.deb_version
+    for token in ok_to_preserve:
+        checked_version = checked_version.replace(token, "")
+    if "{" in checked_version:
         raise errors.BzrCommandError("deb-version not fully "
                 "expanded: %s" % base_branch.deb_version)
     if if_changed_from is not None and not changed:
