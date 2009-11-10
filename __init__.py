@@ -212,6 +212,8 @@ class cmd_build(Command):
         old_recipe = None
         if if_changed_from is not None:
             old_recipe = self._get_old_recipe(if_changed_from)
+        # Save the unsubstituted version for dailydeb.
+        self._template_version = base_branch.deb_version
         changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
         if not changed:
             trace.note("Unchanged")
@@ -224,12 +226,10 @@ class cmd_build(Command):
             if_changed_from)
         if result is not None:
             return result
+        manifest_path = manifest or os.path.join(working_directory,
+                        "bzr-builder.manifest")
         build_tree(base_branch, working_directory)
-        if manifest is not None:
-            self._write_manifest_to_path(manifest, base_branch)
-        else:
-            self._write_manifest_to_path(os.path.join(working_directory,
-                        "bzr-builder.manifest"), base_branch)
+        self._write_manifest_to_path(manifest_path, base_branch)
 
 
 register_command(cmd_build)
@@ -292,9 +292,16 @@ class cmd_dailydeb(cmd_build):
                 os.makedirs(working_directory)
         try:
             package_dir = os.path.join(working_directory, package_basedir)
+            # we want to use a consistent package_dir always to support
+            # updates in place, but debuild etc want PACKAGE-UPSTREAMVERSION
+            # on disk, so we build with as much of a version number as we
+            # know, and do a final rename-to step before calling into debian
+            # build tools. We then rename the working dir back to 
+            # PACKAGE-RECIPEVERSION.
+            manifest_path = os.path.join(package_dir, "debian",
+                "bzr-builder.manifest")
             build_tree(base_branch, package_dir)
-            self._write_manifest_to_path(os.path.join(package_dir, "debian",
-                        "bzr-builder.manifest"), base_branch)
+            self._write_manifest_to_path(manifest_path, base_branch)
             self._add_changelog_entry(base_branch, package_dir,
                     distribution=distribution, package=package)
             self._build_source_package(package_dir)
