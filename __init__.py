@@ -263,9 +263,9 @@ class cmd_dailydeb(cmd_build):
                             "must be specified if you use --dput."),
             ]
 
-    takes_args = ["recipe_file", "working_directory?"]
+    takes_args = ["recipe_file", "working_basedir?"]
 
-    def run(self, recipe_file, working_directory=None, manifest=None,
+    def run(self, recipe_file, working_basedir=None, manifest=None,
             if_changed_from=None, package=None, distribution=None,
             dput=None, key_id=None):
 
@@ -276,45 +276,47 @@ class cmd_dailydeb(cmd_build):
             if_changed_from)
         if result is not None:
             return result
-        recipe_name = os.path.basename(recipe_file)
-        if recipe_name.endswith(".recipe"):
-            recipe_name = recipe_name[:-len(".recipe")]
-        version = base_branch.deb_version
-        if "-" in version:
-            version = version[:version.rindex("-")]
-        package_basedir = "%s-%s" % (package or recipe_name, version)
-        if working_directory is None:
+        if working_basedir is None:
             temp_dir = tempfile.mkdtemp(prefix="bzr-builder-")
-            working_directory = temp_dir
+            working_basedir = temp_dir
         else:
             temp_dir = None
-            if not os.path.exists(working_directory):
-                os.makedirs(working_directory)
+            if not os.path.exists(working_basedir):
+                os.makedirs(working_basedir)
+        # calculates the package name too.
+        package_dir = self._calculate_package_dir(recipe_file,
+            base_branch, working_basedir, package)
+        working_directory = os.path.join(working_basedir,
+            "%s-%s" % (self._package_name,self._template_version))
         try:
-            package_dir = os.path.join(working_directory, package_basedir)
             # we want to use a consistent package_dir always to support
             # updates in place, but debuild etc want PACKAGE-UPSTREAMVERSION
-            # on disk, so we build with as much of a version number as we
-            # know, and do a final rename-to step before calling into debian
-            # build tools. We then rename the working dir back to 
-            # PACKAGE-RECIPEVERSION.
-            manifest_path = os.path.join(package_dir, "debian",
+            # on disk, so we build_tree with the unsubstituted version number
+            # and do a final rename-to step before calling into debian build
+            # tools. We then rename the working dir back.
+            manifest_path = os.path.join(working_directory, "debian",
                 "bzr-builder.manifest")
-            build_tree(base_branch, package_dir)
+            build_tree(base_branch, working_directory)
             self._write_manifest_to_path(manifest_path, base_branch)
-            self._add_changelog_entry(base_branch, package_dir,
+            self._add_changelog_entry(base_branch, working_directory,
                     distribution=distribution, package=package)
-            self._build_source_package(package_dir)
-            if key_id is not None:
-                self._sign_source_package(package_dir, key_id)
-            if dput is not None:
-                self._dput_source_package(package_dir, dput)
+            # working_directory -> package_dir: after this debian stuff works.
+            os.rename(working_directory, package_dir)
+            try:
+                self._build_source_package(package_dir)
+                if key_id is not None:
+                    self._sign_source_package(package_dir, key_id)
+                if dput is not None:
+                    self._dput_source_package(package_dir, dput)
+            finally:
+                # package_dir -> working_directory
+                os.rename(package_dir, working_directory)
+            # Note that this may write a second manifest.
             if manifest is not None:
                 self._write_manifest_to_path(manifest, base_branch)
         finally:
             if temp_dir is not None:
                 shutil.rmtree(temp_dir)
-
 
     def _add_changelog_entry(self, base_branch, basedir, distribution=None,
             package=None):
@@ -357,6 +359,19 @@ class cmd_dailydeb(cmd_build):
         finally:
             cl_f.close()
 
+    def _calculate_package_dir(self, recipe_file, base_branch,
+        working_basedir, package):
+        """Calculate the directory name that should be used while debuilding."""
+        recipe_name = os.path.basename(recipe_file)
+        if recipe_name.endswith(".recipe"):
+            recipe_name = recipe_name[:-len(".recipe")]
+        self._package_name = package or recipe_name
+        version = base_branch.deb_version
+        if "-" in version:
+            version = version[:version.rindex("-")]
+        package_basedir = "%s-%s" % (self._package_name, version)
+        package_dir = os.path.join(working_basedir, package_basedir)
+        return package_dir
 
     def _get_maintainer(self):
         """
