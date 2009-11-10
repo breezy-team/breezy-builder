@@ -200,8 +200,12 @@ class cmd_build(Command):
                 filename=if_changed_from).parse()
         return old_recipe
 
-    def run(self, recipe_file, working_directory, manifest=None,
-            if_changed_from=None):
+    def _substitute_stuff(self, recipe_file, if_changed_from):
+        """Common code to substitute stuff
+        
+        :return: A tuple with (retcode, base_branch). If retcode is None
+            then the command execution should continue.
+        """
         base_branch = self._get_branch_from_recipe_file(recipe_file)
         time = datetime.datetime.utcnow()
         base_branch.substitute_time(time)
@@ -211,7 +215,15 @@ class cmd_build(Command):
         changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
         if not changed:
             trace.note("Unchanged")
-            return 0
+            return 0, base_branch
+        return None, base_branch
+
+    def run(self, recipe_file, working_directory, manifest=None,
+            if_changed_from=None):
+        result, base_branch = self._substitute_stuff(recipe_file,
+            if_changed_from)
+        if result is not None:
+            return result
         build_tree(base_branch, working_directory)
         if manifest is not None:
             self._write_manifest_to_path(manifest, base_branch)
@@ -260,17 +272,10 @@ class cmd_dailydeb(cmd_build):
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
                     "specify --dput.")
-
-        base_branch = self._get_branch_from_recipe_file(recipe_file)
-        time = datetime.datetime.utcnow()
-        base_branch.substitute_time(time)
-        old_recipe = None
-        if if_changed_from is not None:
-            old_recipe = self._get_old_recipe(if_changed_from)
-        changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
-        if not changed:
-            trace.note("Unchanged")
-            return 0
+        result, base_branch = self._substitute_stuff(recipe_file,
+            if_changed_from)
+        if result is not None:
+            return result
         recipe_name = os.path.basename(recipe_file)
         if recipe_name.endswith(".recipe"):
             recipe_name = recipe_name[:-len(".recipe")]
