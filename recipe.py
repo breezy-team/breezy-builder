@@ -247,11 +247,12 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
                 changed_revision_id = br_from.last_revision()
             if revision_id != changed_revision_id:
                 changed = True
-        for index, (child_branch, nest_location) in \
-            enumerate(new_branch.child_branches):
+        for index, instruction in enumerate(new_branch.child_branches):
+            child_branch = instruction.recipe_branch
+            nest_location = instruction.nest_path
             if_changed_child = None
             if if_changed_from is not None:
-                if_changed_child = if_changed_from.child_branches[index][0]
+                if_changed_child = if_changed_from.child_branches[index].recipe_branch
             if child_branch is not None:
                 child_changed = _resolve_revisions_recurse(child_branch,
                         substitute_revno,
@@ -327,22 +328,8 @@ def build_tree(base_branch, target_path):
         try:
             tree_to, br_to = update_branch(base_branch, tree_to, br_to,
                     to_transport)
-            for child_branch, nest_location in base_branch.child_branches:
-                if child_branch is None:
-                    # it's a command
-                    proc = subprocess.Popen(nest_location, cwd=target_path,
-                            preexec_fn=subprocess_setup, shell=True,
-                            stdin=subprocess.PIPE)
-                    proc.communicate()
-                    if proc.returncode != 0:
-                        raise CommandFailedError(nest_location)
-                elif nest_location is not None:
-                    # FIXME: pass possible_transports around
-                    build_tree(child_branch,
-                            target_path=os.path.join(target_path,
-                                nest_location))
-                else:
-                    merge_branch(child_branch, tree_to, br_to)
+            for instruction in base_branch.child_branches:
+                instruction.apply(target_path, tree_to, br_to)
         finally:
             # Is this ok if tree_to is created by pull_or_branch?
             if br_to is not None:
@@ -354,7 +341,9 @@ def build_tree(base_branch, target_path):
 
 def _add_child_branches_to_manifest(child_branches, indent_level):
     manifest = ""
-    for child_branch, nest_location in child_branches:
+    for instruction in child_branches:
+        child_branch = instruction.recipe_branch
+        nest_location = instruction.nest_path
         if child_branch is None:
             manifest += "%s%s %s\n" % ("  " * indent_level, RUN_INSTRUCTION,
                     nest_location)
@@ -390,6 +379,50 @@ def build_manifest(base_branch):
     return manifest
 
 
+class ChildBranch(object):
+    """A child branch in a recipe.
+    
+    If the nest path is not None it is the path relative to the recipe branch
+    where the child branch should be placed.  If it is None then the child
+    branch should be merged instead of nested.
+    """
+
+    def __init__(self, recipe_branch, nest_path=None):
+        self.recipe_branch = recipe_branch
+        self.nest_path = nest_path
+        
+    def apply(self, target_path, tree_to, br_to):
+        raise NotImplementedError(self.apply)
+
+    def as_tuple(self):
+        return (self.recipe_branch, self.nest_path)
+
+
+class CommandInstruction(ChildBranch):
+
+    def apply(self, target_path, tree_to, br_to):
+        # it's a command
+        proc = subprocess.Popen(self.nest_path, cwd=target_path,
+            preexec_fn=subprocess_setup, shell=True, stdin=subprocess.PIPE)
+        proc.communicate()
+        if proc.returncode != 0:
+            raise CommandFailedError(self.nest_path)
+
+
+class MergeInstruction(ChildBranch):
+
+    def apply(self, target_path, tree_to, br_to):
+        merge_branch(self.recipe_branch, tree_to, br_to)
+
+
+class NestInstruction(ChildBranch):
+
+    def apply(self, target_path, tree_to, br_to):
+        # FIXME: pass possible_transports around
+        build_tree(self.recipe_branch,
+            target_path=os.path.join(target_path, self.nest_path))
+
+
 class RecipeBranch(object):
     """A nested structure that represents a Recipe.
 
@@ -397,11 +430,7 @@ class RecipeBranch(object):
     root branch), and optionally child branches that are either merged
     or nested.
 
-    The child_branches attribute is a list of tuples of (RecipeBranch,
-    relative path), where if the relative branch is not None it is the
-    path relative to this branch where the child branch should be placed.
-    If it is None then the child branch should be merged instead.
-
+    The child_branches attribute is a list of tuples of ChildBranch objects. 
     The revid attribute records the revid that the url and revspec resolved
     to when the RecipeBranch was built, or None if it has not been built.
     """
@@ -425,7 +454,7 @@ class RecipeBranch(object):
 
         :param branch: the RecipeBranch to merge.
         """
-        self.child_branches.append((branch, None))
+        self.child_branches.append(MergeInstruction(branch))
 
     def nest_branch(self, location, branch):
         """Nest a child branch in to this one.
@@ -433,16 +462,16 @@ class RecipeBranch(object):
         :param location: the relative path at which this branch should be nested.
         :param branch: the RecipeBranch to nest.
         """
-        assert location not in [b[1] for b in self.child_branches],\
+        assert location not in [b.nest_path for b in self.child_branches],\
             "%s already has branch nested there" % location
-        self.child_branches.append((branch, location))
+        self.child_branches.append(NestInstruction(branch, location))
 
     def run_command(self, command):
         """Set a command to be run.
 
         :param command: the command to be run
         """
-        self.child_branches.append((None, command))
+        self.child_branches.append(CommandInstruction(None, command))
 
     def different_shape_to(self, other_branch):
         """Tests whether the name, url and child_branches are the same"""
@@ -452,16 +481,18 @@ class RecipeBranch(object):
             return True
         if len(self.child_branches) != len(other_branch.child_branches):
             return True
-        for index, (child_branch, nest_location) in \
-                enumerate(self.child_branches):
-            other_child, other_nest_location = \
-                   other_branch.child_branches[index]
+        for index, instruction in enumerate(self.child_branches):
+            child_branch = instruction.recipe_branch
+            nest_location = instruction.nest_path
+            other_instruction = other_branch.child_branches[index]
+            other_child_branch = other_instruction.recipe_branch
+            other_nest_location = other_instruction.nest_path
             if nest_location != other_nest_location:
                 return True
-            if ((child_branch is None and other_child is not None)
-                    or (child_branch is not None and other_child is None)):
+            if ((child_branch is None and other_child_branch is not None)
+                    or (child_branch is not None and other_child_branch is None)):
                 return True
-            if child_branch.different_shape_to(other_child):
+            if child_branch.different_shape_to(other_child_branch):
                 return True
         return False
 
