@@ -151,6 +151,201 @@ from bzrlib.plugins.builder.recipe import (
         )
 
 
+def write_manifest_to_path(path, base_branch):
+    parent_dir = os.path.dirname(path)
+    if parent_dir != '' and not os.path.exists(parent_dir):
+        os.makedirs(parent_dir)
+    manifest_f = open(path, 'wb')
+    try:
+        manifest_f.write(build_manifest(base_branch))
+    finally:
+        manifest_f.close()
+
+
+def get_branch_from_recipe_file(recipe_file):
+    recipe_transport = transport.get_transport(os.path.dirname(recipe_file))
+    try:
+        recipe_contents = recipe_transport.get_bytes(
+                os.path.basename(recipe_file))
+    except errors.NoSuchFile:
+        raise errors.BzrCommandError("Specified recipe does not exist: "
+                "%s" % recipe_file)
+    parser = RecipeParser(recipe_contents, filename=recipe_file)
+    return parser.parse()
+
+
+def get_old_recipe(if_changed_from):
+    old_manifest_transport = transport.get_transport(os.path.dirname(
+                if_changed_from))
+    try:
+        old_manifest_contents = old_manifest_transport.get_bytes(
+                os.path.basename(if_changed_from))
+    except errors.NoSuchFile:
+        return None
+    old_recipe = RecipeParser(old_manifest_contents,
+            filename=if_changed_from).parse()
+    return old_recipe
+
+
+def get_maintainer():
+    """
+    Create maintainer string using the same algorithm as in dch
+    """
+    env = os.environ
+    regex = re.compile(r"^(.*)\s+<(.*)>$")
+
+    # Split email and name
+    if 'DEBEMAIL' in env:
+        match_obj = regex.match(env['DEBEMAIL'])
+        if match_obj:
+            if not 'DEBFULLNAME' in env:
+                env['DEBFULLNAME'] = match_obj.group(1)
+            env['DEBEMAIL'] = match_obj.group(2)
+    if 'DEBEMAIL' not in env or 'DEBFULLNAME' not in env:
+        if 'EMAIL' in env:
+            match_obj = regex.match(env['EMAIL'])
+            if match_obj:
+                if not 'DEBFULLNAME' in env:
+                    env['DEBFULLNAME'] = match_obj.group(1)
+                env['EMAIL'] = match_obj.group(2)
+
+    # Get maintainer's name
+    if 'DEBFULLNAME' in env:
+        maintainer = env['DEBFULLNAME']
+    elif 'NAME' in env:
+        maintainer = env['NAME']
+    else:
+        # Use password database if no data in environment variables
+        try:
+            maintainer = re.sub(r',.*', '', pwd.getpwuid(os.getuid()).pw_gecos)
+        except KeyError, AttributeError:
+            # TBD: Use last changelog entry value
+            maintainer = "bzr-builder"
+
+    # Get maintainer's mail address
+    if 'DEBEMAIL' in env:
+        email = env['DEBEMAIL']
+    elif 'EMAIL' in env:
+        email = env['EMAIL']
+    else:
+        addr = None
+        if os.path.exists('/etc/mailname'):
+            f = open('/etc/mailname')
+            try:
+                addr = f.readline().strip()
+            finally:
+                f.close()
+        if not addr:
+            addr = socket.getfqdn()
+        if addr:
+            user = pwd.getpwuid(os.getuid()).pw_name
+            if not user:
+                addr = None
+            else:
+                addr = "%s@%s" % (user, addr)
+
+        if addr:
+            email = addr
+        else:
+            # TBD: Use last changelog entry value
+            email = "none@example.org"
+
+    return (maintainer, email)
+
+
+def add_changelog_entry(base_branch, basedir, distribution=None,
+        package=None):
+    debian_dir = os.path.join(basedir, "debian")
+    if not os.path.exists(debian_dir):
+        os.makedirs(debian_dir)
+    cl_path = os.path.join(debian_dir, "changelog")
+    if os.path.exists(cl_path):
+        cl_f = open(cl_path)
+        try:
+            cl = changelog.Changelog(file=cl_f)
+        finally:
+            cl_f.close()
+    else:
+        cl = changelog.Changelog()
+    if len(cl._blocks) > 0:
+        if distribution is None:
+            distribution = cl._blocks[0].distributions.split()[0]
+        if package is None:
+            package = cl._blocks[0].package
+        if "{debupstream}" in base_branch.deb_version:
+            cl_version = cl._blocks[0].version
+            base_branch.deb_version = base_branch.deb_version.replace(
+                "{debupstream}", cl_version.upstream_version)
+    else:
+        if package is None:
+            raise errors.BzrCommandError("No previous changelog to "
+                    "take the package name from, and --package not "
+                    "specified.")
+        if "{debupstream}" in base_branch.deb_version:
+            raise errors.BzrCommandError("No previous changelog to "
+                    "take the upstream version from - {debupstream} was "
+                    "used.")
+        if distribution is None:
+            distribution = "jaunty"
+    # Use debian packaging environment variables
+    # or default values if they don't exist
+    author = "%s <%s>" % get_maintainer()
+
+    date = utils.formatdate(localtime=True)
+    cl.new_block(package=package, version=base_branch.deb_version,
+            distributions=distribution, urgency="low",
+            changes=['', '  * Auto build.', ''],
+            author=author, date=date)
+    cl_f = open(cl_path, 'wb')
+    try:
+        cl.write_to_open_file(cl_f)
+    finally:
+        cl_f.close()
+
+
+def build_source_package(basedir):
+    trace.note("Building the source package")
+    command = ["/usr/bin/debuild", "--no-tgz-check", "-i", "-I", "-S",
+                    "-uc", "-us"]
+    proc = subprocess.Popen(command, cwd=basedir,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE)
+    proc.stdin.close()
+    retcode = proc.wait()
+    if retcode != 0:
+        output = proc.stdout.read()
+        raise errors.BzrCommandError("Failed to build the source package: "
+                "%s" % output)
+
+
+def sign_source_package(basedir, key_id):
+    trace.note("Signing the source package")
+    command = ["/usr/bin/debsign", "-S", "-k%s" % key_id]
+    proc = subprocess.Popen(command, cwd=basedir,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE)
+    proc.stdin.close()
+    retcode = proc.wait()
+    if retcode != 0:
+        output = proc.stdout.read()
+        raise errors.BzrCommandError("Signing the package failed: "
+                "%s" % output)
+
+
+def dput_source_package(basedir, target):
+    trace.note("Uploading the source package")
+    command = ["/usr/bin/debrelease", "-S", "--dput", target]
+    proc = subprocess.Popen(command, cwd=basedir,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            stdin=subprocess.PIPE)
+    proc.stdin.close()
+    retcode = proc.wait()
+    if retcode != 0:
+        output = proc.stdout.read()
+        raise errors.BzrCommandError("Uploading the package failed: "
+                "%s" % output)
+
+
 class cmd_build(Command):
     """Build a tree based on a 'recipe'.
 
@@ -167,51 +362,18 @@ class cmd_build(Command):
                         "to that specified in the specified manifest."),
                     ]
 
-    def _write_manifest_to_path(self, path, base_branch):
-        parent_dir = os.path.dirname(path)
-        if parent_dir != '' and not os.path.exists(parent_dir):
-            os.makedirs(parent_dir)
-        manifest_f = open(path, 'wb')
-        try:
-            manifest_f.write(build_manifest(base_branch))
-        finally:
-            manifest_f.close()
-
-    def _get_branch_from_recipe_file(self, recipe_file):
-        recipe_transport = transport.get_transport(os.path.dirname(recipe_file))
-        try:
-            recipe_contents = recipe_transport.get_bytes(
-                    os.path.basename(recipe_file))
-        except errors.NoSuchFile:
-            raise errors.BzrCommandError("Specified recipe does not exist: "
-                    "%s" % recipe_file)
-        parser = RecipeParser(recipe_contents, filename=recipe_file)
-        return parser.parse()
-
-    def _get_old_recipe(self, if_changed_from):
-        old_manifest_transport = transport.get_transport(os.path.dirname(
-                    if_changed_from))
-        try:
-            old_manifest_contents = old_manifest_transport.get_bytes(
-                    os.path.basename(if_changed_from))
-        except errors.NoSuchFile:
-            return None
-        old_recipe = RecipeParser(old_manifest_contents,
-                filename=if_changed_from).parse()
-        return old_recipe
-
     def _substitute_stuff(self, recipe_file, if_changed_from):
         """Common code to substitute stuff
         
         :return: A tuple with (retcode, base_branch). If retcode is None
             then the command execution should continue.
         """
-        base_branch = self._get_branch_from_recipe_file(recipe_file)
+        base_branch = get_branch_from_recipe_file(recipe_file)
         time = datetime.datetime.utcnow()
         base_branch.substitute_time(time)
         old_recipe = None
         if if_changed_from is not None:
-            old_recipe = self._get_old_recipe(if_changed_from)
+            old_recipe = get_old_recipe(if_changed_from)
         # Save the unsubstituted version for dailydeb.
         self._template_version = base_branch.deb_version
         changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
@@ -229,7 +391,7 @@ class cmd_build(Command):
         manifest_path = manifest or os.path.join(working_directory,
                         "bzr-builder.manifest")
         build_tree(base_branch, working_directory)
-        self._write_manifest_to_path(manifest_path, base_branch)
+        write_manifest_to_path(manifest_path, base_branch)
 
 
 register_command(cmd_build)
@@ -295,78 +457,29 @@ class cmd_dailydeb(cmd_build):
             manifest_path = os.path.join(working_directory, "debian",
                 "bzr-builder.manifest")
             build_tree(base_branch, working_directory)
-            self._write_manifest_to_path(manifest_path, base_branch)
+            write_manifest_to_path(manifest_path, base_branch)
             # Add changelog also substitutes {debupstream}.
-            self._add_changelog_entry(base_branch, working_directory,
-                    distribution=distribution, package=package)
+            add_changelog_entry(base_branch, working_directory,
+                distribution=distribution, package=package)
             package_dir = self._calculate_package_dir(base_branch,
                 working_basedir)
             # working_directory -> package_dir: after this debian stuff works.
             os.rename(working_directory, package_dir)
             try:
-                self._build_source_package(package_dir)
+                build_source_package(package_dir)
                 if key_id is not None:
-                    self._sign_source_package(package_dir, key_id)
+                    sign_source_package(package_dir, key_id)
                 if dput is not None:
-                    self._dput_source_package(package_dir, dput)
+                    dput_source_package(package_dir, dput)
             finally:
                 # package_dir -> working_directory
                 os.rename(package_dir, working_directory)
             # Note that this may write a second manifest.
             if manifest is not None:
-                self._write_manifest_to_path(manifest, base_branch)
+                write_manifest_to_path(manifest, base_branch)
         finally:
             if temp_dir is not None:
                 shutil.rmtree(temp_dir)
-
-    def _add_changelog_entry(self, base_branch, basedir, distribution=None,
-            package=None):
-        debian_dir = os.path.join(basedir, "debian")
-        if not os.path.exists(debian_dir):
-            os.makedirs(debian_dir)
-        cl_path = os.path.join(debian_dir, "changelog")
-        if os.path.exists(cl_path):
-            cl_f = open(cl_path)
-            try:
-                cl = changelog.Changelog(file=cl_f)
-            finally:
-                cl_f.close()
-        else:
-            cl = changelog.Changelog()
-        if len(cl._blocks) > 0:
-            if distribution is None:
-                distribution = cl._blocks[0].distributions.split()[0]
-            if package is None:
-                package = cl._blocks[0].package
-            if "{debupstream}" in base_branch.deb_version:
-                cl_version = cl._blocks[0].version
-                base_branch.deb_version = base_branch.deb_version.replace(
-                    "{debupstream}", cl_version.upstream_version)
-        else:
-            if package is None:
-                raise errors.BzrCommandError("No previous changelog to "
-                        "take the package name from, and --package not "
-                        "specified.")
-            if "{debupstream}" in base_branch.deb_version:
-                raise errors.BzrCommandError("No previous changelog to "
-                        "take the upstream version from - {debupstream} was "
-                        "used.")
-            if distribution is None:
-                distribution = "jaunty"
-        # Use debian packaging environment variables
-        # or default values if they don't exist
-        author = "%s <%s>" % self._get_maintainer()
-
-        date = utils.formatdate(localtime=True)
-        cl.new_block(package=package, version=base_branch.deb_version,
-                distributions=distribution, urgency="low",
-                changes=['', '  * Auto build.', ''],
-                author=author, date=date)
-        cl_f = open(cl_path, 'wb')
-        try:
-            cl.write_to_open_file(cl_f)
-        finally:
-            cl_f.close()
 
     def _calculate_package_dir(self, base_branch, working_basedir):
         """Calculate the directory name that should be used while debuilding."""
@@ -383,112 +496,6 @@ class cmd_dailydeb(cmd_build):
         if recipe_name.endswith(".recipe"):
             recipe_name = recipe_name[:-len(".recipe")]
         self._package_name = package or recipe_name
-
-    def _get_maintainer(self):
-        """
-        Create maintainer string using the same algorithm as in dch
-        """
-        env = os.environ
-        regex = re.compile(r"^(.*)\s+<(.*)>$")
-
-        # Split email and name
-        if 'DEBEMAIL' in env:
-            match_obj = regex.match(env['DEBEMAIL'])
-            if match_obj:
-                if not 'DEBFULLNAME' in env:
-                    env['DEBFULLNAME'] = match_obj.group(1)
-                env['DEBEMAIL'] = match_obj.group(2)
-        if 'DEBEMAIL' not in env or 'DEBFULLNAME' not in env:
-            if 'EMAIL' in env:
-                match_obj = regex.match(env['EMAIL'])
-                if match_obj:
-                    if not 'DEBFULLNAME' in env:
-                        env['DEBFULLNAME'] = match_obj.group(1)
-                    env['EMAIL'] = match_obj.group(2)
-
-        # Get maintainer's name
-        if 'DEBFULLNAME' in env:
-            maintainer = env['DEBFULLNAME']
-        elif 'NAME' in env:
-            maintainer = env['NAME']
-        else:
-            # Use password database if no data in environment variables
-            try:
-                maintainer = re.sub(r',.*', '', pwd.getpwuid(os.getuid()).pw_gecos)
-            except KeyError, AttributeError:
-                # TBD: Use last changelog entry value
-                maintainer = "bzr-builder"
-
-        # Get maintainer's mail address
-        if 'DEBEMAIL' in env:
-            email = env['DEBEMAIL']
-        elif 'MAIL' in env:
-            email = env['MAIL']
-        else:
-            addr = None
-            if os.path.exists('/etc/mailname'):
-                f = open('/etc/mailname')
-                try:
-                    addr = f.readline().strip()
-                finally:
-                    f.close()
-            if not addr:
-                addr = socket.getfqdn()
-            if addr:
-                user = pwd.getpwuid(os.getuid()).pw_name
-                if not user:
-                    addr = None
-                else:
-                    addr = "%s@%s" % (user, addr)
-
-            if addr:
-                email = addr
-            else:
-                # TBD: Use last changelog entry value
-                email = "none@example.org"
-
-        return (maintainer, email)
-
-
-    def _build_source_package(self, basedir):
-        trace.note("Building the source package")
-        command = ["/usr/bin/debuild", "--no-tgz-check", "-i", "-I", "-S",
-                        "-uc", "-us"]
-        proc = subprocess.Popen(command, cwd=basedir,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                stdin=subprocess.PIPE)
-        proc.stdin.close()
-        retcode = proc.wait()
-        if retcode != 0:
-            output = proc.stdout.read()
-            raise errors.BzrCommandError("Failed to build the source package: "
-                    "%s" % output)
-
-    def _sign_source_package(self, basedir, key_id):
-        trace.note("Signing the source package")
-        command = ["/usr/bin/debsign", "-S", "-k%s" % key_id]
-        proc = subprocess.Popen(command, cwd=basedir,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                stdin=subprocess.PIPE)
-        proc.stdin.close()
-        retcode = proc.wait()
-        if retcode != 0:
-            output = proc.stdout.read()
-            raise errors.BzrCommandError("Signing the package failed: "
-                    "%s" % output)
-
-    def _dput_source_package(self, basedir, target):
-        trace.note("Uploading the source package")
-        command = ["/usr/bin/debrelease", "-S", "--dput", target]
-        proc = subprocess.Popen(command, cwd=basedir,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                stdin=subprocess.PIPE)
-        proc.stdin.close()
-        retcode = proc.wait()
-        if retcode != 0:
-            output = proc.stdout.read()
-            raise errors.BzrCommandError("Uploading the package failed: "
-                    "%s" % output)
 
 
 register_command(cmd_dailydeb)
