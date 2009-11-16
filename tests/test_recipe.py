@@ -145,9 +145,9 @@ class RecipeParserTests(TestCaseInTempDir):
                 self.basic_header_and_branch + "merge foo ")
 
     def test_rejects_text_at_end_of_merge_line(self):
-        self.assertParseError(3, 17, "Expecting the end of the line, "
+        self.assertParseError(3, 22, "Expecting the end of the line, "
                 "got 'bar'", self.get_recipe,
-                self.basic_header_and_branch + "merge foo url 2 bar")
+                self.basic_header_and_branch + "merge foo url 2 path bar")
 
     def test_rejects_nest_no_name(self):
         self.assertParseError(3, 6, "End of line while looking for "
@@ -219,6 +219,17 @@ class RecipeParserTests(TestCaseInTempDir):
         child_branch, location = base_branch.child_branches[0].as_tuple()
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org")
+
+    def test_builds_recipe_with_partial_merge(self):
+        base_branch = self.get_recipe(self.basic_header_and_branch
+                + "merge bar http://bar.org -1 some/path")
+        self.check_base_recipe_branch(base_branch, "http://foo.org/",
+                num_child_branches=1)
+        instruction = base_branch.child_branches[0]
+        self.assertEqual(None, instruction.nest_path)
+        self.check_recipe_branch(
+            instruction.recipe_branch, "bar", "http://bar.org", "-1")
+        self.assertEqual("some/path", instruction.subpath)
 
     def test_builds_recipe_with_nest(self):
         base_branch = self.get_recipe(self.basic_header_and_branch

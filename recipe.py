@@ -146,7 +146,7 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
     return tree_to, br_to
 
 
-def merge_branch(child_branch, tree_to, br_to):
+def merge_branch(child_branch, tree_to, br_to, subpath):
     """Merge the branch specified by child_branch.
 
     :param child_branch: the RecipeBranch to retrieve the branch and revision to
@@ -411,8 +411,12 @@ class CommandInstruction(ChildBranch):
 
 class MergeInstruction(ChildBranch):
 
+    def __init__(self, recipe_branch, subpath):
+        ChildBranch.__init__(self, recipe_branch)
+        self.subpath = subpath
+
     def apply(self, target_path, tree_to, br_to):
-        merge_branch(self.recipe_branch, tree_to, br_to)
+        merge_branch(self.recipe_branch, tree_to, br_to, self.subpath)
 
 
 class NestInstruction(ChildBranch):
@@ -449,12 +453,13 @@ class RecipeBranch(object):
         self.child_branches = []
         self.revid = None
 
-    def merge_branch(self, branch):
+    def merge_branch(self, branch, subpath=None):
         """Merge a child branch in to this one.
 
         :param branch: the RecipeBranch to merge.
+        :param subpath: XXX
         """
-        self.child_branches.append(MergeInstruction(branch))
+        self.child_branches.append(MergeInstruction(branch, subpath))
 
     def nest_branch(self, location, branch):
         """Nest a child branch in to this one.
@@ -630,12 +635,14 @@ class RecipeParser(object):
                     if instruction == NEST_INSTRUCTION:
                         location = self.parse_branch_location()
                     revspec = self.parse_optional_revspec()
+                    if instruction == MERGE_INSTRUCTION:
+                        path = self.parse_optional_path()
                     self.new_line()
                     last_branch = RecipeBranch(branch_id, url, revspec=revspec)
                     if instruction == NEST_INSTRUCTION:
                         active_branches[-1].nest_branch(location, last_branch)
                     else:
-                        active_branches[-1].merge_branch(last_branch)
+                        active_branches[-1].merge_branch(last_branch, path)
                 last_instruction = instruction
         if len(active_branches) == 0:
             self.throw_parse_error("Empty recipe")
@@ -694,6 +701,13 @@ class RecipeParser(object):
         if revspec is not None:
             self.take_chars(len(revspec))
         return revspec
+
+    def parse_optional_path(self):
+        self.parse_whitespace(None, require=False)
+        path = self.peek_to_whitespace()
+        if path is not None:
+            self.take_chars(len(path))
+        return path
 
     def throw_parse_error(self, problem):
         raise RecipeParseError(self.filename, self.line_index + 1,
