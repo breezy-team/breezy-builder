@@ -371,15 +371,17 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(revid, tree.last_revision())
         self.assertEqual(revid, base_branch.revid)
 
-    def test_build_tree_nested(self):
-        source1 = self.make_branch_and_tree("source1")
-        self.build_tree(["source1/a"])
+    def make_source_branch(self, relpath):
+        """Make a branch with one file and one commit."""
+        source1 = self.make_branch_and_tree(relpath)
+        self.build_tree([relpath + "/a"])
         source1.add(["a"])
         source1_rev_id = source1.commit("one")
-        source2 = self.make_branch_and_tree("source2")
-        self.build_tree(["source2/a"])
-        source2.add(["a"])
-        source2_rev_id = source2.commit("one")
+        return source1
+
+    def test_build_tree_nested(self):
+        source1_rev_id = self.make_source_branch("source1").last_revision()
+        source2_rev_id = self.make_source_branch("source2").last_revision()
         base_branch = BaseRecipeBranch("source1", "1", 0.2)
         nested_branch = RecipeBranch("nested", "source2")
         base_branch.nest_branch("sub", nested_branch)
@@ -393,10 +395,8 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source2_rev_id, nested_branch.revid)
 
     def test_build_tree_merged(self):
-        source1 = self.make_branch_and_tree("source1")
-        self.build_tree(["source1/a"])
-        source1.add(["a"])
-        source1_rev_id = source1.commit("one")
+        source1 = self.make_source_branch("source1")
+        source1_rev_id = source1.last_revision()
         source2 = source1.bzrdir.sprout("source2").open_workingtree()
         self.build_tree_contents([("source2/a", "other change")])
         source2_rev_id = source2.commit("one")
@@ -415,10 +415,8 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source2_rev_id, merged_branch.revid)
 
     def test_build_tree_merge_twice(self):
-        source1 = self.make_branch_and_tree("source1")
-        self.build_tree(["source1/a"])
-        source1.add(["a"])
-        source1_rev_id = source1.commit("one")
+        source1 = self.make_source_branch("source1")
+        source1_rev_id = source1.last_revision()
         source2 = source1.bzrdir.sprout("source2").open_workingtree()
         self.build_tree_contents([("source2/a", "other change")])
         source2_rev_id = source2.commit("one")
@@ -447,10 +445,7 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source3_rev_id, merged_branch2.revid)
 
     def test_build_tree_merged_with_conflicts(self):
-        source1 = self.make_branch_and_tree("source1")
-        self.build_tree(["source1/a"])
-        source1.add(["a"])
-        source1_rev_id = source1.commit("one")
+        source1 = self.make_source_branch("source1")
         source2 = source1.bzrdir.sprout("source2").open_workingtree()
         self.build_tree_contents([("source2/a", "other change\n")])
         source2_rev_id = source2.commit("one")
@@ -476,10 +471,8 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source2_rev_id, merged_branch.revid)
 
     def test_build_tree_with_revspecs(self):
-        source1 = self.make_branch_and_tree("source1")
-        self.build_tree(["source1/a"])
-        source1.add(["a"])
-        source1_rev_id = source1.commit("one")
+        source1 = self.make_source_branch("source1")
+        source1_rev_id = source1.last_revision()
         source2 = source1.bzrdir.sprout("source2").open_workingtree()
         self.build_tree_contents([("source2/a", "other change\n")])
         source2_rev_id = source2.commit("one")
