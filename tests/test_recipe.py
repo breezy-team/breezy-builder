@@ -414,6 +414,29 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source1_rev_id, base_branch.revid)
         self.assertEqual(source2_rev_id, merged_branch.revid)
 
+    def test_build_tree_partial_merge(self):
+        """A recipe can specify a merge of just part of a tree."""
+        source1 = self.make_source_branch("source1")
+        source1.lock_read()
+        self.addCleanup(source1.unlock)
+        source1_rev_id = source1.last_revision()
+        # Make a branch that modifies 'a', and adds 'b'.
+        source2 = source1.bzrdir.sprout("source2").open_workingtree()
+        self.build_tree_contents([
+            ("source2/a", "change existing file"), ("source2/b", "new file")])
+        source2.add(["b"])
+        source2_rev_id = source2.commit("one")
+        base_branch = BaseRecipeBranch("source1", "1", 0.2)
+        merged_branch = RecipeBranch("merged", "source2")
+        # Merge just 'b' from source2; 'a' is untouched.
+        base_branch.merge_branch(merged_branch, "b")
+        build_tree(base_branch, "target")
+        file_id = source1.path2id("a")
+        self.check_file_contents("target/a", source1.get_file_text(file_id))
+        self.check_file_contents("target/b", "new file")
+        self.assertEqual(source1_rev_id, base_branch.revid)
+        self.assertEqual(source2_rev_id, merged_branch.revid)
+
     def test_build_tree_merge_twice(self):
         source1 = self.make_source_branch("source1")
         source1_rev_id = source1.last_revision()

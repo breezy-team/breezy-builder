@@ -170,6 +170,8 @@ def merge_branch(child_branch, tree_to, br_to, subpath):
             merger = merge.Merger.from_revision_ids(pb, tree_to, merge_revid,
                     other_branch=merge_from, tree_branch=br_to)
             merger.merge_type = merge.Merge3Merger
+            if subpath is not None:
+                merger.set_interesting_files([subpath])
             if (merger.base_rev_id == merger.other_rev_id and
                     merger.other_rev_id is not None):
                 # Nothing to do.
