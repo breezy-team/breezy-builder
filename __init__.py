@@ -90,11 +90,11 @@ Once the command finished it will have placed the result in "working-dir".
 
 It is also possible to produce Debian source packages from a recipe, assuming
 that one of the branches in the recipe contains some appropriate packaging.
-You can do this using the "bzr dailydeb" command which takes the same
-arguments as "build". Only this time in working dir, you will find a source
+You can do this using the "bzr dailydeb" command, which takes the same
+arguments as "build". Only this time in the working dir you will find a source
 package and a directory containing the code that the packages was built from
-once it is done. Also take a look at the "--key-id" and "--dput" arguments
-to have "bzr dailydeb" sign and upload the source package somewhere.
+once it is done. Also take a look at the "--key-id" and "--dput" arguments to
+have "bzr dailydeb" sign and upload the source package somewhere.
 
 To build Debian source package that you desire you should make sure that
 "deb-version" is set to an appropriate value on the first line of your
