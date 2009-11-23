@@ -151,6 +151,10 @@ from bzrlib.plugins.builder.recipe import (
         )
 
 
+# The default distribution used by get_changelog_entry()
+DEFAULT_UBUNTU_DISTRIBUTION = "jaunty"
+
+
 def write_manifest_to_path(path, base_branch):
     parent_dir = os.path.dirname(path)
     if parent_dir != '' and not os.path.exists(parent_dir):
@@ -188,8 +192,7 @@ def get_old_recipe(if_changed_from):
 
 
 def get_maintainer():
-    """
-    Create maintainer string using the same algorithm as in dch
+    """Create maintainer string using the same algorithm as in dch.
     """
     env = os.environ
     regex = re.compile(r"^(.*)\s+<(.*)>$")
@@ -278,7 +281,7 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
                     "take the package name from, and --package not "
                     "specified.")
         if distribution is None:
-            distribution = "jaunty"
+            distribution = DEFAULT_UBUNTU_DISTRIBUTION
     # Use debian packaging environment variables
     # or default values if they don't exist
     author = "%s <%s>" % get_maintainer()
@@ -295,10 +298,14 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
         cl_f.close()
 
 
-def build_source_package(basedir):
-    trace.note("Building the source package")
-    command = ["/usr/bin/debuild", "--no-tgz-check", "-i", "-I", "-S",
-                    "-uc", "-us"]
+def run_command(command, msg, error_msg):
+    """ Run a command in a subprocess.
+
+    :param command: list with command and parameters
+    :param msg: message to display to the user
+    :param error_msg: message to display if something fails.
+    """
+    trace.note(msg)
     proc = subprocess.Popen(command, cwd=basedir,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             stdin=subprocess.PIPE)
@@ -306,36 +313,29 @@ def build_source_package(basedir):
     retcode = proc.wait()
     if retcode != 0:
         output = proc.stdout.read()
-        raise errors.BzrCommandError("Failed to build the source package: "
-                "%s" % output)
+        raise errors.BzrCommandError("%s: %s" % (output, error_msg))
+
+
+def build_source_package(basedir):
+    command = ["/usr/bin/debuild", "--no-tgz-check", "-i", "-I", "-S",
+                    "-uc", "-us"]
+    _run_command(command,
+        "Building the source package",
+        "Failed to build the source package")
 
 
 def sign_source_package(basedir, key_id):
-    trace.note("Signing the source package")
     command = ["/usr/bin/debsign", "-S", "-k%s" % key_id]
-    proc = subprocess.Popen(command, cwd=basedir,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            stdin=subprocess.PIPE)
-    proc.stdin.close()
-    retcode = proc.wait()
-    if retcode != 0:
-        output = proc.stdout.read()
-        raise errors.BzrCommandError("Signing the package failed: "
-                "%s" % output)
+    _run_command(command,
+        "Signing the source package",
+        "Signing the package failed")
 
 
 def dput_source_package(basedir, target):
-    trace.note("Uploading the source package")
     command = ["/usr/bin/debrelease", "-S", "--dput", target]
-    proc = subprocess.Popen(command, cwd=basedir,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            stdin=subprocess.PIPE)
-    proc.stdin.close()
-    retcode = proc.wait()
-    if retcode != 0:
-        output = proc.stdout.read()
-        raise errors.BzrCommandError("Uploading the package failed: "
-                "%s" % output)
+    _run_command(command,
+        "Uploading the source package",
+        "Uploading the package failed")
 
 
 def get_base_branch(recipe_file, if_changed_from=None):
@@ -414,8 +414,8 @@ class cmd_dailydeb(cmd_build):
                         help="dput the built package to the specified "
                         "dput target."),
                 Option("key-id", type=str, short_name="k",
-                       help="Sign the packages with the specified GnuPG key, "
-                            "must be specified if you use --dput."),
+                       help="Sign the packages with the specified GnuPG key. "
+                            "Must be specified if you use --dput."),
             ]
 
     takes_args = ["recipe_file", "working_directory?"]
