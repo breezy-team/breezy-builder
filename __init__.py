@@ -151,8 +151,8 @@ from bzrlib.plugins.builder.recipe import (
         )
 
 
-# The default distribution used by get_changelog_entry()
-DEFAULT_UBUNTU_DISTRIBUTION = "jaunty"
+# The default distribution used by add_changelog_entry()
+DEFAULT_UBUNTU_DISTRIBUTION = "lucid"
 
 
 def write_manifest_to_path(path, base_branch):
@@ -298,7 +298,7 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
         cl_f.close()
 
 
-def run_command(command, msg, error_msg):
+def _run_command(command, msg, error_msg):
     """ Run a command in a subprocess.
 
     :param command: list with command and parameters
@@ -313,7 +313,7 @@ def run_command(command, msg, error_msg):
     retcode = proc.wait()
     if retcode != 0:
         output = proc.stdout.read()
-        raise errors.BzrCommandError("%s: %s" % (output, error_msg))
+        raise errors.BzrCommandError("%s: %s" % (error_msg, output))
 
 
 def build_source_package(basedir):
