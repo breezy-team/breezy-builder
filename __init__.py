@@ -107,6 +107,10 @@ on various things when the recipe is processed:
   * {revno} will be the revno of the base branch (the first specified).
   * {revno:<branch name>} will be substituted with the revno for the
     branch named <branch name> in the recipe.
+  * {debupstream} will be replaced by the upstream portion of the version
+    number taken from debian/changelog in the final tree. If when the
+    tree is built the top of debian/changelog has a version number of
+    "1.0-1" then this would evaluate to "1.0".
 
 Format versions:
 
