@@ -149,7 +149,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         cl_f = open(cl_path)
         try:
             line = cl_f.readline()
-            self.assertEqual("foo (1) jaunty; urgency=low\n", line)
+            self.assertEqual("foo (1) lucid; urgency=low\n", line)
         finally:
             cl_f.close()
 
