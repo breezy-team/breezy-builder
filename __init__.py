@@ -107,6 +107,10 @@ on various things when the recipe is processed:
   * {revno} will be the revno of the base branch (the first specified).
   * {revno:<branch name>} will be substituted with the revno for the
     branch named <branch name> in the recipe.
+  * {debupstream} will be replaced by the upstream portion of the version
+    number taken from debian/changelog in the final tree. If when the
+    tree is built the top of debian/changelog has a version number of
+    "1.0-1" then this would evaluate to "1.0".
 
 Format versions:
 
@@ -146,6 +150,7 @@ from bzrlib.option import Option
 from bzrlib.plugins.builder.recipe import (
         build_manifest,
         build_tree,
+        DEBUPSTREAM_VAR,
         RecipeParser,
         resolve_revisions,
         )
@@ -272,11 +277,18 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
             distribution = cl._blocks[0].distributions.split()[0]
         if package is None:
             package = cl._blocks[0].package
+        if DEBUPSTREAM_VAR in base_branch.deb_version:
+            cl_version = cl._blocks[0].version
+            base_branch.substitute_debupstream(cl_version)
     else:
         if package is None:
             raise errors.BzrCommandError("No previous changelog to "
                     "take the package name from, and --package not "
                     "specified.")
+        if DEBUPSTREAM_VAR in base_branch.deb_version:
+            raise errors.BzrCommandError("No previous changelog to "
+                    "take the upstream version from as %s was "
+                    "used." % DEBUPSTREAM_VAR)
         if distribution is None:
             distribution = "jaunty"
     # Use debian packaging environment variables
@@ -338,33 +350,6 @@ def dput_source_package(basedir, target):
                 "%s" % output)
 
 
-def get_base_branch(recipe_file, if_changed_from=None):
-    base_branch = get_branch_from_recipe_file(recipe_file)
-    time = datetime.datetime.utcnow()
-    base_branch.substitute_time(time)
-    old_recipe = None
-    if if_changed_from is not None:
-        old_recipe = get_old_recipe(if_changed_from)
-    changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
-    if not changed:
-        return None
-    return base_branch
-
-
-def build_one_recipe(recipe_file, working_directory, manifest=None,
-        if_changed_from=None):
-    base_branch = get_base_branch(recipe_file, if_changed_from=if_changed_from)
-    if base_branch is None:
-        trace.note("Unchanged")
-        return 0
-    build_tree(base_branch, working_directory)
-    if manifest is not None:
-        write_manifest_to_path(manifest, base_branch)
-    else:
-        write_manifest_to_path(os.path.join(working_directory,
-                    "bzr-builder.manifest"), base_branch)
-
-
 class cmd_build(Command):
     """Build a tree based on a 'recipe'.
 
@@ -381,10 +366,40 @@ class cmd_build(Command):
                         "to that specified in the specified manifest."),
                     ]
 
+    def _get_prepared_branch_from_recipe(self, recipe_file,
+            if_changed_from=None):
+        """Common code to prepare a branch and do substitutions.
+
+        :param recipe_file: a path to a recipe file to work from.
+        :param if_changed_from: an optional path to a manifest to
+            compare the recipe against.
+        :return: A tuple with (retcode, base_branch). If retcode is None
+            then the command execution should continue.
+        """
+        base_branch = get_branch_from_recipe_file(recipe_file)
+        time = datetime.datetime.utcnow()
+        base_branch.substitute_time(time)
+        old_recipe = None
+        if if_changed_from is not None:
+            old_recipe = get_old_recipe(if_changed_from)
+        # Save the unsubstituted version for dailydeb.
+        self._template_version = base_branch.deb_version
+        changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
+        if not changed:
+            trace.note("Unchanged")
+            return 0, base_branch
+        return None, base_branch
+
     def run(self, recipe_file, working_directory, manifest=None,
             if_changed_from=None):
-        return build_one_recipe(recipe_file, working_directory,
-                manifest=manifest, if_changed_from=if_changed_from)
+        result, base_branch = self._get_prepared_branch_from_recipe(recipe_file,
+            if_changed_from=if_changed_from)
+        if result is not None:
+            return result
+        manifest_path = manifest or os.path.join(working_directory,
+                        "bzr-builder.manifest")
+        build_tree(base_branch, working_directory)
+        write_manifest_to_path(manifest_path, base_branch)
 
 
 register_command(cmd_build)
@@ -418,51 +433,78 @@ class cmd_dailydeb(cmd_build):
                             "must be specified if you use --dput."),
             ]
 
-    takes_args = ["recipe_file", "working_directory?"]
+    takes_args = ["recipe_file", "working_basedir?"]
 
-    def run(self, recipe_file, working_directory=None, manifest=None,
+    def run(self, recipe_file, working_basedir=None, manifest=None,
             if_changed_from=None, package=None, distribution=None,
             dput=None, key_id=None):
 
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
                     "specify --dput.")
-
-        base_branch = get_base_branch(recipe_file, if_changed_from=if_changed_from)
-        if base_branch is None:
-            trace.note("Unchanged")
-            return 0
-        recipe_name = os.path.basename(recipe_file)
-        if recipe_name.endswith(".recipe"):
-            recipe_name = recipe_name[:-len(".recipe")]
-        version = base_branch.deb_version
-        if "-" in version:
-            version = version[:version.rindex("-")]
-        package_basedir = "%s-%s" % (package or recipe_name, version)
-        if working_directory is None:
+        result, base_branch = self._get_prepared_branch_from_recipe(recipe_file,
+            if_changed_from=if_changed_from)
+        if result is not None:
+            return result
+        if working_basedir is None:
             temp_dir = tempfile.mkdtemp(prefix="bzr-builder-")
-            working_directory = temp_dir
+            working_basedir = temp_dir
         else:
             temp_dir = None
-            if not os.path.exists(working_directory):
-                os.makedirs(working_directory)
+            if not os.path.exists(working_basedir):
+                os.makedirs(working_basedir)
+        self._calculate_package_name(recipe_file, package)
+        working_directory = os.path.join(working_basedir,
+            "%s-%s" % (self._package_name, self._template_version))
         try:
-            package_dir = os.path.join(working_directory, package_basedir)
-            build_tree(base_branch, package_dir)
-            write_manifest_to_path(os.path.join(package_dir, "debian",
-                        "bzr-builder.manifest"), base_branch)
-            add_changelog_entry(base_branch, package_dir,
-                    distribution=distribution, package=package)
-            build_source_package(package_dir)
-            if key_id is not None:
-                sign_source_package(package_dir, key_id)
-            if dput is not None:
-                dput_source_package(package_dir, dput)
+            # we want to use a consistent package_dir always to support
+            # updates in place, but debuild etc want PACKAGE-UPSTREAMVERSION
+            # on disk, so we build_tree with the unsubstituted version number
+            # and do a final rename-to step before calling into debian build
+            # tools. We then rename the working dir back.
+            manifest_path = os.path.join(working_directory, "debian",
+                "bzr-builder.manifest")
+            build_tree(base_branch, working_directory)
+            write_manifest_to_path(manifest_path, base_branch)
+            # Add changelog also substitutes {debupstream}.
+            add_changelog_entry(base_branch, working_directory,
+                distribution=distribution, package=package)
+            package_dir = self._calculate_package_dir(base_branch,
+                working_basedir)
+            # working_directory -> package_dir: after this debian stuff works.
+            os.rename(working_directory, package_dir)
+            try:
+                build_source_package(package_dir)
+                if key_id is not None:
+                    sign_source_package(package_dir, key_id)
+                if dput is not None:
+                    dput_source_package(package_dir, dput)
+            finally:
+                # package_dir -> working_directory
+                # FIXME: may fail in error unwind, masking the original exception.
+                os.rename(package_dir, working_directory)
+            # Note that this may write a second manifest.
             if manifest is not None:
                 write_manifest_to_path(manifest, base_branch)
         finally:
             if temp_dir is not None:
                 shutil.rmtree(temp_dir)
+
+    def _calculate_package_dir(self, base_branch, working_basedir):
+        """Calculate the directory name that should be used while debuilding."""
+        version = base_branch.deb_version
+        if "-" in version:
+            version = version[:version.rindex("-")]
+        package_basedir = "%s-%s" % (self._package_name, version)
+        package_dir = os.path.join(working_basedir, package_basedir)
+        return package_dir
+
+    def _calculate_package_name(self, recipe_file, package):
+        """Calculate the directory name that should be used while debuilding."""
+        recipe_name = os.path.basename(recipe_file)
+        if recipe_name.endswith(".recipe"):
+            recipe_name = recipe_name[:-len(".recipe")]
+        self._package_name = package or recipe_name
 
 
 register_command(cmd_dailydeb)

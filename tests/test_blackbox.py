@@ -187,8 +187,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         out, err = self.run_bzr("dailydeb test.recipe "
                 "--manifest manifest --package foo --if-changed-from bar")
 
-    def test_cmd_dailydeb_with_package_from_changelog(self):
-        #TODO: define a test feature for debuild and require it here.
+    def make_simple_package(self):
         source = self.make_branch_and_tree("source")
         self.build_tree(["source/a", "source/debian/"])
         cl_contents = ("package (0.1-1) unstable; urgency=low\n  * foo\n"
@@ -201,7 +200,12 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                 ("source/debian/changelog", cl_contents)])
         source.add(["a", "debian/", "debian/rules", "debian/control",
                 "debian/changelog"])
-        revid = source.commit("one")
+        source.commit("one")
+        return source
+
+    def test_cmd_dailydeb_with_package_from_changelog(self):
+        #TODO: define a test feature for debuild and require it here.
+        source = self.make_simple_package()
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
         out, err = self.run_bzr("dailydeb test.recipe "
@@ -213,5 +217,18 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             actual_cl_contents = f.read()
         finally:
             f.close()
-        self.assertEqual(new_cl_contents,
-                actual_cl_contents[:len(new_cl_contents)])
+        self.assertStartsWith(actual_cl_contents, new_cl_contents)
+
+    def test_cmd_dailydeb_with_upstream_version_from_changelog(self):
+        source = self.make_simple_package()
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
+                    "deb-version {debupstream}-2\nsource 1\n")])
+        out, err = self.run_bzr("dailydeb test.recipe working")
+        new_cl_contents = ("package (0.1-2) unstable; urgency=low\n\n"
+                "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
+        f = open("working/test-{debupstream}-2/debian/changelog")
+        try:
+            actual_cl_contents = f.read()
+        finally:
+            f.close()
+        self.assertStartsWith(actual_cl_contents, new_cl_contents)

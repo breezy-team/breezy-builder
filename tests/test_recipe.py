@@ -714,7 +714,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
     def test_substitute(self):
         source =self.make_branch_and_tree("source")
         revid1 = source.commit("one")
-        revid2 = source.commit("two")
+        source.commit("two")
         branch1 = BaseRecipeBranch("source",
                 "{revno}-{revno:packaging}", 0.2, revspec="1")
         branch2 = RecipeBranch("packaging", "source")
@@ -724,6 +724,16 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         self.assertEqual(revid1, branch1.revid)
         self.assertEqual("1", branch1.revspec)
         self.assertEqual("1-2", branch1.deb_version)
+
+    def test_substitute_supports_debupstream(self):
+        # resolve_revisions should leave debupstream parameters alone and not
+        # complain.
+        source =self.make_branch_and_tree("source")
+        source.commit("one")
+        source.commit("two")
+        branch1 = BaseRecipeBranch("source", "{debupstream}-{revno}", 0.2)
+        resolve_revisions(branch1)
+        self.assertEqual("{debupstream}-2", branch1.deb_version)
 
 
 class BuildManifestTests(TestCaseInTempDir):

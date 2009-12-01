@@ -38,6 +38,13 @@ MERGE_INSTRUCTION = "merge"
 NEST_INSTRUCTION = "nest"
 RUN_INSTRUCTION = "run"
 
+TIME_VAR = "{time}"
+REVNO_VAR = "{revno}"
+REVNO_PARAM_VAR = "{revno:%s}"
+DEBUPSTREAM_VAR = "{debupstream}"
+
+ok_to_preserve = [DEBUPSTREAM_VAR]
+
 
 class CommandFailedError(errors.BzrError):
 
@@ -226,7 +233,7 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
         def get_revno():
             try:
                 revno = br_from.revision_id_to_revno(revision_id)
-                return "%s" % revno
+                return str(revno)
             except errors.NoSuchRevision:
                 # We need to load and use the full revno map after all
                 result = br_from.get_revision_id_to_revno_map().get(
@@ -288,7 +295,10 @@ def resolve_revisions(base_branch, if_changed_from=None):
             if_changed_from=if_changed_from_revisions)
     if not changed:
         changed = changed_revisions
-    if "{" in base_branch.deb_version:
+    checked_version = base_branch.deb_version
+    for token in ok_to_preserve:
+        checked_version = checked_version.replace(token, "")
+    if "{" in checked_version:
         raise errors.BzrCommandError("deb-version not fully "
                 "expanded: %s" % base_branch.deb_version)
     if if_changed_from is not None and not changed:
@@ -486,9 +496,9 @@ class BaseRecipeBranch(RecipeBranch):
             needed.
         """
         if branch_name is None:
-            subst_string = "{revno}"
+            subst_string = REVNO_VAR
         else:
-            subst_string = "{revno:%s}" % branch_name
+            subst_string = REVNO_PARAM_VAR % branch_name
         if subst_string in self.deb_version:
             revno = get_revno_cb()
             if revno is None:
@@ -502,9 +512,20 @@ class BaseRecipeBranch(RecipeBranch):
 
         :param time: a datetime.datetime with the desired time.
         """
-        if "{time}" in self.deb_version:
-            self.deb_version = self.deb_version.replace("{time}",
+        if TIME_VAR in self.deb_version:
+            self.deb_version = self.deb_version.replace(TIME_VAR,
                     time.strftime("%Y%m%d%H%M"))
+
+    def substitute_debupstream(self, version):
+        """Substitute {debupstream} in to deb_version if needed.
+
+        :param version: the Version object to take the upstream version
+            from.
+        """
+        if DEBUPSTREAM_VAR in self.deb_version:
+            # Should we include the epoch?
+            self.deb_version = self.deb_version.replace(DEBUPSTREAM_VAR,
+                    version.upstream_version)
 
 
 class RecipeParseError(errors.BzrError):
