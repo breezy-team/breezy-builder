@@ -362,9 +362,13 @@ class cmd_build(Command):
                         "to that specified in the specified manifest."),
                     ]
 
-    def _substitute_stuff(self, recipe_file, if_changed_from):
-        """Common code to substitute stuff
-        
+    def _get_prepared_branch_from_recipe(self, recipe_file,
+            if_changed_from=None):
+        """Common code to prepare a branch and do substitutions.
+
+        :param recipe_file: a path to a recipe file to work from.
+        :param if_changed_from: an optional path to a manifest to
+            compare the recipe against.
         :return: A tuple with (retcode, base_branch). If retcode is None
             then the command execution should continue.
         """
@@ -384,8 +388,8 @@ class cmd_build(Command):
 
     def run(self, recipe_file, working_directory, manifest=None,
             if_changed_from=None):
-        result, base_branch = self._substitute_stuff(recipe_file,
-            if_changed_from)
+        result, base_branch = self._get_prepared_branch_from_recipe(recipe_file,
+            if_changed_from=if_changed_from)
         if result is not None:
             return result
         manifest_path = manifest or os.path.join(working_directory,
@@ -434,8 +438,8 @@ class cmd_dailydeb(cmd_build):
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
                     "specify --dput.")
-        result, base_branch = self._substitute_stuff(recipe_file,
-            if_changed_from)
+        result, base_branch = self._get_prepared_branch_from_recipe(recipe_file,
+            if_changed_from=if_changed_from)
         if result is not None:
             return result
         if working_basedir is None:
