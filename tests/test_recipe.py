@@ -216,7 +216,7 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "merge bar http://bar.org")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
-        child_branch, location = base_branch.child_branches[0]
+        child_branch, location = base_branch.child_branches[0].as_tuple()
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org")
 
@@ -225,7 +225,7 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "nest bar http://bar.org baz")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
-        child_branch, location = base_branch.child_branches[0]
+        child_branch, location = base_branch.child_branches[0].as_tuple()
         self.assertEqual("baz", location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org")
 
@@ -234,10 +234,10 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "nest bar http://bar.org baz\nmerge zam lp:zam")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=2)
-        child_branch, location = base_branch.child_branches[0]
+        child_branch, location = base_branch.child_branches[0].as_tuple()
         self.assertEqual("baz", location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org")
-        child_branch, location = base_branch.child_branches[1]
+        child_branch, location = base_branch.child_branches[1].as_tuple()
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "zam", "lp:zam")
 
@@ -246,10 +246,10 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "merge zam lp:zam\nnest bar http://bar.org baz")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=2)
-        child_branch, location = base_branch.child_branches[0]
+        child_branch, location = base_branch.child_branches[0].as_tuple()
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "zam", "lp:zam")
-        child_branch, location = base_branch.child_branches[1]
+        child_branch, location = base_branch.child_branches[1].as_tuple()
         self.assertEqual("baz", location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org")
 
@@ -258,11 +258,11 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "nest bar http://bar.org baz\n  merge zam lp:zam")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
-        child_branch, location = base_branch.child_branches[0]
+        child_branch, location = base_branch.child_branches[0].as_tuple()
         self.assertEqual("baz", location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org",
                 num_child_branches=1)
-        child_branch, location = child_branch.child_branches[0]
+        child_branch, location = child_branch.child_branches[0].as_tuple()
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "zam", "lp:zam")
 
@@ -271,11 +271,11 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "nest bar http://bar.org baz\n  nest zam lp:zam zoo")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
-        child_branch, location = base_branch.child_branches[0]
+        child_branch, location = base_branch.child_branches[0].as_tuple()
         self.assertEqual("baz", location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org",
                 num_child_branches=1)
-        child_branch, location = child_branch.child_branches[0]
+        child_branch, location = child_branch.child_branches[0].as_tuple()
         self.assertEqual("zoo", location)
         self.check_recipe_branch(child_branch, "zam", "lp:zam")
 
@@ -286,11 +286,13 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "merge zam lp:zam 2")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=2, revspec="revid:a")
-        child_branch, location = base_branch.child_branches[0]
+        instruction = base_branch.child_branches[0]
+        child_branch = instruction.recipe_branch
+        location = instruction.nest_path
         self.assertEqual("baz", location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org",
                 revspec="tag:b")
-        child_branch, location = base_branch.child_branches[1]
+        child_branch, location = base_branch.child_branches[1].as_tuple()
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "zam", "lp:zam", revspec="2")
 
@@ -300,7 +302,7 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "run touch test \n")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
-        child_branch, command = base_branch.child_branches[0]
+        child_branch, command = base_branch.child_branches[0].as_tuple()
         self.assertEqual(None, child_branch)
         self.assertEqual("touch test", command)
 
