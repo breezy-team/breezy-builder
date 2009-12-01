@@ -155,6 +155,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
 
     def test_cmd_dailydeb_no_work_dir(self):
         #TODO: define a test feature for debuild and require it here.
+        if getattr(self, "permit_dir", None) is not None:
+            self.permit_dir('/') # Allow the made working dir to be accessed.
         source = self.make_branch_and_tree("source")
         self.build_tree(["source/a", "source/debian/"])
         self.build_tree_contents([("source/debian/rules",
@@ -170,6 +172,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
 
     def test_cmd_dailydeb_if_changed_from_non_existant(self):
         #TODO: define a test feature for debuild and require it here.
+        if getattr(self, "permit_dir", None) is not None:
+            self.permit_dir('/') # Allow the made working dir to be accessed.
         source = self.make_branch_and_tree("source")
         self.build_tree(["source/a", "source/debian/"])
         self.build_tree_contents([("source/debian/rules",
