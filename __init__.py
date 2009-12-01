@@ -477,6 +477,7 @@ class cmd_dailydeb(cmd_build):
                     dput_source_package(package_dir, dput)
             finally:
                 # package_dir -> working_directory
+                # FIXME: may fail in error unwind, masking the original exception.
                 os.rename(package_dir, working_directory)
             # Note that this may write a second manifest.
             if manifest is not None:
