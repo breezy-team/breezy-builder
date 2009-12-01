@@ -19,70 +19,70 @@ The recipe is a series of pointers to branches and instructions for how they
 should be combined. There are two ways to combine branches, by merging, and
 by nesting, allowing much flexibility.
 
-A recipe is just a text file that starts with a line such as
+A recipe is just a text file that starts with a line such as::
 
-# bzr-builder format 0.2 deb-version 1.0+{revno}-{revno:packaging}
+  # bzr-builder format 0.2 deb-version 1.0+{revno}-{revno:packaging}
 
 The format specifier is there to allow the syntax to be changed in later
 versions, and the meaning of "deb-version" will be explained later.
 
 The next step is the define the base branch, this is the branch that will
-be places at the root, e.g. just put
+be places at the root, e.g. just put::
 
-lp:foo
+  lp:foo
 
-to use the trunk of "foo" hosted on LaunchPad.
+to use the trunk of "foo" hosted on Launchpad.
 
 Next comes any number of lines of other branches to be merged in, but using
 a slightly different format. To merge a branch in to the base specify
-something like
+something like::
 
-merge packaging lp:~foo-dev/foo/packaging
+  merge packaging lp:~foo-dev/foo/packaging
 
 which specifies we are merging a branch we will refer to as "packaging", which
 can be found at the given URI. The name you give to the branch as the second
 item doesn't have to match anything else, it's just an identifier specific
 to the recipe.
 
-If you wish to nest a branch then you use a similar line
+If you wish to nest a branch then you use a similar line::
 
-nest artwork lp:foo-images images
+  nest artwork lp:foo-images images
 
 This specifies that we are nesting the branch at lp:foo-images, which we will
 call "artwork", and we will place it locally in to the "images" directory.
 
 You can then continue in this fashion for as many branches as you like. It
-is also possible to nest and merge branches in to nested branches. For example
+is also possible to nest and merge branches into nested branches. For example
 to merge a branch in to the "artwork" branch we put the following on the line
-below that one, indented by two spaces.
+below that one, indented by two spaces::
 
   merge artwork-fixes lp:~bob/foo-images/fix-12345
 
-which will merge Bob's fixes branch in to the "artwork" branch which we nested
+which will merge Bob's fixes branch into the "artwork" branch which we nested
 at "images".
 
-It is also possible to specify particular revisions of a branch by appending
-a revisionspec to the line. For instance
+It is also possible to specify a particular revision of a branch by appending
+a revisionspec to the line. For instance::
 
-nest docs lp:foo-docs doc tag:1.0
+  nest docs lp:foo-docs doc tag:1.0
 
 will nest the revision pointed to by the "1.0" tag of that branch. The format
-for the revisionspec is indentical to that taken by the "--revision" argument
-to many bzr commands, see "bzr help revisionspec".
+for the revisionspec is identical to that taken by the "--revision" argument
+to many bzr commands. See "bzr help revisionspec" for details.
 
 It is also possible to run an arbitrary command at a particular point in the
-construction process.
+construction process. For example::
 
-run autoreconf -i
+  run autoreconf -i
 
 will run autotools at a particular point. Doing things with branches is usually
 preferred, but sometimes it is the easier or only way to achieve something.
 Note that you usually shouldn't rely on having general Internet access when
-assembling the recipe, so commands that would require it should be avoided.
+assembling the recipe, so commands that require it should be avoided.
 
-You can then build this branch by running
+You can then build this branch by running::
 
-bzr build foo.recipe working-dir
+  bzr build foo.recipe working-dir
 
 (assuming you saved it as foo.recipe in your current directory).
 
@@ -91,15 +91,15 @@ Once the command finished it will have placed the result in "working-dir".
 It is also possible to produce Debian source packages from a recipe, assuming
 that one of the branches in the recipe contains some appropriate packaging.
 You can do this using the "bzr dailydeb" command, which takes the same
-arguments as "build". Only this time im working dir you will find a source
+arguments as "build". Only this time in the working dir you will find a source
 package and a directory containing the code that the packages was built from
-once it is done. Also take a look at the "--key-id" and "--dput" arguments
-to have "bzr dailydeb" sign and upload the source package somewhere.
+once it is done. Also take a look at the "--key-id" and "--dput" arguments to
+have "bzr dailydeb" sign and upload the source package somewhere.
 
 To build Debian source package that you desire you should make sure that
 "deb-version" is set to an appropriate value on the first line of your
 recipe. This will be used as the version number of the package. The
-value you put there also allows for substution of values in to it based
+value you put there also allows for substitution of values in to it based
 on various things when the recipe is processed:
 
   * {time} will be substituted with the current date and time, such as
