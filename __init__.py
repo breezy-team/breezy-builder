@@ -275,8 +275,7 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
             package = cl._blocks[0].package
         if DEBUPSTREAM_VAR in base_branch.deb_version:
             cl_version = cl._blocks[0].version
-            base_branch.deb_version = base_branch.deb_version.replace(
-                DEBUPSTREAM_VAR, cl_version.upstream_version)
+            base_branch.substitute_debupstream(cl_version)
     else:
         if package is None:
             raise errors.BzrCommandError("No previous changelog to "

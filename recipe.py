@@ -516,6 +516,17 @@ class BaseRecipeBranch(RecipeBranch):
             self.deb_version = self.deb_version.replace(TIME_VAR,
                     time.strftime("%Y%m%d%H%M"))
 
+    def substitute_debupstream(self, version):
+        """Substitute {debupstream} in to deb_version if needed.
+
+        :param version: the Version object to take the upstream version
+            from.
+        """
+        if DEBUPSTREAM_VAR in self.deb_version:
+            # Should we include the epoch?
+            self.deb_version = self.deb_version.replace(DEBUPSTREAM_VAR,
+                    version.upstream_version)
+
 
 class RecipeParseError(errors.BzrError):
     _fmt = "Error parsing %(filename)s:%(line)s:%(char)s: %(problem)s."
