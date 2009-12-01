@@ -146,6 +146,7 @@ from bzrlib.option import Option
 from bzrlib.plugins.builder.recipe import (
         build_manifest,
         build_tree,
+        DEBUPSTREAM_VAR,
         RecipeParser,
         resolve_revisions,
         )
@@ -272,19 +273,19 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
             distribution = cl._blocks[0].distributions.split()[0]
         if package is None:
             package = cl._blocks[0].package
-        if "{debupstream}" in base_branch.deb_version:
+        if DEBUPSTREAM_VAR in base_branch.deb_version:
             cl_version = cl._blocks[0].version
             base_branch.deb_version = base_branch.deb_version.replace(
-                "{debupstream}", cl_version.upstream_version)
+                DEBUPSTREAM_VAR, cl_version.upstream_version)
     else:
         if package is None:
             raise errors.BzrCommandError("No previous changelog to "
                     "take the package name from, and --package not "
                     "specified.")
-        if "{debupstream}" in base_branch.deb_version:
+        if DEBUPSTREAM_VAR in base_branch.deb_version:
             raise errors.BzrCommandError("No previous changelog to "
-                    "take the upstream version from - {debupstream} was "
-                    "used.")
+                    "take the upstream version from as %s was "
+                    "used." % DEBUPSTREAM_VAR)
         if distribution is None:
             distribution = "jaunty"
     # Use debian packaging environment variables

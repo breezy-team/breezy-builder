@@ -38,6 +38,13 @@ MERGE_INSTRUCTION = "merge"
 NEST_INSTRUCTION = "nest"
 RUN_INSTRUCTION = "run"
 
+TIME_VAR = "{time}"
+REVNO_VAR = "{revno}"
+REVNO_PARAM_VAR = "{revno:%s}"
+DEBUPSTREAM_VAR = "{debupstream}"
+
+ok_to_preserve = [DEBUPSTREAM_VAR]
+
 
 class CommandFailedError(errors.BzrError):
 
@@ -288,7 +295,6 @@ def resolve_revisions(base_branch, if_changed_from=None):
             if_changed_from=if_changed_from_revisions)
     if not changed:
         changed = changed_revisions
-    ok_to_preserve = ["{debupstream}"]
     checked_version = base_branch.deb_version
     for token in ok_to_preserve:
         checked_version = checked_version.replace(token, "")
@@ -490,9 +496,9 @@ class BaseRecipeBranch(RecipeBranch):
             needed.
         """
         if branch_name is None:
-            subst_string = "{revno}"
+            subst_string = REVNO_VAR
         else:
-            subst_string = "{revno:%s}" % branch_name
+            subst_string = REVNO_PARAM_VAR % branch_name
         if subst_string in self.deb_version:
             revno = get_revno_cb()
             if revno is None:
@@ -506,8 +512,8 @@ class BaseRecipeBranch(RecipeBranch):
 
         :param time: a datetime.datetime with the desired time.
         """
-        if "{time}" in self.deb_version:
-            self.deb_version = self.deb_version.replace("{time}",
+        if TIME_VAR in self.deb_version:
+            self.deb_version = self.deb_version.replace(TIME_VAR,
                     time.strftime("%Y%m%d%H%M"))
 
 
