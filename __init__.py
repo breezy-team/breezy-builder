@@ -226,7 +226,7 @@ def get_maintainer():
         # Use password database if no data in environment variables
         try:
             maintainer = re.sub(r',.*', '', pwd.getpwuid(os.getuid()).pw_gecos)
-        except KeyError, AttributeError:
+        except (KeyError, AttributeError):
             # TBD: Use last changelog entry value
             maintainer = "bzr-builder"
 

@@ -352,7 +352,7 @@ class BuildTreeTests(TestCaseWithTransport):
     def test_build_tree_single_branch_existing_branch(self):
         source = self.make_branch_and_tree("source")
         revid = source.commit("one")
-        target = self.make_branch_and_tree("target")
+        self.make_branch_and_tree("target")
         base_branch = BaseRecipeBranch("source", "1", 0.2)
         build_tree(base_branch, "target")
         self.failUnlessExists("target")
@@ -448,7 +448,7 @@ class BuildTreeTests(TestCaseWithTransport):
         base_branch = BaseRecipeBranch("source1", "1", 0.2)
         merged_branch = RecipeBranch("merged", "source2")
         base_branch.merge_branch(merged_branch)
-        e = self.assertRaises(errors.BzrCommandError, build_tree,
+        self.assertRaises(errors.BzrCommandError, build_tree,
                 base_branch, "target")
         self.failUnlessExists("target")
         tree = workingtree.WorkingTree.open("target")
@@ -704,7 +704,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
 
     def test_changed_command(self):
         source =self.make_branch_and_tree("source")
-        revid = source.commit("one")
+        source.commit("one")
         branch1 = BaseRecipeBranch("source", "{revno}", 0.2)
         branch2 = BaseRecipeBranch("source", "{revno}", 0.2)
         branch1.run_command("touch test1")

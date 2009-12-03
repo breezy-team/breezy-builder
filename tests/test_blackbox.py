@@ -83,7 +83,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source = self.make_branch_and_tree("source")
         self.build_tree(["source/a"])
         source.add(["a"])
-        revid = source.commit("one")
+        source.commit("one")
         out, err = self.run_bzr("build recipe working "
                 "--if-changed-from manifest")
 
@@ -164,7 +164,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                 ("source/debian/control",
                     "Source: foo\nMaintainer: maint maint@maint.org\n")])
         source.add(["a", "debian/", "debian/rules", "debian/control"])
-        revid = source.commit("one")
+        source.commit("one")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
         out, err = self.run_bzr("dailydeb test.recipe "
@@ -181,7 +181,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                 ("source/debian/control",
                     "Source: foo\nMaintainer: maint maint@maint.org\n")])
         source.add(["a", "debian/", "debian/rules", "debian/control"])
-        revid = source.commit("one")
+        source.commit("one")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
         out, err = self.run_bzr("dailydeb test.recipe "
@@ -205,7 +205,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
 
     def test_cmd_dailydeb_with_package_from_changelog(self):
         #TODO: define a test feature for debuild and require it here.
-        source = self.make_simple_package()
+        self.make_simple_package()
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
         out, err = self.run_bzr("dailydeb test.recipe "
@@ -220,7 +220,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
 
     def test_cmd_dailydeb_with_upstream_version_from_changelog(self):
-        source = self.make_simple_package()
+        self.make_simple_package()
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version {debupstream}-2\nsource 1\n")])
         out, err = self.run_bzr("dailydeb test.recipe working")
