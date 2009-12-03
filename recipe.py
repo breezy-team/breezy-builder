@@ -120,10 +120,10 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
         # We do a "pull"
         if tree_to is not None:
             # FIXME: should these pulls overwrite?
-            result = tree_to.pull(br_from, stop_revision=revision_id,
+            tree_to.pull(br_from, stop_revision=revision_id,
                     possible_transports=possible_transports)
         else:
-            result = br_to.pull(br_from, stop_revision=revision_id,
+            br_to.pull(br_from, stop_revision=revision_id,
                     possible_transports=possible_transports)
             tree_to = br_to.bzrdir.create_workingtree()
             # Ugh, we have to assume that the caller replaces their reference
@@ -256,7 +256,6 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
                 changed = True
         for index, instruction in enumerate(new_branch.child_branches):
             child_branch = instruction.recipe_branch
-            nest_location = instruction.nest_path
             if_changed_child = None
             if if_changed_from is not None:
                 if_changed_child = if_changed_from.child_branches[index].recipe_branch
