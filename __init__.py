@@ -310,6 +310,16 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
         cl_f.close()
 
 
+def calculate_package_dir(base_branch, package_name, working_basedir):
+    """Calculate the directory name that should be used while debuilding."""
+    version = base_branch.deb_version
+    if "-" in version:
+        version = version[:version.rindex("-")]
+    package_basedir = "%s-%s" % (package_name, version)
+    package_dir = os.path.join(working_basedir, package_basedir)
+    return package_dir
+
+
 def _run_command(command, basedir, msg, error_msg):
     """ Run a command in a subprocess.
 
@@ -469,8 +479,8 @@ class cmd_dailydeb(cmd_build):
             # Add changelog also substitutes {debupstream}.
             add_changelog_entry(base_branch, working_directory,
                 distribution=distribution, package=package)
-            package_dir = self._calculate_package_dir(base_branch,
-                working_basedir)
+            package_dir = calculate_package_dir(base_branch,
+                    self._package_name, working_basedir)
             # working_directory -> package_dir: after this debian stuff works.
             os.rename(working_directory, package_dir)
             try:
@@ -489,15 +499,6 @@ class cmd_dailydeb(cmd_build):
         finally:
             if temp_dir is not None:
                 shutil.rmtree(temp_dir)
-
-    def _calculate_package_dir(self, base_branch, working_basedir):
-        """Calculate the directory name that should be used while debuilding."""
-        version = base_branch.deb_version
-        if "-" in version:
-            version = version[:version.rindex("-")]
-        package_basedir = "%s-%s" % (self._package_name, version)
-        package_dir = os.path.join(working_basedir, package_basedir)
-        return package_dir
 
     def _calculate_package_name(self, recipe_file, package):
         """Calculate the directory name that should be used while debuilding."""
