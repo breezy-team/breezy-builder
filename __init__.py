@@ -262,7 +262,7 @@ def get_maintainer():
 
 
 def add_changelog_entry(base_branch, basedir, distribution=None,
-        package=None):
+        package=None, author_name=None, author_email=None):
     debian_dir = os.path.join(basedir, "debian")
     if not os.path.exists(debian_dir):
         os.makedirs(debian_dir)
@@ -296,7 +296,9 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
             distribution = DEFAULT_UBUNTU_DISTRIBUTION
     # Use debian packaging environment variables
     # or default values if they don't exist
-    author = "%s <%s>" % get_maintainer()
+    if author_name is None or author_email is None:
+        author_name, author_email = get_maintainer()
+    author = "%s <%s>" % (author_name, author_email)
 
     date = utils.formatdate(localtime=True)
     cl.new_block(package=package, version=base_branch.deb_version,
