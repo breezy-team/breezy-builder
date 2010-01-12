@@ -30,6 +30,7 @@ from bzrlib import (
     trace,
     )
 
+
 def watch(target, package_name, version):
     """Watch a package build.
 
@@ -60,7 +61,7 @@ def watch(target, package_name, version):
     archive = owner.getPPAByName(name=archive_name)
     end_states = ['FAILEDTOBUILD', 'FULLYBUILT']
     important_arches = ['amd64', 'i386', 'lpia', 'armel']
-    trace.note("Waiting for %s of %s to build." % (version, package_name))
+    trace.note("Waiting for version %s of %s to build." % (version, package_name))
     start = time.time()
     while True:
         sourceRecords = list(archive.getPublishedSources(
