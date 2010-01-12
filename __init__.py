@@ -443,13 +443,16 @@ class cmd_dailydeb(cmd_build):
                 Option("key-id", type=str, short_name="k",
                        help="Sign the packages with the specified GnuPG key. "
                             "Must be specified if you use --dput."),
+                Option("no-build",
+                       help="Just ready the source package and don't "
+                            "actually build it."),
             ]
 
     takes_args = ["recipe_file", "working_basedir?"]
 
     def run(self, recipe_file, working_basedir=None, manifest=None,
             if_changed_from=None, package=None, distribution=None,
-            dput=None, key_id=None):
+            dput=None, key_id=None, no_build=None):
 
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
@@ -485,6 +488,8 @@ class cmd_dailydeb(cmd_build):
                     self._package_name, working_basedir)
             # working_directory -> package_dir: after this debian stuff works.
             os.rename(working_directory, package_dir)
+            if no_build:
+                return 0
             try:
                 build_source_package(package_dir)
                 if key_id is not None:

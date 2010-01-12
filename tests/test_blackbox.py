@@ -203,6 +203,23 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.commit("one")
         return source
 
+    def test_cmd_dailydeb_no_build(self):
+        self.make_simple_package()
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
+                    "deb-version 1\nsource 1\n")])
+        out, err = self.run_bzr("dailydeb test.recipe "
+                "--manifest manifest --no-build working")
+        new_cl_contents = ("package (1) unstable; urgency=low\n\n"
+                "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
+        f = open("working/test-1/debian/changelog")
+        try:
+            actual_cl_contents = f.read()
+        finally:
+            f.close()
+        self.assertStartsWith(actual_cl_contents, new_cl_contents)
+        for fn in os.listdir("working"):
+            self.assertFalse(fn.endswith(".changes"))
+
     def test_cmd_dailydeb_with_package_from_changelog(self):
         #TODO: define a test feature for debuild and require it here.
         self.make_simple_package()
