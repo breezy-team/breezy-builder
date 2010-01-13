@@ -489,6 +489,8 @@ class cmd_dailydeb(cmd_build):
             # working_directory -> package_dir: after this debian stuff works.
             os.rename(working_directory, package_dir)
             if no_build:
+                if manifest is not None:
+                    write_manifest_to_path(manifest, base_branch)
                 return 0
             try:
                 build_source_package(package_dir)
