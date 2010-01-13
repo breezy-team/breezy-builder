@@ -532,7 +532,6 @@ class BaseRecipeBranch(RecipeBranch):
                     revid_part = " %s" % child_branch.revspec
                 else:
                     revid_part = ""
-                assert child_branch.revid is not None, "Branch hasn't been built"
                 if nest_location is not None:
                     manifest += "%s%s %s %s %s%s\n" % \
                                  ("  " * indent_level, NEST_INSTRUCTION,

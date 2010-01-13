@@ -787,6 +787,22 @@ class StringifyTests(TestCaseInTempDir):
         self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
                 "base_url tag:foo\n", manifest)
 
+    def test_recipe_with_child(self):
+        base_branch = BaseRecipeBranch("base_url", "2", 0.2)
+        nested_branch1 = RecipeBranch("nested1", "nested1_url",
+                revspec="tag:foo")
+        base_branch.nest_branch("nested", nested_branch1)
+        nested_branch2 = RecipeBranch("nested2", "nested2_url")
+        nested_branch1.nest_branch("nested2", nested_branch2)
+        merged_branch = RecipeBranch("merged", "merged_url")
+        base_branch.merge_branch(merged_branch)
+        manifest = str(base_branch)
+        self.assertEqual("# bzr-builder format 0.2 deb-version 2\n"
+                "base_url\n"
+                "nest nested1 nested1_url nested tag:foo\n"
+                "  nest nested2 nested2_url nested2\n"
+                "merge merged merged_url\n", manifest)
+
 
 class RecipeBranchTests(TestCaseInTempDir):
 
