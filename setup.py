@@ -3,7 +3,7 @@
 from distutils.core import setup
 
 setup(name="bzr-builder",
-      version="0.1",
+      version="0.2",
       description="Turn a recipe in to a bzr branch",
       author="James Westby",
       author_email="james.westby@canonical.com",
