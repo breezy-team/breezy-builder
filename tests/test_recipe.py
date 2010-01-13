@@ -27,7 +27,6 @@ from bzrlib.tests import (
         )
 from bzrlib.plugins.builder.recipe import (
         BaseRecipeBranch,
-        build_manifest,
         build_tree,
         ensure_basedir,
         pull_or_branch,
@@ -738,12 +737,12 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         self.assertEqual("{debupstream}-2", branch1.deb_version)
 
 
-class BuildManifestTests(TestCaseInTempDir):
+class StringifyTests(TestCaseInTempDir):
 
     def test_simple_manifest(self):
         base_branch = BaseRecipeBranch("base_url", "1", 0.1)
         base_branch.revid = "base_revid"
-        manifest = build_manifest(base_branch)
+        manifest = str(base_branch)
         self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
                 "base_url revid:base_revid\n", manifest)
 
@@ -759,7 +758,7 @@ class BuildManifestTests(TestCaseInTempDir):
         merged_branch = RecipeBranch("merged", "merged_url")
         merged_branch.revid = "merged_revid"
         base_branch.merge_branch(merged_branch)
-        manifest = build_manifest(base_branch)
+        manifest = str(base_branch)
         self.assertEqual("# bzr-builder format 0.2 deb-version 2\n"
                 "base_url revid:base_revid\n"
                 "nest nested1 nested1_url nested revid:nested1_revid\n"
@@ -770,10 +769,23 @@ class BuildManifestTests(TestCaseInTempDir):
         base_branch = BaseRecipeBranch("base_url", "1", 0.2)
         base_branch.revid = "base_revid"
         base_branch.run_command("touch test")
-        manifest = build_manifest(base_branch)
+        manifest = str(base_branch)
         self.assertEqual("# bzr-builder format 0.2 deb-version 1\n"
                 "base_url revid:base_revid\n"
                 "run touch test\n", manifest)
+
+    def test_recipe_with_no_revspec(self):
+        base_branch = BaseRecipeBranch("base_url", "1", 0.1)
+        manifest = str(base_branch)
+        self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
+                "base_url\n", manifest)
+
+    def test_recipe_with_tag_revspec(self):
+        base_branch = BaseRecipeBranch("base_url", "1", 0.1,
+                revspec="tag:foo")
+        manifest = str(base_branch)
+        self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
+                "base_url tag:foo\n", manifest)
 
 
 class RecipeBranchTests(TestCaseInTempDir):

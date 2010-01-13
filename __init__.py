@@ -148,7 +148,6 @@ from bzrlib.commands import Command, register_command
 from bzrlib.option import Option
 
 from bzrlib.plugins.builder.recipe import (
-        build_manifest,
         build_tree,
         DEBUPSTREAM_VAR,
         RecipeParser,
@@ -166,7 +165,7 @@ def write_manifest_to_path(path, base_branch):
         os.makedirs(parent_dir)
     manifest_f = open(path, 'wb')
     try:
-        manifest_f.write(build_manifest(base_branch))
+        manifest_f.write(str(base_branch))
     finally:
         manifest_f.close()
 

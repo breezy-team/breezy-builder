@@ -344,46 +344,6 @@ def build_tree(base_branch, target_path):
             tree_to.unlock()
 
 
-def _add_child_branches_to_manifest(child_branches, indent_level):
-    manifest = ""
-    for instruction in child_branches:
-        child_branch = instruction.recipe_branch
-        nest_location = instruction.nest_path
-        if child_branch is None:
-            manifest += "%s%s %s\n" % ("  " * indent_level, RUN_INSTRUCTION,
-                    nest_location)
-        else:
-            assert child_branch.revid is not None, "Branch hasn't been built"
-            if nest_location is not None:
-                manifest += "%s%s %s %s %s revid:%s\n" % \
-                             ("  " * indent_level, NEST_INSTRUCTION,
-                              child_branch.name,
-                              child_branch.url, nest_location,
-                              child_branch.revid)
-                manifest += _add_child_branches_to_manifest(
-                        child_branch.child_branches, indent_level+1)
-            else:
-                manifest += "%s%s %s %s revid:%s\n" % \
-                             ("  " * indent_level, MERGE_INSTRUCTION,
-                              child_branch.name,
-                              child_branch.url, child_branch.revid)
-    return manifest
-
-
-def build_manifest(base_branch):
-    manifest = "# bzr-builder format %s deb-version " % str(base_branch.format)
-    # TODO: should we store the expanded version that was used?
-    manifest += "%s\n" % (base_branch.deb_version,)
-    assert base_branch.revid is not None, "Branch hasn't been built"
-    manifest += "%s revid:%s\n" % (base_branch.url, base_branch.revid)
-    manifest += _add_child_branches_to_manifest(base_branch.child_branches, 0)
-    # Sanity check.
-    # TODO: write a function that compares the result of this parse with
-    # the branch that we built it from.
-    RecipeParser(manifest).parse()
-    return manifest
-
-
 class ChildBranch(object):
     """A child branch in a recipe.
     
@@ -556,6 +516,56 @@ class BaseRecipeBranch(RecipeBranch):
             # Should we include the epoch?
             self.deb_version = self.deb_version.replace(DEBUPSTREAM_VAR,
                     version.upstream_version)
+
+    def _add_child_branches_to_manifest(self, child_branches, indent_level):
+        manifest = ""
+        for instruction in child_branches:
+            child_branch = instruction.recipe_branch
+            nest_location = instruction.nest_path
+            if child_branch is None:
+                manifest += "%s%s %s\n" % ("  " * indent_level, RUN_INSTRUCTION,
+                        nest_location)
+            else:
+                if child_branch.revid is not None:
+                    revid_part = " revid:%s" % child_branch.revid
+                elif child_branch.revspec is not None:
+                    revid_part = " %s" % child_branch.revspec
+                else:
+                    revid_part = ""
+                assert child_branch.revid is not None, "Branch hasn't been built"
+                if nest_location is not None:
+                    manifest += "%s%s %s %s %s%s\n" % \
+                                 ("  " * indent_level, NEST_INSTRUCTION,
+                                  child_branch.name,
+                                  child_branch.url, nest_location,
+                                  revid_part)
+                    manifest += self._add_child_branches_to_manifest(
+                            child_branch.child_branches, indent_level+1)
+                else:
+                    manifest += "%s%s %s %s%s\n" % \
+                                 ("  " * indent_level, MERGE_INSTRUCTION,
+                                  child_branch.name,
+                                  child_branch.url, revid_part)
+        return manifest
+
+
+    def __str__(self):
+        manifest = "# bzr-builder format %s deb-version " % str(self.format)
+        # TODO: should we store the expanded version that was used?
+        manifest += "%s\n" % (self.deb_version,)
+        if self.revid is not None:
+            manifest += "%s revid:%s\n" % (self.url, self.revid)
+        elif self.revspec is not None:
+            manifest += "%s %s\n" % (self.url, self.revspec)
+        else:
+            manifest += "%s\n" % (self.url,)
+        manifest += self._add_child_branches_to_manifest(self.child_branches,
+                0)
+        # Sanity check.
+        # TODO: write a function that compares the result of this parse with
+        # the branch that we built it from.
+        RecipeParser(manifest).parse()
+        return manifest
 
 
 class RecipeParseError(errors.BzrError):
