@@ -478,9 +478,9 @@ class cmd_dailydeb(cmd_build):
             temp_dir = None
             if not os.path.exists(working_basedir):
                 os.makedirs(working_basedir)
-        self._calculate_package_name(recipe_file, package)
+        package_name = self._calculate_package_name(recipe_file, package)
         working_directory = os.path.join(working_basedir,
-            "%s-%s" % (self._package_name, self._template_version))
+            "%s-%s" % (package_name, self._template_version))
         try:
             # we want to use a consistent package_dir always to support
             # updates in place, but debuild etc want PACKAGE-UPSTREAMVERSION
@@ -495,7 +495,7 @@ class cmd_dailydeb(cmd_build):
             add_changelog_entry(base_branch, working_directory,
                 distribution=distribution, package=package)
             package_dir = calculate_package_dir(base_branch,
-                    self._package_name, working_basedir)
+                    package_name, working_basedir)
             # working_directory -> package_dir: after this debian stuff works.
             os.rename(working_directory, package_dir)
             if no_build:
@@ -521,14 +521,15 @@ class cmd_dailydeb(cmd_build):
         if watch_ppa:
             from bzrlib.plugins.builder.ppa import watch
             target = target_from_dput(dput)
-            return watch(target, self.package, base_branch.deb_version)
+            if not watch(target, self.package, base_branch.deb_version):
+                return 2
 
     def _calculate_package_name(self, recipe_file, package):
         """Calculate the directory name that should be used while debuilding."""
         recipe_name = os.path.basename(recipe_file)
         if recipe_name.endswith(".recipe"):
             recipe_name = recipe_name[:-len(".recipe")]
-        self._package_name = package or recipe_name
+        return package or recipe_name
 
 
 register_command(cmd_dailydeb)
