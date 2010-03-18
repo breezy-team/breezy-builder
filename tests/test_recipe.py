@@ -27,7 +27,6 @@ from bzrlib.tests import (
         )
 from bzrlib.plugins.builder.recipe import (
         BaseRecipeBranch,
-        build_manifest,
         build_tree,
         ensure_basedir,
         pull_or_branch,
@@ -216,7 +215,7 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "merge bar http://bar.org")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
-        child_branch, location = base_branch.child_branches[0]
+        child_branch, location = base_branch.child_branches[0].as_tuple()
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org")
 
@@ -225,7 +224,7 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "nest bar http://bar.org baz")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
-        child_branch, location = base_branch.child_branches[0]
+        child_branch, location = base_branch.child_branches[0].as_tuple()
         self.assertEqual("baz", location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org")
 
@@ -234,10 +233,10 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "nest bar http://bar.org baz\nmerge zam lp:zam")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=2)
-        child_branch, location = base_branch.child_branches[0]
+        child_branch, location = base_branch.child_branches[0].as_tuple()
         self.assertEqual("baz", location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org")
-        child_branch, location = base_branch.child_branches[1]
+        child_branch, location = base_branch.child_branches[1].as_tuple()
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "zam", "lp:zam")
 
@@ -246,10 +245,10 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "merge zam lp:zam\nnest bar http://bar.org baz")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=2)
-        child_branch, location = base_branch.child_branches[0]
+        child_branch, location = base_branch.child_branches[0].as_tuple()
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "zam", "lp:zam")
-        child_branch, location = base_branch.child_branches[1]
+        child_branch, location = base_branch.child_branches[1].as_tuple()
         self.assertEqual("baz", location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org")
 
@@ -258,11 +257,11 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "nest bar http://bar.org baz\n  merge zam lp:zam")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
-        child_branch, location = base_branch.child_branches[0]
+        child_branch, location = base_branch.child_branches[0].as_tuple()
         self.assertEqual("baz", location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org",
                 num_child_branches=1)
-        child_branch, location = child_branch.child_branches[0]
+        child_branch, location = child_branch.child_branches[0].as_tuple()
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "zam", "lp:zam")
 
@@ -271,11 +270,11 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "nest bar http://bar.org baz\n  nest zam lp:zam zoo")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
-        child_branch, location = base_branch.child_branches[0]
+        child_branch, location = base_branch.child_branches[0].as_tuple()
         self.assertEqual("baz", location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org",
                 num_child_branches=1)
-        child_branch, location = child_branch.child_branches[0]
+        child_branch, location = child_branch.child_branches[0].as_tuple()
         self.assertEqual("zoo", location)
         self.check_recipe_branch(child_branch, "zam", "lp:zam")
 
@@ -286,11 +285,13 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "merge zam lp:zam 2")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=2, revspec="revid:a")
-        child_branch, location = base_branch.child_branches[0]
+        instruction = base_branch.child_branches[0]
+        child_branch = instruction.recipe_branch
+        location = instruction.nest_path
         self.assertEqual("baz", location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org",
                 revspec="tag:b")
-        child_branch, location = base_branch.child_branches[1]
+        child_branch, location = base_branch.child_branches[1].as_tuple()
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "zam", "lp:zam", revspec="2")
 
@@ -300,7 +301,7 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "run touch test \n")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
-        child_branch, command = base_branch.child_branches[0]
+        child_branch, command = base_branch.child_branches[0].as_tuple()
         self.assertEqual(None, child_branch)
         self.assertEqual("touch test", command)
 
@@ -350,7 +351,7 @@ class BuildTreeTests(TestCaseWithTransport):
     def test_build_tree_single_branch_existing_branch(self):
         source = self.make_branch_and_tree("source")
         revid = source.commit("one")
-        target = self.make_branch_and_tree("target")
+        self.make_branch_and_tree("target")
         base_branch = BaseRecipeBranch("source", "1", 0.2)
         build_tree(base_branch, "target")
         self.failUnlessExists("target")
@@ -446,7 +447,7 @@ class BuildTreeTests(TestCaseWithTransport):
         base_branch = BaseRecipeBranch("source1", "1", 0.2)
         merged_branch = RecipeBranch("merged", "source2")
         base_branch.merge_branch(merged_branch)
-        e = self.assertRaises(errors.BzrCommandError, build_tree,
+        self.assertRaises(errors.BzrCommandError, build_tree,
                 base_branch, "target")
         self.failUnlessExists("target")
         tree = workingtree.WorkingTree.open("target")
@@ -702,7 +703,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
 
     def test_changed_command(self):
         source =self.make_branch_and_tree("source")
-        revid = source.commit("one")
+        source.commit("one")
         branch1 = BaseRecipeBranch("source", "{revno}", 0.2)
         branch2 = BaseRecipeBranch("source", "{revno}", 0.2)
         branch1.run_command("touch test1")
@@ -714,7 +715,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
     def test_substitute(self):
         source =self.make_branch_and_tree("source")
         revid1 = source.commit("one")
-        revid2 = source.commit("two")
+        source.commit("two")
         branch1 = BaseRecipeBranch("source",
                 "{revno}-{revno:packaging}", 0.2, revspec="1")
         branch2 = RecipeBranch("packaging", "source")
@@ -725,13 +726,23 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         self.assertEqual("1", branch1.revspec)
         self.assertEqual("1-2", branch1.deb_version)
 
+    def test_substitute_supports_debupstream(self):
+        # resolve_revisions should leave debupstream parameters alone and not
+        # complain.
+        source =self.make_branch_and_tree("source")
+        source.commit("one")
+        source.commit("two")
+        branch1 = BaseRecipeBranch("source", "{debupstream}-{revno}", 0.2)
+        resolve_revisions(branch1)
+        self.assertEqual("{debupstream}-2", branch1.deb_version)
 
-class BuildManifestTests(TestCaseInTempDir):
+
+class StringifyTests(TestCaseInTempDir):
 
     def test_simple_manifest(self):
         base_branch = BaseRecipeBranch("base_url", "1", 0.1)
         base_branch.revid = "base_revid"
-        manifest = build_manifest(base_branch)
+        manifest = str(base_branch)
         self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
                 "base_url revid:base_revid\n", manifest)
 
@@ -747,7 +758,7 @@ class BuildManifestTests(TestCaseInTempDir):
         merged_branch = RecipeBranch("merged", "merged_url")
         merged_branch.revid = "merged_revid"
         base_branch.merge_branch(merged_branch)
-        manifest = build_manifest(base_branch)
+        manifest = str(base_branch)
         self.assertEqual("# bzr-builder format 0.2 deb-version 2\n"
                 "base_url revid:base_revid\n"
                 "nest nested1 nested1_url nested revid:nested1_revid\n"
@@ -758,10 +769,39 @@ class BuildManifestTests(TestCaseInTempDir):
         base_branch = BaseRecipeBranch("base_url", "1", 0.2)
         base_branch.revid = "base_revid"
         base_branch.run_command("touch test")
-        manifest = build_manifest(base_branch)
+        manifest = str(base_branch)
         self.assertEqual("# bzr-builder format 0.2 deb-version 1\n"
                 "base_url revid:base_revid\n"
                 "run touch test\n", manifest)
+
+    def test_recipe_with_no_revspec(self):
+        base_branch = BaseRecipeBranch("base_url", "1", 0.1)
+        manifest = str(base_branch)
+        self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
+                "base_url\n", manifest)
+
+    def test_recipe_with_tag_revspec(self):
+        base_branch = BaseRecipeBranch("base_url", "1", 0.1,
+                revspec="tag:foo")
+        manifest = str(base_branch)
+        self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
+                "base_url tag:foo\n", manifest)
+
+    def test_recipe_with_child(self):
+        base_branch = BaseRecipeBranch("base_url", "2", 0.2)
+        nested_branch1 = RecipeBranch("nested1", "nested1_url",
+                revspec="tag:foo")
+        base_branch.nest_branch("nested", nested_branch1)
+        nested_branch2 = RecipeBranch("nested2", "nested2_url")
+        nested_branch1.nest_branch("nested2", nested_branch2)
+        merged_branch = RecipeBranch("merged", "merged_url")
+        base_branch.merge_branch(merged_branch)
+        manifest = str(base_branch)
+        self.assertEqual("# bzr-builder format 0.2 deb-version 2\n"
+                "base_url\n"
+                "nest nested1 nested1_url nested tag:foo\n"
+                "  nest nested2 nested2_url nested2\n"
+                "merge merged merged_url\n", manifest)
 
 
 class RecipeBranchTests(TestCaseInTempDir):
