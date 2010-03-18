@@ -445,17 +445,28 @@ class cmd_dailydeb(cmd_build):
                 Option("no-build",
                        help="Just ready the source package and don't "
                             "actually build it."),
+                Option("watch-ppa", help="Watch the PPA the package was "
+                    "dput to and exit with 0 only if it builds and "
+                    "publishes successfully."),
             ]
 
     takes_args = ["recipe_file", "working_basedir?"]
 
     def run(self, recipe_file, working_basedir=None, manifest=None,
             if_changed_from=None, package=None, distribution=None,
-            dput=None, key_id=None, no_build=None):
+            dput=None, key_id=None, no_build=None, watch_ppa=False):
 
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
                     "specify --dput.")
+        if watch_ppa:
+            if not dput:
+                raise errors.BzrCommandError(
+                    "cannot watch a ppa without doing dput.")
+            else:
+                # Check we can calculate a PPA url.
+                target_from_dput(dput)
+
         result, base_branch = self._get_prepared_branch_from_recipe(recipe_file,
             if_changed_from=if_changed_from)
         if result is not None:
@@ -467,9 +478,9 @@ class cmd_dailydeb(cmd_build):
             temp_dir = None
             if not os.path.exists(working_basedir):
                 os.makedirs(working_basedir)
-        self._calculate_package_name(recipe_file, package)
+        package_name = self._calculate_package_name(recipe_file, package)
         working_directory = os.path.join(working_basedir,
-            "%s-%s" % (self._package_name, self._template_version))
+            "%s-%s" % (package_name, self._template_version))
         try:
             # we want to use a consistent package_dir always to support
             # updates in place, but debuild etc want PACKAGE-UPSTREAMVERSION
@@ -484,7 +495,7 @@ class cmd_dailydeb(cmd_build):
             add_changelog_entry(base_branch, working_directory,
                 distribution=distribution, package=package)
             package_dir = calculate_package_dir(base_branch,
-                    self._package_name, working_basedir)
+                    package_name, working_basedir)
             # working_directory -> package_dir: after this debian stuff works.
             os.rename(working_directory, package_dir)
             if no_build:
@@ -507,16 +518,38 @@ class cmd_dailydeb(cmd_build):
         finally:
             if temp_dir is not None:
                 shutil.rmtree(temp_dir)
+        if watch_ppa:
+            from bzrlib.plugins.builder.ppa import watch
+            target = target_from_dput(dput)
+            if not watch(target, self.package, base_branch.deb_version):
+                return 2
 
     def _calculate_package_name(self, recipe_file, package):
         """Calculate the directory name that should be used while debuilding."""
         recipe_name = os.path.basename(recipe_file)
         if recipe_name.endswith(".recipe"):
             recipe_name = recipe_name[:-len(".recipe")]
-        self._package_name = package or recipe_name
+        return package or recipe_name
 
 
 register_command(cmd_dailydeb)
+
+
+def target_from_dput(dput):
+    """Convert a dput specification to a LP API specification.
+
+    :param dput: A dput command spec like ppa:team-name.
+    :return: A LP API target like team-name/ppa.
+    """
+    ppa_prefix = 'ppa:'
+    if not dput.startswith(ppa_prefix):
+        raise errors.BzrCommandError('%r does not appear to be a PPA. '
+            'A dput target like \'%suser[/name]\' must be used.'
+            % (dput, ppa_prefix))
+    base, _, suffix = dput[len(ppa_prefix):].partition('/')
+    if not suffix:
+        suffix = 'ppa'
+    return base + '/' + suffix
 
 
 def test_suite():
