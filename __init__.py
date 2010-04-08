@@ -337,21 +337,27 @@ def _run_command(command, basedir, msg, error_msg,
         isn't available.
     """
     trace.note(msg)
+    # Hide output if -q is in use.
+    quiet = trace.is_quiet()
+    if quiet:
+        kwargs = {"stderr": subprocess.STDOUT, "stdout": subprocess.PIPE}
+    else:
+        kwargs = {}
     try:
         proc = subprocess.Popen(command, cwd=basedir,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                stdin=subprocess.PIPE)
+                stdin=subprocess.PIPE, **kwargs)
     except OSError, e:
         if e.errno != errno.ENOENT:
             raise
         if not_installed_msg is None:
             raise
         raise MissingDependency(msg=not_installed_msg)
-    proc.stdin.close()
-    retcode = proc.wait()
-    if retcode != 0:
-        output = proc.stdout.read()
-        raise errors.BzrCommandError("%s: %s" % (error_msg, output))
+    output = proc.communicate()
+    if proc.returncode != 0:
+        if quiet:
+            raise errors.BzrCommandError("%s: %s" % (error_msg, output))
+        else:
+            raise errors.BzrCommandError(error_msg)
 
 
 def build_source_package(basedir):
