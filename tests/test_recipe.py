@@ -627,6 +627,20 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(revid, tree.last_revision())
         self.assertEqual(revid, base_branch.revid)
 
+    def test_error_on_merge_revspec(self):
+        # See bug 416950
+        source = self.make_branch_and_tree("source")
+        revid = source.commit("one")
+        base_branch = BaseRecipeBranch("source", "1", 0.2)
+        merged_branch = RecipeBranch("merged", "source", revspec="debian")
+        base_branch.merge_branch(merged_branch)
+        e = self.assertRaises(errors.InvalidRevisionSpec,
+                build_tree, base_branch, "target")
+        self.assertTrue(str(e).startswith("Requested revision: 'debian' "
+                    "does not exist in branch: "))
+        self.assertTrue(str(e).endswith(". Did you not mean to specify a "
+                    "revspec at the end of the merge line?"))
+
 
 class ResolveRevisionsTests(TestCaseWithTransport):
 

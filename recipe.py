@@ -170,7 +170,14 @@ def merge_branch(child_branch, tree_to, br_to):
             if child_branch.revspec is not None:
                 merge_revspec = revisionspec.RevisionSpec.from_string(
                         child_branch.revspec)
-                merge_revid = merge_revspec.as_revision_id(merge_from)
+                try:
+                    merge_revid = merge_revspec.as_revision_id(merge_from)
+                except errors.InvalidRevisionSpec, e:
+                    # Give the user a hint if they didn't mean to speciy
+                    # a revspec.
+                    e.extra = (". Did you not mean to specify a revspec "
+                        "at the end of the merge line?")
+                    raise e
             else:
                 merge_revid = merge_from.last_revision()
             child_branch.revid = merge_revid
