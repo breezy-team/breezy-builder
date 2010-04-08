@@ -164,40 +164,36 @@ def merge_branch(child_branch, tree_to, br_to):
     merge_from = branch.Branch.open(child_branch.url)
     merge_from.lock_read()
     try:
-        pb = ui.ui_factory.nested_progress_bar()
-        try:
-            tag._merge_tags_if_possible(merge_from, br_to)
-            if child_branch.revspec is not None:
-                merge_revspec = revisionspec.RevisionSpec.from_string(
-                        child_branch.revspec)
-                try:
-                    merge_revid = merge_revspec.as_revision_id(merge_from)
-                except errors.InvalidRevisionSpec, e:
-                    # Give the user a hint if they didn't mean to speciy
-                    # a revspec.
-                    e.extra = (". Did you not mean to specify a revspec "
-                        "at the end of the merge line?")
-                    raise e
-            else:
-                merge_revid = merge_from.last_revision()
-            child_branch.revid = merge_revid
-            merger = merge.Merger.from_revision_ids(pb, tree_to, merge_revid,
-                    other_branch=merge_from, tree_branch=br_to)
-            merger.merge_type = merge.Merge3Merger
-            if (merger.base_rev_id == merger.other_rev_id and
-                    merger.other_rev_id is not None):
-                # Nothing to do.
-                return
-            conflict_count = merger.do_merge()
-            merger.set_pending()
-            if conflict_count:
-                # FIXME: better reporting
-                raise errors.BzrCommandError("Conflicts from merge")
-            tree_to.commit("Merge %s" %
-                    urlutils.unescape_for_display(
-                        child_branch.url, 'utf-8'))
-        finally:
-            pb.finished()
+        tag._merge_tags_if_possible(merge_from, br_to)
+        if child_branch.revspec is not None:
+            merge_revspec = revisionspec.RevisionSpec.from_string(
+                    child_branch.revspec)
+            try:
+                merge_revid = merge_revspec.as_revision_id(merge_from)
+            except errors.InvalidRevisionSpec, e:
+                # Give the user a hint if they didn't mean to speciy
+                # a revspec.
+                e.extra = (". Did you not mean to specify a revspec "
+                    "at the end of the merge line?")
+                raise e
+        else:
+            merge_revid = merge_from.last_revision()
+        child_branch.revid = merge_revid
+        merger = merge.Merger.from_revision_ids(None, tree_to, merge_revid,
+                other_branch=merge_from, tree_branch=br_to)
+        merger.merge_type = merge.Merge3Merger
+        if (merger.base_rev_id == merger.other_rev_id and
+                merger.other_rev_id is not None):
+            # Nothing to do.
+            return
+        conflict_count = merger.do_merge()
+        merger.set_pending()
+        if conflict_count:
+            # FIXME: better reporting
+            raise errors.BzrCommandError("Conflicts from merge")
+        tree_to.commit("Merge %s" %
+                urlutils.unescape_for_display(
+                    child_branch.url, 'utf-8'))
     finally:
         merge_from.unlock()
 
