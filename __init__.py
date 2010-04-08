@@ -129,6 +129,7 @@ if __name__ == '__main__':
 
 import datetime
 from email import utils
+import errno
 import os
 import pwd
 import re
@@ -157,6 +158,10 @@ from bzrlib.plugins.builder.recipe import (
 
 # The default distribution used by add_changelog_entry()
 DEFAULT_UBUNTU_DISTRIBUTION = "lucid"
+
+
+class MissingDependency(errors.BzrError):
+    pass
 
 
 def write_manifest_to_path(path, base_branch):
@@ -321,17 +326,27 @@ def calculate_package_dir(base_branch, package_name, working_basedir):
     return package_dir
 
 
-def _run_command(command, basedir, msg, error_msg):
+def _run_command(command, basedir, msg, error_msg,
+        not_installed_msg=None):
     """ Run a command in a subprocess.
 
     :param command: list with command and parameters
     :param msg: message to display to the user
     :param error_msg: message to display if something fails.
+    :param not_installed_msg: the message to display if the command
+        isn't available.
     """
     trace.note(msg)
-    proc = subprocess.Popen(command, cwd=basedir,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            stdin=subprocess.PIPE)
+    try:
+        proc = subprocess.Popen(command, cwd=basedir,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                stdin=subprocess.PIPE)
+    except OSError, e:
+        if e.errno != errno.ENOENT:
+            raise
+        if not_installed_msg is None:
+            raise
+        raise MissingDependency(msg=not_installed_msg)
     proc.stdin.close()
     retcode = proc.wait()
     if retcode != 0:
@@ -344,21 +359,27 @@ def build_source_package(basedir):
                     "-uc", "-us"]
     _run_command(command, basedir,
         "Building the source package",
-        "Failed to build the source package")
+        "Failed to build the source package",
+        not_installed_msg="debuild is not installed, please install "
+            "the devscripts package.")
 
 
 def sign_source_package(basedir, key_id):
     command = ["/usr/bin/debsign", "-S", "-k%s" % key_id]
     _run_command(command, basedir,
         "Signing the source package",
-        "Signing the package failed")
+        "Signing the package failed",
+        not_installed_msg="debsign is not installed, please install "
+            "the devscripts package.")
 
 
 def dput_source_package(basedir, target):
     command = ["/usr/bin/debrelease", "-S", "--dput", target]
     _run_command(command, basedir,
         "Uploading the source package",
-        "Uploading the package failed")
+        "Uploading the package failed",
+        not_installed_msg="debrelease is not installed, please "
+            "install the devscripts package.")
 
 
 class cmd_build(Command):
