@@ -55,7 +55,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree(["source/a"])
         source.add(["a"])
         revid = source.commit("one")
-        self.run_bzr("build recipe working")
+        self.run_bzr("build -q recipe working")
         self.failUnlessExists("working/a")
         tree = workingtree.WorkingTree.open("working")
         self.assertEqual(revid, tree.last_revision())
@@ -71,7 +71,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree(["source/a"])
         source.add(["a"])
         revid = source.commit("one")
-        self.run_bzr("build recipe working --manifest manifest")
+        self.run_bzr("build -q recipe working --manifest manifest")
         self.failUnlessExists("working/a")
         self.failUnlessExists("manifest")
         self.check_file_contents("manifest", "# bzr-builder format 0.1 "
@@ -111,7 +111,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "deb-version 1\nsource 1\n")])
         self.build_tree_contents([("old-manifest", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource revid:foo\n")])
-        out, err = self.run_bzr("build recipe working --manifest manifest "
+        out, err = self.run_bzr("build -q recipe working --manifest manifest "
                 "--if-changed-from old-manifest")
         self.failUnlessExists("working/a")
         self.failUnlessExists("manifest")
@@ -130,7 +130,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         revid = source.commit("one")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
-        out, err = self.run_bzr("dailydeb test.recipe working "
+        out, err = self.run_bzr("dailydeb -q test.recipe working "
                 "--manifest manifest --package foo")
         self.failIfExists("working/a")
         package_root = "working/foo-1/"
@@ -167,7 +167,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.commit("one")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
-        out, err = self.run_bzr("dailydeb test.recipe "
+        out, err = self.run_bzr("dailydeb -q test.recipe "
                 "--manifest manifest --package foo")
 
     def test_cmd_dailydeb_if_changed_from_non_existant(self):
@@ -184,7 +184,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.commit("one")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
-        out, err = self.run_bzr("dailydeb test.recipe "
+        out, err = self.run_bzr("dailydeb -q test.recipe "
                 "--manifest manifest --package foo --if-changed-from bar")
 
     def make_simple_package(self):
@@ -207,7 +207,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.make_simple_package()
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
-        out, err = self.run_bzr("dailydeb test.recipe "
+        out, err = self.run_bzr("dailydeb -q test.recipe "
                 "--manifest manifest --no-build working")
         new_cl_contents = ("package (1) unstable; urgency=low\n\n"
                 "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
@@ -225,7 +225,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.make_simple_package()
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
-        out, err = self.run_bzr("dailydeb test.recipe "
+        out, err = self.run_bzr("dailydeb -q test.recipe "
                 "--manifest manifest --if-changed-from bar working")
         new_cl_contents = ("package (1) unstable; urgency=low\n\n"
                 "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
@@ -240,7 +240,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.make_simple_package()
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version {debupstream}-2\nsource 1\n")])
-        out, err = self.run_bzr("dailydeb test.recipe working")
+        out, err = self.run_bzr("dailydeb -q test.recipe working")
         new_cl_contents = ("package (0.1-2) unstable; urgency=low\n\n"
                 "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
         f = open("working/test-{debupstream}-2/debian/changelog")
