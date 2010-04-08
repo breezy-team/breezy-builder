@@ -201,6 +201,12 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertParseError(3, 1, "Empty recipe", self.get_recipe,
                 self.basic_header)
 
+    def test_rejects_non_unique_ids(self):
+        self.assertParseError(4, 7, "'foo' was already used to identify "
+                "a branch.", self.get_recipe,
+                self.basic_header_and_branch + "merge foo url\n"
+                + "merge foo other-url\n")
+
     def test_builds_simplest_recipe(self):
         base_branch = self.get_recipe(self.basic_header_and_branch)
         self.check_base_recipe_branch(base_branch, "http://foo.org/")

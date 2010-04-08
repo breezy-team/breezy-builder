@@ -346,7 +346,7 @@ def build_tree(base_branch, target_path):
 
 class ChildBranch(object):
     """A child branch in a recipe.
-    
+
     If the nest path is not None it is the path relative to the recipe branch
     where the child branch should be placed.  If it is None then the child
     branch should be merged instead of nested.
@@ -355,7 +355,7 @@ class ChildBranch(object):
     def __init__(self, recipe_branch, nest_path=None):
         self.recipe_branch = recipe_branch
         self.nest_path = nest_path
-        
+
     def apply(self, target_path, tree_to, br_to):
         raise NotImplementedError(self.apply)
 
@@ -395,7 +395,7 @@ class RecipeBranch(object):
     root branch), and optionally child branches that are either merged
     or nested.
 
-    The child_branches attribute is a list of tuples of ChildBranch objects. 
+    The child_branches attribute is a list of tuples of ChildBranch objects.
     The revid attribute records the revid that the url and revspec resolved
     to when the RecipeBranch was built, or None if it has not been built.
     """
@@ -613,6 +613,7 @@ class RecipeParser(object):
         self.line_index = 0
         self.current_line = self.lines[self.line_index]
         self.current_indent_level = 0
+        self.seen_nicks = set()
         (version, deb_version) = self.parse_header()
         self.version = version
         last_instruction = None
@@ -699,7 +700,15 @@ class RecipeParser(object):
 
     def parse_branch_id(self):
         self.parse_whitespace("the branch id")
-        branch_id = self.take_to_whitespace("the branch id")
+        branch_id = self.peek_to_whitespace()
+        if branch_id is None:
+            self.throw_parse_error("End of line while looking for the "
+                    "branch id")
+        if branch_id in self.seen_nicks:
+            self.throw_parse_error("'%s' was already used to identify "
+                    "a branch." % branch_id)
+        self.take_chars(len(branch_id))
+        self.seen_nicks.add(branch_id)
         return branch_id
 
     def parse_branch_url(self):
