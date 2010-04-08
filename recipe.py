@@ -457,7 +457,12 @@ class RecipeBranch(object):
             if ((child_branch is None and other_child_branch is not None)
                     or (child_branch is not None and other_child_branch is None)):
                 return True
-            if child_branch.different_shape_to(other_child_branch):
+            # if child_branch is None then other_child_branch must be
+            # None too, meaning that they are both run instructions,
+            # we would compare their nest locations (commands), but
+            # that has already been done, so just guard
+            if (child_branch is not None
+                    and child_branch.different_shape_to(other_child_branch)):
                 return True
         return False
 

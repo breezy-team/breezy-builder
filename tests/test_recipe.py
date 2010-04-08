@@ -718,6 +718,17 @@ class ResolveRevisionsTests(TestCaseWithTransport):
                     if_changed_from=branch2))
         self.assertEqual("source", branch1.url)
 
+    def test_unchanged_command(self):
+        source =self.make_branch_and_tree("source")
+        source.commit("one")
+        branch1 = BaseRecipeBranch("source", "{revno}", 0.2)
+        branch2 = BaseRecipeBranch("source", "{revno}", 0.2)
+        branch1.run_command("touch test1")
+        branch2.run_command("touch test1")
+        self.assertEqual(False, resolve_revisions(branch1,
+                    if_changed_from=branch2))
+        self.assertEqual("source", branch1.url)
+
     def test_substitute(self):
         source =self.make_branch_and_tree("source")
         revid1 = source.commit("one")
