@@ -249,3 +249,18 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         finally:
             f.close()
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
+
+    def test_cmd_dailydeb_with_append_version(self):
+        self.make_simple_package()
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
+                    "deb-version 1\nsource 1\n")])
+        out, err = self.run_bzr("dailydeb -q test.recipe working "
+                "--append-version ~ppa1")
+        new_cl_contents = ("package (1~ppa1) unstable; urgency=low\n\n"
+                "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
+        f = open("working/test-1/debian/changelog")
+        try:
+            actual_cl_contents = f.read()
+        finally:
+            f.close()
+        self.assertStartsWith(actual_cl_contents, new_cl_contents)

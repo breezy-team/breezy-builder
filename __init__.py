@@ -266,7 +266,8 @@ def get_maintainer():
 
 
 def add_changelog_entry(base_branch, basedir, distribution=None,
-        package=None, author_name=None, author_email=None):
+        package=None, author_name=None, author_email=None,
+        append_version=None):
     debian_dir = os.path.join(basedir, "debian")
     if not os.path.exists(debian_dir):
         os.makedirs(debian_dir)
@@ -305,7 +306,10 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
     author = "%s <%s>" % (author_name, author_email)
 
     date = utils.formatdate(localtime=True)
-    cl.new_block(package=package, version=base_branch.deb_version,
+    version = base_branch.deb_version
+    if append_version is not None:
+        version += append_version
+    cl.new_block(package=package, version=version,
             distributions=distribution, urgency="low",
             changes=['', '  * Auto build.', ''],
             author=author, date=date)
@@ -475,13 +479,17 @@ class cmd_dailydeb(cmd_build):
                 Option("watch-ppa", help="Watch the PPA the package was "
                     "dput to and exit with 0 only if it builds and "
                     "publishes successfully."),
+                Option("append-version", type=str, help="Append the "
+                        "specified string to the end of the version used "
+                        "in debian/changelog."),
             ]
 
     takes_args = ["recipe_file", "working_basedir?"]
 
     def run(self, recipe_file, working_basedir=None, manifest=None,
             if_changed_from=None, package=None, distribution=None,
-            dput=None, key_id=None, no_build=None, watch_ppa=False):
+            dput=None, key_id=None, no_build=None, watch_ppa=False,
+            append_version=None):
 
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
@@ -520,7 +528,8 @@ class cmd_dailydeb(cmd_build):
             write_manifest_to_path(manifest_path, base_branch)
             # Add changelog also substitutes {debupstream}.
             add_changelog_entry(base_branch, working_directory,
-                distribution=distribution, package=package)
+                distribution=distribution, package=package,
+                append_version=append_version)
             package_dir = calculate_package_dir(base_branch,
                     package_name, working_basedir)
             # working_directory -> package_dir: after this debian stuff works.
