@@ -22,6 +22,7 @@ from bzrlib import (
         bzrdir,
         errors,
         merge,
+        revision,
         revisionspec,
         tag,
         transport,
@@ -188,6 +189,42 @@ def merge_branch(child_branch, tree_to, br_to, subpath):
             pb.finished()
     finally:
         merge_from.unlock()
+
+
+def merge_unrelated_branch(op, child_branch, tree_to, br_to, subpath):
+    pb = ui.ui_factory.nested_progress_bar()
+    op.add_cleanup(pb.finished)
+    merge_from = branch.Branch.open(child_branch.url)
+    merge_from.lock_read()
+    op.add_cleanup(merge_from.unlock)
+    if child_branch.revspec is not None:
+        merge_revspec = revisionspec.RevisionSpec.from_string(
+                child_branch.revspec)
+        merge_revid = merge_revspec.as_revision_id(merge_from)
+    else:
+        merge_revid = merge_from.last_revision()
+    child_branch.revid = merge_revid
+    other_tree = merge_from.basis_tree()
+    other_tree.lock_read()
+    op.add_cleanup(other_tree.unlock)
+    # XXX: what should target_subdir be?  Three obvious options:
+    #  1. tree-root
+    #  2. same as source_subpath (but what if basename(source_subpath) does not
+    #     exist in target?)
+    #  3. specified in the recipe instruction (how?  would need to define a
+    #     syntax)
+    # Trying option 2 for now.
+    merger = merge.MergeIntoMerger(this_tree=tree_to, other_tree=other_tree,
+        other_branch=merge_from, target_subdir=os.path.basename(subpath),
+        source_subpath=subpath, other_rev_id=merge_revid)
+    merger.set_base_revision(revision.NULL_REVISION, merge_from)
+    conflict_count = merger.do_merge()
+    merger.set_pending()
+    if conflict_count:
+        # FIXME: better reporting
+        raise errors.BzrCommandError("Conflicts from merge")
+    tree_to.commit("Merge %s of %s" %
+        (subpath, urlutils.unescape_for_display(child_branch.url, 'utf-8')))
 
 
 def update_branch(base_branch, tree_to, br_to, to_transport):
@@ -421,6 +458,18 @@ class MergeInstruction(ChildBranch):
         merge_branch(self.recipe_branch, tree_to, br_to, self.subpath)
 
 
+class MergeUnrelatedInstruction(ChildBranch):
+
+    def __init__(self, recipe_branch, subpath):
+        ChildBranch.__init__(self, recipe_branch)
+        self.subpath = subpath
+
+    def apply(self, target_path, tree_to, br_to):
+        from bzrlib.cleanup import OperationWithCleanups
+        op = OperationWithCleanups(merge_unrelated_branch)
+        op.run(self.recipe_branch, tree_to, br_to, self.subpath)
+
+
 class NestInstruction(ChildBranch):
 
     def apply(self, target_path, tree_to, br_to):
@@ -459,9 +508,21 @@ class RecipeBranch(object):
         """Merge a child branch in to this one.
 
         :param branch: the RecipeBranch to merge.
-        :param subpath: XXX
+        :param subpath: (optional) only merge files from branch that are from
+            this path.  e.g. subpath='/debian' will only merge changes from
+            that directory.
         """
         self.child_branches.append(MergeInstruction(branch, subpath))
+
+    def merge_unrelated_branch(self, branch, subpath=None):
+        """Merge a child branch in to this one.
+
+        :param branch: the RecipeBranch to merge.
+        :param subpath: (optional) only merge files from branch that are from
+            this path.  e.g. subpath='/debian' will only merge changes from
+            that directory.
+        """
+        self.child_branches.append(MergeUnrelatedInstruction(branch, subpath))
 
     def nest_branch(self, location, branch):
         """Nest a child branch in to this one.
