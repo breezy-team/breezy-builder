@@ -438,7 +438,7 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source2_rev_id, merged_branch.revid)
 
     def test_build_tree_partial_merge_unrelated(self):
-        """A recipe can specify a merge of just part of a tree."""
+        """A recipe can specify a merge of just part of an unrelated tree."""
         source1 = self.make_source_branch("source1")
         source2 = self.make_source_branch("source2")
         source1.lock_read()
@@ -452,7 +452,7 @@ class BuildTreeTests(TestCaseWithTransport):
         base_branch = BaseRecipeBranch("source1", "1", 0.2)
         merged_branch = RecipeBranch("merged", "source2")
         # Merge just 'b' from source2; 'a' is untouched.
-        base_branch.merge_unrelated_branch(merged_branch, "b")
+        base_branch.merge_into_branch(merged_branch, "b")
         build_tree(base_branch, "target")
         file_id = source1.path2id("a")
         self.check_file_contents("target/a", source1.get_file_text(file_id))

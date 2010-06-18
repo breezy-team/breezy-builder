@@ -36,6 +36,7 @@ def subprocess_setup():
 
 
 MERGE_INSTRUCTION = "merge"
+MERGE_INTO_INSTRUCTION = "merge-into"
 NEST_INSTRUCTION = "nest"
 RUN_INSTRUCTION = "run"
 
@@ -191,7 +192,7 @@ def merge_branch(child_branch, tree_to, br_to, subpath):
         merge_from.unlock()
 
 
-def merge_unrelated_branch(op, child_branch, tree_to, br_to, subpath):
+def merge_into_branch(op, child_branch, tree_to, br_to, subpath):
     pb = ui.ui_factory.nested_progress_bar()
     op.add_cleanup(pb.finished)
     merge_from = branch.Branch.open(child_branch.url)
@@ -458,7 +459,7 @@ class MergeInstruction(ChildBranch):
         merge_branch(self.recipe_branch, tree_to, br_to, self.subpath)
 
 
-class MergeUnrelatedInstruction(ChildBranch):
+class MergeIntoInstruction(ChildBranch):
 
     def __init__(self, recipe_branch, subpath):
         ChildBranch.__init__(self, recipe_branch)
@@ -466,7 +467,7 @@ class MergeUnrelatedInstruction(ChildBranch):
 
     def apply(self, target_path, tree_to, br_to):
         from bzrlib.cleanup import OperationWithCleanups
-        op = OperationWithCleanups(merge_unrelated_branch)
+        op = OperationWithCleanups(merge_into_branch)
         op.run(self.recipe_branch, tree_to, br_to, self.subpath)
 
 
@@ -514,15 +515,16 @@ class RecipeBranch(object):
         """
         self.child_branches.append(MergeInstruction(branch, subpath))
 
-    def merge_unrelated_branch(self, branch, subpath=None):
-        """Merge a child branch in to this one.
+    def merge_into_branch(self, branch, subpath=None, target_subdir=None):
+        """Merge subdir of a child branch into this one.
 
         :param branch: the RecipeBranch to merge.
-        :param subpath: (optional) only merge files from branch that are from
-            this path.  e.g. subpath='/debian' will only merge changes from
-            that directory.
+        :param subpath: only merge files from branch that are from this path.
+            e.g. subpath='/debian' will only merge changes from that directory.
+        :param target_subdir: (optional) directory in target to merge that
+            subpath into.  Defaults to basename of subpath.
         """
-        self.child_branches.append(MergeUnrelatedInstruction(branch, subpath))
+        self.child_branches.append(MergeIntoInstruction(branch, subpath))
 
     def nest_branch(self, location, branch):
         """Nest a child branch in to this one.
@@ -700,12 +702,18 @@ class RecipeParser(object):
                     revspec = self.parse_optional_revspec()
                     if instruction == MERGE_INSTRUCTION:
                         path = self.parse_optional_path()
+                    elif instruction == MERGE_INTO_INSTRUCTION:
+                        path = self.take_to_whitespace('subpath to merge')
+                        target_subdir = self.parse_optional_path()
                     self.new_line()
                     last_branch = RecipeBranch(branch_id, url, revspec=revspec)
                     if instruction == NEST_INSTRUCTION:
                         active_branches[-1].nest_branch(location, last_branch)
-                    else:
+                    elif instruction == MERGE_INSTRUCTION:
                         active_branches[-1].merge_branch(last_branch, path)
+                    elif instruction == MERGE_INTO_INSTRUCTION:
+                        active_branches[-1].merge_into_branch(
+                            last_branch, path, target_subdir)
                 last_instruction = instruction
         if len(active_branches) == 0:
             self.throw_parse_error("Empty recipe")
