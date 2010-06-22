@@ -409,7 +409,7 @@ class BuildTreeTests(TestCaseWithTransport):
         source1 = self.make_branch_and_tree(relpath)
         self.build_tree([relpath + "/a"])
         source1.add(["a"])
-        source1_rev_id = source1.commit("one")
+        source1.commit("one")
         return source1
 
     def test_build_tree_nested(self):

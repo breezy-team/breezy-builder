@@ -456,9 +456,6 @@ class CommandInstruction(ChildBranch):
 
 class MergeInstruction(ChildBranch):
 
-    def __init__(self, recipe_branch):
-        ChildBranch.__init__(self, recipe_branch)
-
     def apply(self, target_path, tree_to, br_to):
         merge_branch(self.recipe_branch, tree_to, br_to)
 
