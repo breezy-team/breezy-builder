@@ -41,7 +41,7 @@ from bzrlib.plugins.builder.recipe import (
 class RecipeParserTests(TestCaseInTempDir):
 
     deb_version = "0.1-{revno}"
-    basic_header = ("# bzr-builder format 0.2 deb-version "
+    basic_header = ("# bzr-builder format 0.3 deb-version "
             + deb_version +"\n")
     basic_header_and_branch = basic_header + "http://foo.org/\n"
 
@@ -130,8 +130,8 @@ class RecipeParserTests(TestCaseInTempDir):
                 self.basic_header + "http://foo.org/ 2 foo")
 
     def tests_rejects_unknown_instruction(self):
-        self.assertParseError(3, 1, "Expecting 'merge', 'nest' or 'run', "
-                "got 'cat'", self.get_recipe,
+        self.assertParseError(3, 1, "Expecting 'merge', 'merge-into', 'nest' "
+                "or 'run', got 'cat'", self.get_recipe,
                 self.basic_header + "http://foo.org/\n" + "cat")
 
     def test_rejects_merge_no_name(self):
@@ -145,9 +145,29 @@ class RecipeParserTests(TestCaseInTempDir):
                 self.basic_header_and_branch + "merge foo ")
 
     def test_rejects_text_at_end_of_merge_line(self):
-        self.assertParseError(3, 22, "Expecting the end of the line, "
+        self.assertParseError(3, 17, "Expecting the end of the line, "
                 "got 'bar'", self.get_recipe,
-                self.basic_header_and_branch + "merge foo url 2 path bar")
+                self.basic_header_and_branch + "merge foo url 2 bar")
+
+    def test_rejects_merge_into_no_name(self):
+        self.assertParseError(3, 12, "End of line while looking for "
+                "the branch id", self.get_recipe,
+                self.basic_header_and_branch + "merge-into ")
+
+    def test_rejects_merge_into_no_url(self):
+        self.assertParseError(3, 16, "End of line while looking for "
+                "the branch url", self.get_recipe,
+                self.basic_header_and_branch + "merge-into foo ")
+
+    def test_rejects_merge_into_no_revspec(self):
+        self.assertParseError(3, 23, "End of line while looking for "
+                "the revspec", self.get_recipe,
+                self.basic_header_and_branch + "merge-into foo url:// ")
+
+    def test_rejects_merge_into_no_subpath(self):
+        self.assertParseError(3, 26, "End of line while looking for "
+                "the subpath to merge", self.get_recipe,
+                self.basic_header_and_branch + "merge-into foo url:// -1 ")
 
     def test_rejects_nest_no_name(self):
         self.assertParseError(3, 6, "End of line while looking for "
@@ -220,9 +240,9 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org")
 
-    def test_builds_recipe_with_partial_merge(self):
+    def test_builds_recipe_with_merge_into(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
-                + "merge bar http://bar.org -1 some/path")
+                + "merge-into bar http://bar.org -1 some/path")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
         instruction = base_branch.child_branches[0]
@@ -230,6 +250,19 @@ class RecipeParserTests(TestCaseInTempDir):
         self.check_recipe_branch(
             instruction.recipe_branch, "bar", "http://bar.org", "-1")
         self.assertEqual("some/path", instruction.subpath)
+        self.assertEqual(None, instruction.target_subdir)
+
+    def test_builds_recipe_with_merge_into_target(self):
+        base_branch = self.get_recipe(self.basic_header_and_branch
+                + "merge-into bar http://bar.org -1 some/path target-subdir")
+        self.check_base_recipe_branch(base_branch, "http://foo.org/",
+                num_child_branches=1)
+        instruction = base_branch.child_branches[0]
+        self.assertEqual(None, instruction.nest_path)
+        self.check_recipe_branch(
+            instruction.recipe_branch, "bar", "http://bar.org", "-1")
+        self.assertEqual("some/path", instruction.subpath)
+        self.assertEqual("target-subdir", instruction.target_subdir)
 
     def test_builds_recipe_with_nest(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
@@ -414,30 +447,7 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source1_rev_id, base_branch.revid)
         self.assertEqual(source2_rev_id, merged_branch.revid)
 
-    def test_build_tree_partial_merge(self):
-        """A recipe can specify a merge of just part of a tree."""
-        source1 = self.make_source_branch("source1")
-        source1.lock_read()
-        self.addCleanup(source1.unlock)
-        source1_rev_id = source1.last_revision()
-        # Make a branch that modifies 'a', and adds 'b'.
-        source2 = source1.bzrdir.sprout("source2").open_workingtree()
-        self.build_tree_contents([
-            ("source2/a", "change existing file"), ("source2/b", "new file")])
-        source2.add(["b"])
-        source2_rev_id = source2.commit("one")
-        base_branch = BaseRecipeBranch("source1", "1", 0.2)
-        merged_branch = RecipeBranch("merged", "source2")
-        # Merge just 'b' from source2; 'a' is untouched.
-        base_branch.merge_branch(merged_branch, "b")
-        build_tree(base_branch, "target")
-        file_id = source1.path2id("a")
-        self.check_file_contents("target/a", source1.get_file_text(file_id))
-        self.check_file_contents("target/b", "new file")
-        self.assertEqual(source1_rev_id, base_branch.revid)
-        self.assertEqual(source2_rev_id, merged_branch.revid)
-
-    def test_build_tree_partial_merge_unrelated(self):
+    def test_build_tree_merge_into(self):
         """A recipe can specify a merge of just part of an unrelated tree."""
         source1 = self.make_source_branch("source1")
         source2 = self.make_source_branch("source2")
@@ -461,7 +471,7 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source1_rev_id, base_branch.revid)
         self.assertEqual(source2_rev_id, merged_branch.revid)
 
-    def test_build_tree_partial_merge_unrelated_explicit_target(self):
+    def test_build_tree_merge_into_explicit_target(self):
         """A recipe can specify a merge of just part of an unrelated tree into
         a specific subdirectory of the target tree.
         """

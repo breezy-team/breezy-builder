@@ -148,7 +148,7 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
     return tree_to, br_to
 
 
-def merge_branch(child_branch, tree_to, br_to, subpath):
+def merge_branch(child_branch, tree_to, br_to):
     """Merge the branch specified by child_branch.
 
     :param child_branch: the RecipeBranch to retrieve the branch and revision to
@@ -172,8 +172,6 @@ def merge_branch(child_branch, tree_to, br_to, subpath):
             merger = merge.Merger.from_revision_ids(pb, tree_to, merge_revid,
                     other_branch=merge_from, tree_branch=br_to)
             merger.merge_type = merge.Merge3Merger
-            if subpath is not None:
-                merger.set_interesting_files([subpath])
             if (merger.base_rev_id == merger.other_rev_id and
                     merger.other_rev_id is not None):
                 # Nothing to do.
@@ -458,12 +456,11 @@ class CommandInstruction(ChildBranch):
 
 class MergeInstruction(ChildBranch):
 
-    def __init__(self, recipe_branch, subpath):
+    def __init__(self, recipe_branch):
         ChildBranch.__init__(self, recipe_branch)
-        self.subpath = subpath
 
     def apply(self, target_path, tree_to, br_to):
-        merge_branch(self.recipe_branch, tree_to, br_to, self.subpath)
+        merge_branch(self.recipe_branch, tree_to, br_to)
 
 
 class MergeIntoInstruction(ChildBranch):
@@ -517,15 +514,12 @@ class RecipeBranch(object):
         self.child_branches = []
         self.revid = None
 
-    def merge_branch(self, branch, subpath=None):
+    def merge_branch(self, branch):
         """Merge a child branch in to this one.
 
         :param branch: the RecipeBranch to merge.
-        :param subpath: (optional) only merge files from branch that are from
-            this path.  e.g. subpath='/debian' will only merge changes from
-            that directory.
         """
-        self.child_branches.append(MergeInstruction(branch, subpath))
+        self.child_branches.append(MergeInstruction(branch))
 
     def merge_into_branch(self, branch, subpath=None, target_subdir=None):
         """Merge subdir of a child branch into this one.
@@ -643,7 +637,7 @@ class RecipeParser(object):
     eol_char = "\n"
     digit_chars = ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")
 
-    NEWEST_VERSION = 0.2
+    NEWEST_VERSION = 0.3
 
     def __init__(self, f, filename=None):
         """Create a RecipeParser.
@@ -712,20 +706,20 @@ class RecipeParser(object):
                     url = self.parse_branch_url()
                     if instruction == NEST_INSTRUCTION:
                         location = self.parse_branch_location()
-                    revspec = self.parse_optional_revspec()
-                    if instruction == MERGE_INSTRUCTION:
-                        path = self.parse_optional_path()
-                    elif instruction == MERGE_INTO_INSTRUCTION:
-                        path = self.take_to_whitespace('subpath to merge')
+                    if instruction == MERGE_INTO_INSTRUCTION:
+                        revspec = self.parse_revspec()
+                        path = self.parse_subpath()
                         target_subdir = self.parse_optional_path()
                         if target_subdir == '':
                             target_subdir = None
+                    else:
+                        revspec = self.parse_optional_revspec()
                     self.new_line()
                     last_branch = RecipeBranch(branch_id, url, revspec=revspec)
                     if instruction == NEST_INSTRUCTION:
                         active_branches[-1].nest_branch(location, last_branch)
                     elif instruction == MERGE_INSTRUCTION:
-                        active_branches[-1].merge_branch(last_branch, path)
+                        active_branches[-1].merge_branch(last_branch)
                     elif instruction == MERGE_INTO_INSTRUCTION:
                         active_branches[-1].merge_into_branch(
                             last_branch, path, target_subdir)
@@ -752,9 +746,13 @@ class RecipeParser(object):
         if self.version < 0.2:
             options = (MERGE_INSTRUCTION, NEST_INSTRUCTION)
             options_str = "'%s' or '%s'" % options
-        else:
+        elif self.version < 0.3:
             options = (MERGE_INSTRUCTION, NEST_INSTRUCTION, RUN_INSTRUCTION)
             options_str = "'%s', '%s' or '%s'" % options
+        else:
+            options = (MERGE_INSTRUCTION, MERGE_INTO_INSTRUCTION,
+                NEST_INSTRUCTION, RUN_INSTRUCTION)
+            options_str = "'%s', '%s', '%s' or '%s'" % options
         instruction = self.peek_to_whitespace()
         if instruction is None:
             self.throw_parse_error("End of line while looking for %s"
@@ -780,6 +778,16 @@ class RecipeParser(object):
         self.parse_whitespace("the location to nest")
         location = self.take_to_whitespace("the location to nest")
         return location
+
+    def parse_subpath(self):
+        self.parse_whitespace("the subpath to merge")
+        location = self.take_to_whitespace("the subpath to merge")
+        return location
+
+    def parse_revspec(self):
+        self.parse_whitespace("the revspec")
+        revspec = self.take_to_whitespace("the revspec")
+        return revspec
 
     def parse_optional_revspec(self):
         self.parse_whitespace(None, require=False)

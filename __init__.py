@@ -21,7 +21,7 @@ by nesting, allowing much flexibility.
 
 A recipe is just a text file that starts with a line such as
 
-# bzr-builder format 0.2 deb-version 1.0+{revno}-{revno:packaging}
+# bzr-builder format 0.3 deb-version 1.0+{revno}-{revno:packaging}
 
 The format specifier is there to allow the syntax to be changed in later
 versions, and the meaning of "deb-version" will be explained later.
@@ -43,13 +43,6 @@ which specifies we are merging a branch we will refer to as "packaging", which
 can be found at the given URI. The name you give to the branch as the second
 item doesn't have to match anything else, it's just an identifier specific
 to the recipe.
-
-You can also merge specific subdirectories from unrelated branches with a
-"merge-into" line like
-
-merge-into packaging lp:~foo-dev/foo/packaging debian
-
-which specifies that the only the debian/ subdirectory should be merged.
 
 If you wish to nest a branch then you use a similar line
 
@@ -76,6 +69,19 @@ nest docs lp:foo-docs doc tag:1.0
 will nest the revision pointed to by the "1.0" tag of that branch. The format
 for the revisionspec is indentical to that taken by the "--revision" argument
 to many bzr commands, see "bzr help revisionspec".
+
+You can also merge specific subdirectories from unrelated branches with a
+"merge-into" line like
+
+merge-into packaging lp:~foo-dev/foo/packaging -1 debian
+
+which specifies that the only the debian/ subdirectory from revision -1 (i.e.
+the latest revision) should be merged.  You optionally specify the subdirectory
+in the target with a line like
+
+merge-into libfoo lp:libfoo -1 src lib/foo
+
+will put the "src" directory of libfoo in "lib/foo".
 
 It is also possible to run an arbitrary command at a particular point in the
 construction process.
@@ -119,6 +125,7 @@ Format versions:
 
   0.1 - original format.
   0.2 - added "run" instruction.
+  0.3 - added "merge-into" instruction.
 """
 
 if __name__ == '__main__':
