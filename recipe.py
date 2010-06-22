@@ -192,7 +192,19 @@ def merge_branch(child_branch, tree_to, br_to, subpath):
         merge_from.unlock()
 
 
-def merge_into_branch(op, child_branch, tree_to, br_to, subpath):
+def merge_into_branch(op, child_branch, tree_to, br_to, subpath,
+        target_subdir=None):
+    """Merge the branch subdirectory specified by child_branch.
+
+    :param child_branch: the RecipeBranch to retrieve the branch and revision to
+            merge from.
+    :param tree_to: the WorkingTree to merge in to.
+    :param br_to: the Branch to merge in to.
+    :param subpath: only merge files from branch that are from this path.
+        e.g. subpath='/debian' will only merge changes from that directory.
+    :param target_subdir: (optional) directory in target to merge that
+        subpath into.  Defaults to basename of subpath.
+    """
     pb = ui.ui_factory.nested_progress_bar()
     op.add_cleanup(pb.finished)
     merge_from = branch.Branch.open(child_branch.url)
@@ -208,15 +220,10 @@ def merge_into_branch(op, child_branch, tree_to, br_to, subpath):
     other_tree = merge_from.basis_tree()
     other_tree.lock_read()
     op.add_cleanup(other_tree.unlock)
-    # XXX: what should target_subdir be?  Three obvious options:
-    #  1. tree-root
-    #  2. same as source_subpath (but what if basename(source_subpath) does not
-    #     exist in target?)
-    #  3. specified in the recipe instruction (how?  would need to define a
-    #     syntax)
-    # Trying option 2 for now.
+    if target_subdir is None:
+        target_subdir = os.path.basename(subpath)
     merger = merge.MergeIntoMerger(this_tree=tree_to, other_tree=other_tree,
-        other_branch=merge_from, target_subdir=os.path.basename(subpath),
+        other_branch=merge_from, target_subdir=target_subdir,
         source_subpath=subpath, other_rev_id=merge_revid)
     merger.set_base_revision(revision.NULL_REVISION, merge_from)
     conflict_count = merger.do_merge()
@@ -461,14 +468,16 @@ class MergeInstruction(ChildBranch):
 
 class MergeIntoInstruction(ChildBranch):
 
-    def __init__(self, recipe_branch, subpath):
+    def __init__(self, recipe_branch, subpath, target_subdir):
         ChildBranch.__init__(self, recipe_branch)
         self.subpath = subpath
+        self.target_subdir = target_subdir
 
     def apply(self, target_path, tree_to, br_to):
         from bzrlib.cleanup import OperationWithCleanups
         op = OperationWithCleanups(merge_into_branch)
-        op.run(self.recipe_branch, tree_to, br_to, self.subpath)
+        op.run(self.recipe_branch, tree_to, br_to, self.subpath,
+            self.target_subdir)
 
 
 class NestInstruction(ChildBranch):
@@ -489,6 +498,9 @@ class RecipeBranch(object):
     The child_branches attribute is a list of tuples of ChildBranch objects. 
     The revid attribute records the revid that the url and revspec resolved
     to when the RecipeBranch was built, or None if it has not been built.
+
+    :ivar revid: after this recipe branch has been built this is set to the
+        revision ID that was merged/nested from the branch at self.url.
     """
 
     def __init__(self, name, url, revspec=None):
@@ -524,7 +536,8 @@ class RecipeBranch(object):
         :param target_subdir: (optional) directory in target to merge that
             subpath into.  Defaults to basename of subpath.
         """
-        self.child_branches.append(MergeIntoInstruction(branch, subpath))
+        self.child_branches.append(
+            MergeIntoInstruction(branch, subpath, target_subdir))
 
     def nest_branch(self, location, branch):
         """Nest a child branch in to this one.
@@ -705,6 +718,8 @@ class RecipeParser(object):
                     elif instruction == MERGE_INTO_INSTRUCTION:
                         path = self.take_to_whitespace('subpath to merge')
                         target_subdir = self.parse_optional_path()
+                        if target_subdir == '':
+                            target_subdir = None
                     self.new_line()
                     last_branch = RecipeBranch(branch_id, url, revspec=revspec)
                     if instruction == NEST_INSTRUCTION:

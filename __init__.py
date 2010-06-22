@@ -44,6 +44,13 @@ can be found at the given URI. The name you give to the branch as the second
 item doesn't have to match anything else, it's just an identifier specific
 to the recipe.
 
+You can also merge specific subdirectories from unrelated branches with a
+"merge-into" line like
+
+merge-into packaging lp:~foo-dev/foo/packaging debian
+
+which specifies that the only the debian/ subdirectory should be merged.
+
 If you wish to nest a branch then you use a similar line
 
 nest artwork lp:foo-images images

@@ -461,6 +461,33 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source1_rev_id, base_branch.revid)
         self.assertEqual(source2_rev_id, merged_branch.revid)
 
+    def test_build_tree_partial_merge_unrelated_explicit_target(self):
+        """A recipe can specify a merge of just part of an unrelated tree into
+        a specific subdirectory of the target tree.
+        """
+        source1 = self.make_branch_and_tree("source1")
+        self.build_tree(["source1/dir/"])
+        source1.add(["dir"])
+        source1.commit("one")
+        source2 = self.make_source_branch("source2")
+        source1.lock_read()
+        self.addCleanup(source1.unlock)
+        source1_rev_id = source1.last_revision()
+        # Add 'b' to source2.
+        self.build_tree_contents([
+            ("source2/b", "new file"), ("source2/not-b", "other file")])
+        source2.add(["b", "not-b"])
+        source2_rev_id = source2.commit("two")
+        base_branch = BaseRecipeBranch("source1", "1", 0.2)
+        merged_branch = RecipeBranch("merged", "source2")
+        # Merge just 'b' from source2; 'a' is untouched.
+        base_branch.merge_into_branch(merged_branch, "b", "dir/b")
+        build_tree(base_branch, "target")
+        self.check_file_contents("target/dir/b", "new file")
+        self.assertNotInWorkingTree("dir/not-b", "target")
+        self.assertEqual(source1_rev_id, base_branch.revid)
+        self.assertEqual(source2_rev_id, merged_branch.revid)
+
     def test_build_tree_merge_twice(self):
         source1 = self.make_source_branch("source1")
         source1_rev_id = source1.last_revision()
