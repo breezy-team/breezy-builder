@@ -70,16 +70,17 @@ will nest the revision pointed to by the "1.0" tag of that branch. The format
 for the revisionspec is indentical to that taken by the "--revision" argument
 to many bzr commands, see "bzr help revisionspec".
 
-You can also merge specific subdirectories from unrelated branches with a
-"merge-into" line like
+You can also merge specific subdirectories from a branch with a "merge-part"
+line like
 
-merge-into packaging lp:~foo-dev/foo/packaging -1 debian
+merge-part packaging lp:~foo-dev/foo/packaging -1 debian
 
 which specifies that the only the debian/ subdirectory from revision -1 (i.e.
-the latest revision) should be merged.  You optionally specify the subdirectory
-in the target with a line like
+the latest revision) should be merged.  This works even if the branches share
+no revision history.  You can optionally specify the subdirectory in the target
+with a line like
 
-merge-into libfoo lp:libfoo -1 src lib/foo
+merge-part libfoo lp:libfoo -1 src lib/foo
 
 will put the "src" directory of libfoo in "lib/foo".
 
@@ -121,11 +122,18 @@ on various things when the recipe is processed:
   * {revno:<branch name>} will be substituted with the revno for the
     branch named <branch name> in the recipe.
 
+Instruction syntax summary:
+
+  * nest NAME BRANCH TARGET-DIR [REVISION]
+  * merge NAME BRANCH [REVISION]
+  * merge-part NAME BRANCH REVISION SUBDIR [TARGET-DIR]
+  * run COMMAND
+
 Format versions:
 
   0.1 - original format.
   0.2 - added "run" instruction.
-  0.3 - added "merge-into" instruction.
+  0.3 - added "merge-part" instruction.
 """
 
 if __name__ == '__main__':
