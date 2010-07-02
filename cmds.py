@@ -26,7 +26,12 @@ import shutil
 import subprocess
 import tempfile
 
-from debian_bundle import changelog
+try:
+    from debian import changelog
+except ImportError:
+    # In older versions of python-debian the main package was named 
+    # debian_bundle
+    from debian_bundle import changelog
 
 from bzrlib import (
         errors,
