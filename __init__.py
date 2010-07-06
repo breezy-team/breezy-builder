@@ -19,70 +19,70 @@ The recipe is a series of pointers to branches and instructions for how they
 should be combined. There are two ways to combine branches, by merging, and
 by nesting, allowing much flexibility.
 
-A recipe is just a text file that starts with a line such as
+A recipe is just a text file that starts with a line such as::
 
-# bzr-builder format 0.2 deb-version 1.0+{revno}-{revno:packaging}
+  # bzr-builder format 0.2 deb-version 1.0+{revno}-{revno:packaging}
 
 The format specifier is there to allow the syntax to be changed in later
 versions, and the meaning of "deb-version" will be explained later.
 
 The next step is the define the base branch, this is the branch that will
-be places at the root, e.g. just put
+be places at the root, e.g. just put::
 
-lp:foo
+  lp:foo
 
-to use the trunk of "foo" hosted on LaunchPad.
+to use the trunk of "foo" hosted on Launchpad.
 
 Next comes any number of lines of other branches to be merged in, but using
 a slightly different format. To merge a branch in to the base specify
-something like
+something like::
 
-merge packaging lp:~foo-dev/foo/packaging
+  merge packaging lp:~foo-dev/foo/packaging
 
 which specifies we are merging a branch we will refer to as "packaging", which
 can be found at the given URI. The name you give to the branch as the second
 item doesn't have to match anything else, it's just an identifier specific
 to the recipe.
 
-If you wish to nest a branch then you use a similar line
+If you wish to nest a branch then you use a similar line::
 
-nest artwork lp:foo-images images
+  nest artwork lp:foo-images images
 
 This specifies that we are nesting the branch at lp:foo-images, which we will
 call "artwork", and we will place it locally in to the "images" directory.
 
 You can then continue in this fashion for as many branches as you like. It
-is also possible to nest and merge branches in to nested branches. For example
+is also possible to nest and merge branches into nested branches. For example
 to merge a branch in to the "artwork" branch we put the following on the line
-below that one, indented by two spaces.
+below that one, indented by two spaces::
 
   merge artwork-fixes lp:~bob/foo-images/fix-12345
 
-which will merge Bob's fixes branch in to the "artwork" branch which we nested
+which will merge Bob's fixes branch into the "artwork" branch which we nested
 at "images".
 
-It is also possible to specify particular revisions of a branch by appending
-a revisionspec to the line. For instance
+It is also possible to specify a particular revision of a branch by appending
+a revisionspec to the line. For instance::
 
-nest docs lp:foo-docs doc tag:1.0
+  nest docs lp:foo-docs doc tag:1.0
 
 will nest the revision pointed to by the "1.0" tag of that branch. The format
-for the revisionspec is indentical to that taken by the "--revision" argument
-to many bzr commands, see "bzr help revisionspec".
+for the revisionspec is identical to that taken by the "--revision" argument
+to many bzr commands. See "bzr help revisionspec" for details.
 
 It is also possible to run an arbitrary command at a particular point in the
-construction process.
+construction process. For example::
 
-run autoreconf -i
+  run autoreconf -i
 
 will run autotools at a particular point. Doing things with branches is usually
 preferred, but sometimes it is the easier or only way to achieve something.
 Note that you usually shouldn't rely on having general Internet access when
-assembling the recipe, so commands that would require it should be avoided.
+assembling the recipe, so commands that require it should be avoided.
 
-You can then build this branch by running
+You can then build this branch by running::
 
-bzr build foo.recipe working-dir
+  bzr build foo.recipe working-dir
 
 (assuming you saved it as foo.recipe in your current directory).
 
@@ -91,15 +91,15 @@ Once the command finished it will have placed the result in "working-dir".
 It is also possible to produce Debian source packages from a recipe, assuming
 that one of the branches in the recipe contains some appropriate packaging.
 You can do this using the "bzr dailydeb" command, which takes the same
-arguments as "build". Only this time im working dir you will find a source
+arguments as "build". Only this time in the working dir you will find a source
 package and a directory containing the code that the packages was built from
-once it is done. Also take a look at the "--key-id" and "--dput" arguments
-to have "bzr dailydeb" sign and upload the source package somewhere.
+once it is done. Also take a look at the "--key-id" and "--dput" arguments to
+have "bzr dailydeb" sign and upload the source package somewhere.
 
 To build Debian source package that you desire you should make sure that
 "deb-version" is set to an appropriate value on the first line of your
 recipe. This will be used as the version number of the package. The
-value you put there also allows for substution of values in to it based
+value you put there also allows for substitution of values in to it based
 on various things when the recipe is processed:
 
   * {time} will be substituted with the current date and time, such as
@@ -107,6 +107,10 @@ on various things when the recipe is processed:
   * {revno} will be the revno of the base branch (the first specified).
   * {revno:<branch name>} will be substituted with the revno for the
     branch named <branch name> in the recipe.
+  * {debupstream} will be replaced by the upstream portion of the version
+    number taken from debian/changelog in the final tree. If when the
+    tree is built the top of debian/changelog has a version number of
+    "1.0-1" then this would evaluate to "1.0".
 
 Format versions:
 
@@ -123,370 +127,10 @@ if __name__ == '__main__':
             shell=True, env={"BZR_PLUGIN_PATH": dir})
     sys.exit(retcode)
 
-import datetime
-from email import utils
-import os
-import pwd
-import re
-import socket
-import shutil
-import subprocess
-import tempfile
 
-from debian_bundle import changelog
-
-from bzrlib import (
-        errors,
-        trace,
-        transport,
-        )
-from bzrlib.commands import Command, register_command
-from bzrlib.option import Option
-
-from bzrlib.plugins.builder.recipe import (
-        build_manifest,
-        build_tree,
-        RecipeParser,
-        resolve_revisions,
-        )
-
-
-class cmd_build(Command):
-    """Build a tree based on a 'recipe'.
-
-    Pass the name of the recipe file and the directory to work in.
-
-    See "bzr help builder" for more information on what a recipe is.
-    """
-    takes_args = ["recipe_file", "working_directory"]
-    takes_options = [
-            Option('manifest', type=str, argname="path",
-                   help="Path to write the manifest to."),
-            Option('if-changed-from', type=str, argname="path",
-                   help="Only build if the outcome would be different "
-                        "to that specified in the specified manifest."),
-                    ]
-
-    def _write_manifest_to_path(self, path, base_branch):
-        parent_dir = os.path.dirname(path)
-        if parent_dir != '' and not os.path.exists(parent_dir):
-            os.makedirs(parent_dir)
-        manifest_f = open(path, 'wb')
-        try:
-            manifest_f.write(build_manifest(base_branch))
-        finally:
-            manifest_f.close()
-
-    def _get_branch_from_recipe_file(self, recipe_file):
-        recipe_transport = transport.get_transport(os.path.dirname(recipe_file))
-        try:
-            recipe_contents = recipe_transport.get_bytes(
-                    os.path.basename(recipe_file))
-        except errors.NoSuchFile:
-            raise errors.BzrCommandError("Specified recipe does not exist: "
-                    "%s" % recipe_file)
-        parser = RecipeParser(recipe_contents, filename=recipe_file)
-        return parser.parse()
-
-    def _get_old_recipe(self, if_changed_from):
-        old_manifest_transport = transport.get_transport(os.path.dirname(
-                    if_changed_from))
-        try:
-            old_manifest_contents = old_manifest_transport.get_bytes(
-                    os.path.basename(if_changed_from))
-        except errors.NoSuchFile:
-            return None
-        old_recipe = RecipeParser(old_manifest_contents,
-                filename=if_changed_from).parse()
-        return old_recipe
-
-    def run(self, recipe_file, working_directory, manifest=None,
-            if_changed_from=None):
-        base_branch = self._get_branch_from_recipe_file(recipe_file)
-        time = datetime.datetime.utcnow()
-        base_branch.substitute_time(time)
-        old_recipe = None
-        if if_changed_from is not None:
-            old_recipe = self._get_old_recipe(if_changed_from)
-        changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
-        if not changed:
-            trace.note("Unchanged")
-            return 0
-        build_tree(base_branch, working_directory)
-        if manifest is not None:
-            self._write_manifest_to_path(manifest, base_branch)
-        else:
-            self._write_manifest_to_path(os.path.join(working_directory,
-                        "bzr-builder.manifest"), base_branch)
-
-
-register_command(cmd_build)
-
-
-class cmd_dailydeb(cmd_build):
-    """Build a deb based on a 'recipe'.
-
-    See "bzr help builder" for more information on what a recipe is.
-
-    If you do not specify a working directory then a temporary
-    directory will be used and it will be removed when the command
-    finishes.
-    """
-
-    takes_options = cmd_build.takes_options + [
-                Option("package", type=str,
-                       help="The package name to use in the changelog entry. "
-                            "If not specified then the package from the "
-                            "previous changelog entry will be used, so it "
-                            "must be specified if there is no changelog."),
-                Option("distribution", type=str,
-                        help="The distribution to target. If not specified "
-                             "then the same distribution as the last entry "
-                             "in debian/changelog will be used."),
-                Option("dput", type=str, argname="target",
-                        help="dput the built package to the specified "
-                        "dput target."),
-                Option("key-id", type=str, short_name="k",
-                       help="Sign the packages with the specified GnuPG key, "
-                            "must be specified if you use --dput."),
-                Option("watch-ppa", help="Watch the PPA the package was "
-                    "dput to and exit with 0 only if it builds and "
-                    "publishes successfully."),
-            ]
-
-    takes_args = ["recipe_file", "working_directory?"]
-
-    def run(self, recipe_file, working_directory=None, manifest=None,
-            if_changed_from=None, package=None, distribution=None,
-            dput=None, key_id=None, watch_ppa=False):
-
-        if dput is not None and key_id is None:
-            raise errors.BzrCommandError("You must specify --key-id if you "
-                    "specify --dput.")
-        if watch_ppa:
-            if not dput:
-                raise errors.BzrCommandError(
-                    "cannot watch a ppa without doing dput.")
-            else:
-                # Check we can calculate a PPA url.
-                target_from_dput(dput)
-
-        base_branch = self._get_branch_from_recipe_file(recipe_file)
-        time = datetime.datetime.utcnow()
-        base_branch.substitute_time(time)
-        old_recipe = None
-        if if_changed_from is not None:
-            old_recipe = self._get_old_recipe(if_changed_from)
-        changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
-        if not changed:
-            trace.note("Unchanged")
-            return 0
-        recipe_name = os.path.basename(recipe_file)
-        if recipe_name.endswith(".recipe"):
-            recipe_name = recipe_name[:-len(".recipe")]
-        version = base_branch.deb_version
-        if "-" in version:
-            version = version[:version.rindex("-")]
-        package_basedir = "%s-%s" % (package or recipe_name, version)
-        if working_directory is None:
-            temp_dir = tempfile.mkdtemp(prefix="bzr-builder-")
-            working_directory = temp_dir
-        else:
-            temp_dir = None
-            if not os.path.exists(working_directory):
-                os.makedirs(working_directory)
-        try:
-            package_dir = os.path.join(working_directory, package_basedir)
-            build_tree(base_branch, package_dir)
-            self._write_manifest_to_path(os.path.join(package_dir, "debian",
-                        "bzr-builder.manifest"), base_branch)
-            self._add_changelog_entry(base_branch, package_dir,
-                    distribution=distribution, package=package)
-            self._build_source_package(package_dir)
-            if key_id is not None:
-                self._sign_source_package(package_dir, key_id)
-            if dput is not None:
-                self._dput_source_package(package_dir, dput)
-            if manifest is not None:
-                self._write_manifest_to_path(manifest, base_branch)
-        finally:
-            if temp_dir is not None:
-                shutil.rmtree(temp_dir)
-        if watch_ppa:
-            from bzrlib.plugins.builder.ppa import watch
-            target = target_from_dput(dput)
-            return watch(target, self.package, base_branch.deb_version)
-
-
-    def _add_changelog_entry(self, base_branch, basedir, distribution=None,
-            package=None):
-        debian_dir = os.path.join(basedir, "debian")
-        if not os.path.exists(debian_dir):
-            os.makedirs(debian_dir)
-        cl_path = os.path.join(debian_dir, "changelog")
-        if os.path.exists(cl_path):
-            cl_f = open(cl_path)
-            try:
-                cl = changelog.Changelog(file=cl_f)
-            finally:
-                cl_f.close()
-        else:
-            cl = changelog.Changelog()
-        if len(cl._blocks) > 0:
-            if distribution is None:
-                distribution = cl._blocks[0].distributions.split()[0]
-            if package is None:
-                package = cl._blocks[0].package
-        else:
-            if package is None:
-                raise errors.BzrCommandError("No previous changelog to "
-                        "take the package name from, and --package not "
-                        "specified.")
-            if distribution is None:
-                distribution = "jaunty"
-        self.package = package
-        # Use debian packaging environment variables
-        # or default values if they don't exist
-        author = "%s <%s>" % self._get_maintainer()
-
-        date = utils.formatdate(localtime=True)
-        cl.new_block(package=package, version=base_branch.deb_version,
-                distributions=distribution, urgency="low",
-                changes=['', '  * Auto build.', ''],
-                author=author, date=date)
-        cl_f = open(cl_path, 'wb')
-        try:
-            cl.write_to_open_file(cl_f)
-        finally:
-            cl_f.close()
-
-
-    def _get_maintainer(self):
-        """
-        Create maintainer string using the same algorithm as in dch
-        """
-        env = os.environ
-        regex = re.compile(r"^(.*)\s+<(.*)>$")
-
-        # Split email and name
-        if 'DEBEMAIL' in env:
-            match_obj = regex.match(env['DEBEMAIL'])
-            if match_obj:
-                if not 'DEBFULLNAME' in env:
-                    env['DEBFULLNAME'] = match_obj.group(1)
-                env['DEBEMAIL'] = match_obj.group(2)
-        if 'DEBEMAIL' not in env or 'DEBFULLNAME' not in env:
-            if 'EMAIL' in env:
-                match_obj = regex.match(env['EMAIL'])
-                if match_obj:
-                    if not 'DEBFULLNAME' in env:
-                        env['DEBFULLNAME'] = match_obj.group(1)
-                    env['EMAIL'] = match_obj.group(2)
-
-        # Get maintainer's name
-        if 'DEBFULLNAME' in env:
-            maintainer = env['DEBFULLNAME']
-        elif 'NAME' in env:
-            maintainer = env['NAME']
-        else:
-            # Use password database if no data in environment variables
-            try:
-                maintainer = re.sub(r',.*', '', pwd.getpwuid(os.getuid()).pw_gecos)
-            except KeyError, AttributeError:
-                # TBD: Use last changelog entry value
-                maintainer = "bzr-builder"
-
-        # Get maintainer's mail address
-        if 'DEBEMAIL' in env:
-            email = env['DEBEMAIL']
-        else:
-            addr = None
-            if os.path.exists('/etc/mailname'):
-                f = open('/etc/mailname')
-                try:
-                    addr = f.readline().strip()
-                finally:
-                    f.close()
-            if not addr:
-                addr = socket.getfqdn()
-            if addr:
-                user = pwd.getpwuid(os.getuid()).pw_name
-                if not user:
-                    addr = None
-                else:
-                    addr = "%s@%s" % (user, addr)
-
-            if addr:
-                email = addr
-            else:
-                # TBD: Use last changelog entry value
-                email = "none@example.org"
-
-        return (maintainer, email)
-
-
-    def _build_source_package(self, basedir):
-        trace.note("Building the source package")
-        command = ["/usr/bin/debuild", "--no-tgz-check", "-i", "-I", "-S",
-                        "-uc", "-us"]
-        proc = subprocess.Popen(command, cwd=basedir,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                stdin=subprocess.PIPE)
-        proc.stdin.close()
-        retcode = proc.wait()
-        if retcode != 0:
-            output = proc.stdout.read()
-            raise errors.BzrCommandError("Failed to build the source package: "
-                    "%s" % output)
-
-    def _sign_source_package(self, basedir, key_id):
-        trace.note("Signing the source package")
-        command = ["/usr/bin/debsign", "-S", "-k%s" % key_id]
-        proc = subprocess.Popen(command, cwd=basedir,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                stdin=subprocess.PIPE)
-        proc.stdin.close()
-        retcode = proc.wait()
-        if retcode != 0:
-            output = proc.stdout.read()
-            raise errors.BzrCommandError("Signing the package failed: "
-                    "%s" % output)
-
-    def _dput_source_package(self, basedir, target):
-        trace.note("Uploading the source package")
-        command = ["/usr/bin/debrelease", "-S", "--dput", target]
-        proc = subprocess.Popen(command, cwd=basedir,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                stdin=subprocess.PIPE)
-        trace.note("1")
-        output, err = proc.communicate()
-        print output, err
-        trace.note("2")
-        retcode = proc.returncode
-        if retcode != 0:
-            trace.note("3")
-            raise errors.BzrCommandError("Uploading the package failed: "
-                    "%s" % output)
-        trace.note("Uploaded the source package")
-
-
-register_command(cmd_dailydeb)
-
-
-def target_from_dput(dput):
-    """Convert a dput specification to a LP API specification.
-
-    :param dput: A dput command spec like ppa:team-name.
-    :return: A LP API target like team-name/ppa.
-    """
-    if not dput.startswith('ppa:'):
-        raise errors.BzrCommandError('%r does not appear to be a PPA.'
-            'A dput target like ppa:user[/name] must be used.' % dput)
-    # ppa: is 4 characters long.
-    base, _, suffix = dput[4:].partition('/')
-    if not suffix:
-        suffix = 'ppa'
-    return base + '/' + suffix
+from bzrlib.commands import plugin_cmds
+plugin_cmds.register_lazy("cmd_build", [], "bzrlib.plugins.builder.cmds")
+plugin_cmds.register_lazy("cmd_dailydeb", [], "bzrlib.plugins.builder.cmds")
 
 
 def test_suite():

@@ -2,25 +2,26 @@
 #
 # Copyright: Canonical Ltd. (C) 2009
 #
-# This program is free software: you can redistribute it and/or modify it 
-# under the terms of the GNU General Public License version 3, as published 
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 3, as published
 # by the Free Software Foundation.
 
-# This program is distributed in the hope that it will be useful, but 
-# WITHOUT ANY WARRANTY; without even the implied warranties of 
-# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR 
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranties of
+# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR
 # PURPOSE.  See the GNU General Public License for more details.
 
-# You should have received a copy of the GNU General Public License along 
+# You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from optparse import OptionParser
 import os
-import sys
 import time
 
+
 from launchpadlib.launchpad import (
-    Launchpad, STAGING_SERVICE_ROOT, EDGE_SERVICE_ROOT)
+    Launchpad,
+    EDGE_SERVICE_ROOT,
+    )
 from launchpadlib.credentials import Credentials
 
 from bzrlib import (
@@ -28,37 +29,43 @@ from bzrlib import (
     trace,
     )
 
-def watch(target, package_name, version):
+
+def get_lp():
+    credentials = Credentials()
+    oauth_file = os.path.expanduser('~/.cache/launchpadlib/bzr-builder')
+    if os.path.exists(oauth_file):
+        f = open(oauth_file)
+        try:
+            credentials.load(f)
+        finally:
+            f.close()
+        launchpad = Launchpad(credentials, EDGE_SERVICE_ROOT)
+    else:
+        launchpad = Launchpad.get_token_and_login('bzr-builder',
+                EDGE_SERVICE_ROOT)
+        f = open(oauth_file, 'wb')
+        try:
+            launchpad.credentials.save(f)
+        finally:
+            f.close()
+    return launchpad
+
+
+def watch(owner_name, archive_name, package_name, version):
     """Watch a package build.
 
-    :return: 0 once the package built and published completely ok or 2
-        otherwise.
+    :return: True once the package built and published, or False if it fails
+        or there is a timeout waiting.
     """
     version = str(version)
-    trace.note("logging into launchpad")
-    # See https://help.launchpad.net/API
-    credentials = Credentials()
-    oauth_file = os.path.expanduser('~/.cache/edge_oauth.txt')
-    try:
-        credentials.load(open(oauth_file))
-        launchpad = Launchpad(credentials, EDGE_SERVICE_ROOT)
-    except Exception:
-        cachedir = os.path.expanduser("~/.launchpadlib/cache/")
-        launchpad = Launchpad.get_token_and_login('get-build-status', EDGE_SERVICE_ROOT, cachedir)
-        launchpad.credentials.save(file(oauth_file, "w"))
-    
-    try:
-        owner_name, archive_name = target.split('/', 2)
-    except ValueError:
-            print "E: Failed to parse archive identifier."
-            print "Syntax of target archive: <owner>/<archive>"
-            sys.exit(1)
-    
+    trace.note("Logging into Launchpad")
+
+    launchpad = get_lp()
     owner = launchpad.people[owner_name]
     archive = owner.getPPAByName(name=archive_name)
     end_states = ['FAILEDTOBUILD', 'FULLYBUILT']
     important_arches = ['amd64', 'i386', 'armel']
-    trace.note("Waiting for %s of %s to build." % (version, package_name))
+    trace.note("Waiting for version %s of %s to build." % (version, package_name))
     start = time.time()
     while True:
         sourceRecords = list(archive.getPublishedSources(
@@ -66,19 +73,20 @@ def watch(target, package_name, version):
         if not sourceRecords:
             if time.time() - 900 > start:
                 # Over 15 minutes and no source yet, upload FAIL.
-                raise errors.BzrCommandError("No source record in %s for "
-                    "package %s=%s after 15 minutes." % (target, package_name,
-                    version))
-                return 2
+                raise errors.BzrCommandError("No source record in %s/%s for "
+                    "package %s=%s after 15 minutes." % (owner_name,
+                        archive_name, package_name, version))
+                return False
             trace.note("Source not available yet - waiting.")
             time.sleep(60)
             continue
         pkg = sourceRecords[0]
         if pkg.status.lower() not in ('published', 'pending'):
-            trace.note("pkg status: %s" % (pkg.status,))
+            trace.note("Package status: %s" % (pkg.status,))
             time.sleep(60)
             continue
-        source_id = str(pkg.self).rsplit('/', 1)[1]
+        # FIXME: LP should export this as an attribute.
+        source_id = pkg.self_link.rsplit('/', 1)[1]
         buildSummaries = archive.getBuildSummariesForSourceIds(
             source_ids=[source_id])[source_id]
         if buildSummaries['status'] in end_states:
@@ -93,16 +101,16 @@ def watch(target, package_name, version):
                     missing.append(arch)
             if not missing:
                 break
-            extra = ', '.join(missing)
+            extra = ' on ' + ', '.join(missing)
         else:
             extra = ''
-        trace.note("%s: %s %s" % (pkg.display_name, buildSummaries['status'],
-            extra))
+        trace.note("%s is still in %s%s" % (pkg.display_name,
+                    buildSummaries['status'], extra))
         time.sleep(60)
-    trace.note("%s: %s" % (pkg.display_name, buildSummaries['status']))
-    result = 0
+    trace.note("%s is now %s" % (pkg.display_name, buildSummaries['status']))
+    result = True
     if pkg.status.lower() != 'published':
-        result = 2 # should this perhaps keep waiting?
+        result = False # should this perhaps keep waiting?
     if buildSummaries['status'] != 'FULLYBUILT':
         if buildSummaries['status'] == 'NEEDSBUILD':
             # We're stopping early cause the important_arches are built.
@@ -110,7 +118,7 @@ def watch(target, package_name, version):
             for build in builds:
                 if build.arch_tag in important_arches:
                     if build.buildstate != 'Successfully built':
-                        result = 2
+                        result = False
         else:
-            result = 2
+            result = False
     return result
