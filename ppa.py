@@ -57,7 +57,7 @@ def watch(target, package_name, version):
     owner = launchpad.people[owner_name]
     archive = owner.getPPAByName(name=archive_name)
     end_states = ['FAILEDTOBUILD', 'FULLYBUILT']
-    important_arches = ['amd64', 'i386', 'lpia', 'armel']
+    important_arches = ['amd64', 'i386', 'armel']
     trace.note("Waiting for %s of %s to build." % (version, package_name))
     start = time.time()
     while True:
