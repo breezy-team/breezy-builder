@@ -823,6 +823,9 @@ class RecipeParser(object):
         if os.path.isabs(norm_location):
             self.throw_parse_error("Absolute paths are not allowed: %s"
                     % location)
+        if norm_location.startswith(".."):
+            self.throw_parse_error("Paths outside the current directory "
+                    "are not allowed: %s" % location)
         self.take_chars(len(location))
         self.seen_paths[norm_location] = self.line_index + 1
         return location

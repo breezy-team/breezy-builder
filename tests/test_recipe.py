@@ -405,6 +405,16 @@ class RecipeParserTests(TestCaseInTempDir):
                 "/etc/passwd", self.get_recipe, self.basic_header_and_branch
                 + "nest nest url /etc/passwd\n")
 
+    def test_error_simple_parent_dir(self):
+        exc = self.assertParseError(3, 15, "Paths outside the current "
+                "directory are not allowed: ../foo", self.get_recipe,
+                self.basic_header_and_branch + "nest nest url ../foo\n")
+
+    def test_error_complex_parent_dir(self):
+        exc = self.assertParseError(3, 15, "Paths outside the current "
+                "directory are not allowed: ./foo/../..", self.get_recipe,
+                self.basic_header_and_branch + "nest nest url ./foo/../..\n")
+
 
 class BuildTreeTests(TestCaseWithTransport):
 
