@@ -167,16 +167,18 @@ def merge_branch(child_branch, tree_to, br_to, possible_transports=None):
     :param tree_to: the WorkingTree to merge in to.
     :param br_to: the Branch to merge in to.
     """
-    merge_from = branch.Branch.open(child_branch.url,
-            possible_transports=possible_transports)
-    merge_from.lock_read()
+    if child_branch.branch is None:
+        child_branch.branch = branch.Branch.open(child_branch.url,
+                possible_transports=possible_transports)
+    child_branch.branch.lock_read()
     try:
-        tag._merge_tags_if_possible(merge_from, br_to)
+        tag._merge_tags_if_possible(child_branch.branch, br_to)
         if child_branch.revspec is not None:
             merge_revspec = revisionspec.RevisionSpec.from_string(
                     child_branch.revspec)
             try:
-                merge_revid = merge_revspec.as_revision_id(merge_from)
+                merge_revid = merge_revspec.as_revision_id(
+                    child_branch.branch)
             except errors.InvalidRevisionSpec, e:
                 # Give the user a hint if they didn't mean to speciy
                 # a revspec.
@@ -184,10 +186,10 @@ def merge_branch(child_branch, tree_to, br_to, possible_transports=None):
                     "at the end of the merge line?")
                 raise e
         else:
-            merge_revid = merge_from.last_revision()
+            merge_revid = child_branch.branch.last_revision()
         child_branch.revid = merge_revid
         merger = merge.Merger.from_revision_ids(None, tree_to, merge_revid,
-                other_branch=merge_from, tree_branch=br_to)
+                other_branch=child_branch.branch, tree_branch=br_to)
         merger.merge_type = merge.Merge3Merger
         if (merger.base_rev_id == merger.other_rev_id and
                 merger.other_rev_id is not None):
@@ -202,52 +204,51 @@ def merge_branch(child_branch, tree_to, br_to, possible_transports=None):
                 urlutils.unescape_for_display(
                     child_branch.url, 'utf-8'))
     finally:
-        merge_from.unlock()
+        child_branch.branch.unlock()
 
 
 def update_branch(base_branch, tree_to, br_to, to_transport,
         possible_transports=None):
-    from_location = base_branch.url
-    accelerator_tree, br_from = bzrdir.BzrDir.open_tree_or_branch(
-                        from_location)
-    br_from.lock_read()
+    if base_branch.branch is None:
+        base_branch.branch = branch.Branch.open(base_branch.url,
+                possible_transports=possible_transports)
+    base_branch.branch.lock_read()
     try:
         if base_branch.revspec is not None:
             revspec = revisionspec.RevisionSpec.from_string(
                     base_branch.revspec)
-            revision_id = revspec.as_revision_id(br_from)
+            revision_id = revspec.as_revision_id(base_branch.branch)
         else:
-            revision_id = br_from.last_revision()
+            revision_id = base_branch.branch.last_revision()
         base_branch.revid = revision_id
-        tree_to, br_to = pull_or_branch(tree_to, br_to, br_from,
+        tree_to, br_to = pull_or_branch(tree_to, br_to, base_branch.branch,
                 to_transport, revision_id,
-                accelerator_tree=accelerator_tree,
                 possible_transports=possible_transports)
     finally:
-        br_from.unlock()
+        base_branch.branch.unlock()
     return tree_to, br_to
 
 
 def _resolve_revisions_recurse(new_branch, substitute_revno,
         if_changed_from=None):
     changed = False
-    br_from = branch.Branch.open(new_branch.url)
-    br_from.lock_read()
+    new_branch.branch = branch.Branch.open(new_branch.url)
+    new_branch.branch.lock_read()
     try:
         if new_branch.revspec is not None:
             revspec = revisionspec.RevisionSpec.from_string(
                     new_branch.revspec)
-            revision_id = revspec.as_revision_id(br_from)
+            revision_id = revspec.as_revision_id(new_branch.branch)
         else:
-            revision_id = br_from.last_revision()
+            revision_id = new_branch.branch.last_revision()
         new_branch.revid = revision_id
         def get_revno():
             try:
-                revno = br_from.revision_id_to_revno(revision_id)
+                revno = new_branch.branch.revision_id_to_revno(revision_id)
                 return str(revno)
             except errors.NoSuchRevision:
                 # We need to load and use the full revno map after all
-                result = br_from.get_revision_id_to_revno_map().get(
+                result = new_branch.branch.get_revision_id_to_revno_map().get(
                         revision_id)
             if result is None:
                 return result
@@ -260,9 +261,9 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
                 changed_revspec = revisionspec.RevisionSpec.from_string(
                         if_changed_from.revspec)
                 changed_revision_id = changed_revspec.as_revision_id(
-                        br_from)
+                        new_branch.branch)
             else:
-                changed_revision_id = br_from.last_revision()
+                changed_revision_id = new_branch.branch.last_revision()
             if revision_id != changed_revision_id:
                 changed = True
         for index, instruction in enumerate(new_branch.child_branches):
@@ -278,7 +279,7 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
                     changed = child_changed
         return changed
     finally:
-        br_from.unlock()
+        new_branch.branch.unlock()
 
 
 def resolve_revisions(base_branch, if_changed_from=None):
@@ -443,6 +444,7 @@ class RecipeBranch(object):
         self.revspec = revspec
         self.child_branches = []
         self.revid = None
+        self.branch = None
 
     def merge_branch(self, branch):
         """Merge a child branch in to this one.
