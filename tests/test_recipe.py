@@ -354,6 +354,18 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "baz", "baz.org")
 
+    def test_accepts_comment_line_with_any_number_of_spaces(self):
+        base_branch = self.get_recipe(self.basic_header_and_branch
+                + "nest foo http://bar.org bar\n   #foo\nmerge baz baz.org\n")
+        self.check_base_recipe_branch(base_branch, self.basic_branch,
+                num_child_branches=2)
+        nested_branch, location = base_branch.child_branches[0].as_tuple()
+        self.assertEqual("bar", location)
+        self.check_recipe_branch(nested_branch, "foo", "http://bar.org")
+        child_branch, location = base_branch.child_branches[1].as_tuple()
+        self.assertEqual(None, location)
+        self.check_recipe_branch(child_branch, "baz", "baz.org")
+
     def test_old_format_rejects_run(self):
         header = ("# bzr-builder format 0.1 deb-version "
                 + self.deb_version +"\n")
