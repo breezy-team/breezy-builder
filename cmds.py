@@ -23,6 +23,7 @@ import pwd
 import re
 import socket
 import shutil
+import StringIO
 import subprocess
 import tempfile
 
@@ -165,12 +166,15 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
     if not os.path.exists(debian_dir):
         os.makedirs(debian_dir)
     cl_path = os.path.join(debian_dir, "changelog")
+    file_found = False
     if os.path.exists(cl_path):
+        file_found = True
         cl_f = open(cl_path)
         try:
-            cl = changelog.Changelog(file=cl_f)
+            contents = StringIO.StringIO(cl_f.read())
         finally:
             cl_f.close()
+        cl = changelog.Changelog(file=contents)
     else:
         cl = changelog.Changelog()
     if len(cl._blocks) > 0:
@@ -182,14 +186,22 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
             cl_version = cl._blocks[0].version
             base_branch.substitute_debupstream(cl_version)
     else:
+        if file_found:
+            if len(contents.strip()) > 0:
+                reason = ("debian/changelog didn't contain any "
+                         "parseable stanzas")
+            else:
+                reason = "debian/changelog was empty"
+        else:
+            reason = "debian/changelog was not present"
         if package is None:
             raise errors.BzrCommandError("No previous changelog to "
                     "take the package name from, and --package not "
-                    "specified.")
+                    "specified: %s." % reason)
         if DEBUPSTREAM_VAR in base_branch.deb_version:
             raise errors.BzrCommandError("No previous changelog to "
                     "take the upstream version from as %s was "
-                    "used." % DEBUPSTREAM_VAR)
+                    "used: %s." % (DEBUPSTREAM_VAR, reason))
         if distribution is None:
             distribution = DEFAULT_UBUNTU_DISTRIBUTION
     # Use debian packaging environment variables
