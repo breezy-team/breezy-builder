@@ -767,6 +767,13 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         resolve_revisions(branch1)
         self.assertEqual("{debupstream}-2", branch1.deb_version)
 
+    def test_subsitute_not_fully_expanded(self):
+        source =self.make_branch_and_tree("source")
+        source.commit("one")
+        source.commit("two")
+        branch1 = BaseRecipeBranch("source", "{revno:packaging}", 0.2)
+        self.assertRaises(errors.BzrCommandError, resolve_revisions, branch1)
+
 
 class StringifyTests(TestCaseInTempDir):
 

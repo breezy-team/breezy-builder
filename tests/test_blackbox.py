@@ -264,3 +264,15 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         finally:
             f.close()
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
+
+    def test_cmd_dailydeb_with_invalid_version(self):
+        source = self.make_branch_and_tree("source")
+        self.build_tree(["source/a"])
+        source.add(["a"])
+        revid = source.commit("one")
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
+                    "deb-version $\nsource 1\n")])
+        err = self.run_bzr("dailydeb -q test.recipe working --package foo",
+                retcode=3)[1]
+        self.assertEqual("bzr: ERROR: Invalid deb-version: $: "
+                "Could not parse version: $\n", err)

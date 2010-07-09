@@ -25,9 +25,14 @@ from bzrlib import (
         revisionspec,
         tag,
         transport,
-        ui,
         urlutils,
         )
+
+
+try:
+    from debian import changelog
+except ImportError:
+    from debian_bundle import changelog
 
 
 def subprocess_setup():

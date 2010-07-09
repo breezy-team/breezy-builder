@@ -202,6 +202,11 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
     version = base_branch.deb_version
     if append_version is not None:
         version += append_version
+    try:
+        changelog.Version(version)
+    except (changelog.VersionError, ValueError), e:
+        raise errors.BzrCommandError("Invalid deb-version: %s: %s"
+                % (version, e))
     cl.new_block(package=package, version=version,
             distributions=distribution, urgency="low",
             changes=['', '  * Auto build.', ''],
