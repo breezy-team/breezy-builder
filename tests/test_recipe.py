@@ -42,7 +42,8 @@ class RecipeParserTests(TestCaseInTempDir):
     deb_version = "0.1-{revno}"
     basic_header = ("# bzr-builder format 0.2 deb-version "
             + deb_version +"\n")
-    basic_header_and_branch = basic_header + "http://foo.org/\n"
+    basic_branch = "http://foo.org/"
+    basic_header_and_branch = basic_header + basic_branch + "\n"
 
     def get_recipe(self, recipe_text):
         return RecipeParser(recipe_text).parse()
@@ -310,6 +311,48 @@ class RecipeParserTests(TestCaseInTempDir):
         child_branch, command = base_branch.child_branches[0].as_tuple()
         self.assertEqual(None, child_branch)
         self.assertEqual("touch test", command)
+
+    def test_accepts_blank_line_during_nest(self):
+        base_branch = self.get_recipe(self.basic_header_and_branch
+                + "nest foo http://bar.org bar\n  merge baz baz.org\n\n"
+                "  merge zap zap.org\n")
+        self.check_base_recipe_branch(base_branch, self.basic_branch,
+                num_child_branches=1)
+        nested_branch, location = base_branch.child_branches[0].as_tuple()
+        self.assertEqual("bar", location)
+        self.check_recipe_branch(nested_branch, "foo", "http://bar.org",
+                num_child_branches=2)
+        child_branch, location = nested_branch.child_branches[0].as_tuple()
+        self.assertEqual(None, location)
+        self.check_recipe_branch(child_branch, "baz", "baz.org")
+        child_branch, location = nested_branch.child_branches[1].as_tuple()
+        self.assertEqual(None, location)
+        self.check_recipe_branch(child_branch, "zap", "zap.org")
+
+    def test_accepts_blank_line_at_start_of_nest(self):
+        base_branch = self.get_recipe(self.basic_header_and_branch
+                + "nest foo http://bar.org bar\n\n  merge baz baz.org\n")
+        self.check_base_recipe_branch(base_branch, self.basic_branch,
+                num_child_branches=1)
+        nested_branch, location = base_branch.child_branches[0].as_tuple()
+        self.assertEqual("bar", location)
+        self.check_recipe_branch(nested_branch, "foo", "http://bar.org",
+                num_child_branches=1)
+        child_branch, location = nested_branch.child_branches[0].as_tuple()
+        self.assertEqual(None, location)
+        self.check_recipe_branch(child_branch, "baz", "baz.org")
+
+    def test_accepts_blank_line_as_only_thing_in_nest(self):
+        base_branch = self.get_recipe(self.basic_header_and_branch
+                + "nest foo http://bar.org bar\n\nmerge baz baz.org\n")
+        self.check_base_recipe_branch(base_branch, self.basic_branch,
+                num_child_branches=2)
+        nested_branch, location = base_branch.child_branches[0].as_tuple()
+        self.assertEqual("bar", location)
+        self.check_recipe_branch(nested_branch, "foo", "http://bar.org")
+        child_branch, location = base_branch.child_branches[1].as_tuple()
+        self.assertEqual(None, location)
+        self.check_recipe_branch(child_branch, "baz", "baz.org")
 
     def test_old_format_rejects_run(self):
         header = ("# bzr-builder format 0.1 deb-version "

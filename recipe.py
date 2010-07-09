@@ -657,6 +657,9 @@ class RecipeParser(object):
         active_branches = []
         last_branch = None
         while self.line_index < len(self.lines):
+            if self.is_blankline():
+                self.new_line()
+                continue
             old_indent_level = self.parse_indent()
             if old_indent_level is not None:
                 if (old_indent_level < self.current_indent_level
@@ -790,6 +793,10 @@ class RecipeParser(object):
             self.current_line = None
         else:
             self.current_line = self.lines[self.line_index]
+
+    def is_blankline(self):
+        return len([a for a in self.current_line
+                if a not in self.whitespace_chars]) < 1
 
     def take_char(self):
         if self.index >= len(self.current_line):
