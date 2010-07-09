@@ -159,7 +159,7 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
     return tree_to, br_to
 
 
-def merge_branch(child_branch, tree_to, br_to):
+def merge_branch(child_branch, tree_to, br_to, possible_transports=None):
     """Merge the branch specified by child_branch.
 
     :param child_branch: the RecipeBranch to retrieve the branch and revision to
@@ -167,7 +167,8 @@ def merge_branch(child_branch, tree_to, br_to):
     :param tree_to: the WorkingTree to merge in to.
     :param br_to: the Branch to merge in to.
     """
-    merge_from = branch.Branch.open(child_branch.url)
+    merge_from = branch.Branch.open(child_branch.url,
+            possible_transports=possible_transports)
     merge_from.lock_read()
     try:
         tag._merge_tags_if_possible(merge_from, br_to)
@@ -204,7 +205,8 @@ def merge_branch(child_branch, tree_to, br_to):
         merge_from.unlock()
 
 
-def update_branch(base_branch, tree_to, br_to, to_transport):
+def update_branch(base_branch, tree_to, br_to, to_transport,
+        possible_transports=None):
     from_location = base_branch.url
     accelerator_tree, br_from = bzrdir.BzrDir.open_tree_or_branch(
                         from_location)
@@ -220,7 +222,7 @@ def update_branch(base_branch, tree_to, br_to, to_transport):
         tree_to, br_to = pull_or_branch(tree_to, br_to, br_from,
                 to_transport, revision_id,
                 accelerator_tree=accelerator_tree,
-                possible_transports=[to_transport])
+                possible_transports=possible_transports)
     finally:
         br_from.unlock()
     return tree_to, br_to
@@ -315,13 +317,14 @@ def resolve_revisions(base_branch, if_changed_from=None):
     return True
 
 
-def _build_inner_tree(base_branch, target_path):
+def _build_inner_tree(base_branch, target_path, possible_transports=None):
     revision_of = ""
     if base_branch.revspec is not None:
         revision_of = "revision '%s' of " % base_branch.revspec
     trace.note("Retrieving %s'%s' to put at '%s'."
         % (revision_of, base_branch.url, target_path))
-    to_transport = transport.get_transport(target_path)
+    to_transport = transport.get_transport(target_path,
+            possible_transports=possible_transports)
     try:
         tree_to, br_to = bzrdir.BzrDir.open_tree_or_branch(target_path)
         # Should we commit any changes in the tree here? If we don't
@@ -336,7 +339,7 @@ def _build_inner_tree(base_branch, target_path):
             br_to.lock_write()
         try:
             tree_to, br_to = update_branch(base_branch, tree_to, br_to,
-                    to_transport)
+                    to_transport, possible_transports=possible_transports)
             for instruction in base_branch.child_branches:
                 instruction.apply(target_path, tree_to, br_to)
         finally:
@@ -348,7 +351,7 @@ def _build_inner_tree(base_branch, target_path):
             tree_to.unlock()
 
 
-def build_tree(base_branch, target_path):
+def build_tree(base_branch, target_path, possible_transports=None):
     """Build the RecipeBranch at a path.
 
     Follow the instructions embodied in RecipeBranch and build a tree
@@ -360,7 +363,8 @@ def build_tree(base_branch, target_path):
     :param target_path: the path to the base of the desired output.
     """
     trace.note("Building tree.")
-    _build_inner_tree(base_branch, target_path)
+    _build_inner_tree(base_branch, target_path,
+            possible_transports=possible_transports)
 
 
 class ChildBranch(object):
@@ -375,7 +379,7 @@ class ChildBranch(object):
         self.recipe_branch = recipe_branch
         self.nest_path = nest_path
 
-    def apply(self, target_path, tree_to, br_to):
+    def apply(self, target_path, tree_to, br_to, possible_transports=None):
         raise NotImplementedError(self.apply)
 
     def as_tuple(self):
@@ -384,7 +388,7 @@ class ChildBranch(object):
 
 class CommandInstruction(ChildBranch):
 
-    def apply(self, target_path, tree_to, br_to):
+    def apply(self, target_path, tree_to, br_to, possible_transports=None):
         # it's a command
         trace.note("Running '%s' in '%s'." % (self.nest_path, target_path))
         proc = subprocess.Popen(self.nest_path, cwd=target_path,
@@ -396,21 +400,22 @@ class CommandInstruction(ChildBranch):
 
 class MergeInstruction(ChildBranch):
 
-    def apply(self, target_path, tree_to, br_to):
+    def apply(self, target_path, tree_to, br_to, possible_transports=None):
         revision_of = ""
         if self.recipe_branch.revspec is not None:
             revision_of = "revision '%s' of " % self.recipe_branch.revspec
         trace.note("Merging %s'%s' in to '%s'."
                 % (revision_of, self.recipe_branch.url, target_path))
-        merge_branch(self.recipe_branch, tree_to, br_to)
+        merge_branch(self.recipe_branch, tree_to, br_to,
+                possible_transports=possible_transports)
 
 
 class NestInstruction(ChildBranch):
 
-    def apply(self, target_path, tree_to, br_to):
-        # FIXME: pass possible_transports around
+    def apply(self, target_path, tree_to, br_to, possible_transports=None):
         _build_inner_tree(self.recipe_branch,
-            target_path=os.path.join(target_path, self.nest_path))
+            target_path=os.path.join(target_path, self.nest_path),
+            possible_transports=possible_transports)
 
 
 class RecipeBranch(object):
