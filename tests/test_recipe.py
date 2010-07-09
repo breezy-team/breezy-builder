@@ -938,6 +938,14 @@ class RecipeBranchTests(TestCaseInTempDir):
         base_branch.substitute_time(time)
         self.assertEqual("1-197001010000", base_branch.deb_version)
 
+    def test_substitute_date(self):
+        time = datetime.datetime.utcfromtimestamp(1)
+        base_branch = BaseRecipeBranch("base_url", "1-{date}", 0.2)
+        base_branch.substitute_time(time)
+        self.assertEqual("1-19700101", base_branch.deb_version)
+        base_branch.substitute_time(time)
+        self.assertEqual("1-19700101", base_branch.deb_version)
+
     def test_substitute_revno(self):
         base_branch = BaseRecipeBranch("base_url", "1", 0.2)
         base_branch.substitute_revno(None, None)

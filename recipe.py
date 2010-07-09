@@ -45,11 +45,27 @@ NEST_INSTRUCTION = "nest"
 RUN_INSTRUCTION = "run"
 
 TIME_VAR = "{time}"
+DATE_VAR = "{date}"
 REVNO_VAR = "{revno}"
 REVNO_PARAM_VAR = "{revno:%s}"
 DEBUPSTREAM_VAR = "{debupstream}"
 
 ok_to_preserve = [DEBUPSTREAM_VAR]
+# The variables that don't require substitution in their name
+simple_vars = [TIME_VAR, DATE_VAR, REVNO_VAR, DEBUPSTREAM_VAR]
+
+
+def check_expanded_deb_version(base_branch):
+    checked_version = base_branch.deb_version
+    for token in ok_to_preserve:
+        checked_version = checked_version.replace(token, "")
+    if "{" in checked_version:
+        available_tokens = simple_vars
+        for name in base_branch.list_branch_names():
+            available_tokens.append(REVNO_PARAM_VAR % name)
+        raise errors.BzrCommandError("deb-version not fully "
+                "expanded: %s. Valid substitutions are: %s"
+                % (base_branch.deb_version, available_tokens))
 
 
 class CommandFailedError(errors.BzrError):
@@ -307,17 +323,7 @@ def resolve_revisions(base_branch, if_changed_from=None):
             if_changed_from=if_changed_from_revisions)
     if not changed:
         changed = changed_revisions
-    checked_version = base_branch.deb_version
-    for token in ok_to_preserve:
-        checked_version = checked_version.replace(token, "")
-    if "{" in checked_version:
-        available_tokens = [TIME_VAR, REVNO_VAR]
-        for name in base_branch.list_branch_names():
-            available_tokens.append(REVNO_PARAM_VAR % name)
-        available_tokens.append(DEBUPSTREAM_VAR)
-        raise errors.BzrCommandError("deb-version not fully "
-                "expanded: %s. Valid substitutions are: %s"
-                % (base_branch.deb_version, available_tokens))
+    check_expanded_deb_version(base_branch)
     if if_changed_from is not None and not changed:
         return False
     return True
@@ -564,6 +570,9 @@ class BaseRecipeBranch(RecipeBranch):
         if TIME_VAR in self.deb_version:
             self.deb_version = self.deb_version.replace(TIME_VAR,
                     time.strftime("%Y%m%d%H%M"))
+        if DATE_VAR in self.deb_version:
+            self.deb_version = self.deb_version.replace(DATE_VAR,
+                    time.strftime("%Y%m%d"))
 
     def substitute_debupstream(self, version):
         """Substitute {debupstream} in to deb_version if needed.

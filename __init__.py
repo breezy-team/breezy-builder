@@ -104,6 +104,8 @@ on various things when the recipe is processed:
 
   * {time} will be substituted with the current date and time, such as
     200908191512.
+  * {date} will be substituted with just the current date, such as
+    20090819.
   * {revno} will be the revno of the base branch (the first specified).
   * {revno:<branch name>} will be substituted with the revno for the
     branch named <branch name> in the recipe.
