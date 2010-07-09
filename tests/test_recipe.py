@@ -959,3 +959,17 @@ class RecipeBranchTests(TestCaseInTempDir):
         self.assertEqual("3", base_branch.deb_version)
         base_branch.substitute_revno("foo", lambda: "3")
         self.assertEqual("3", base_branch.deb_version)
+
+    def test_list_branch_names(self):
+        base_branch = BaseRecipeBranch("base_url", "1", 0.2)
+        base_branch.merge_branch(RecipeBranch("merged", "merged_url"))
+        nested_branch = RecipeBranch("nested", "nested_url")
+        nested_branch.merge_branch(
+            RecipeBranch("merged_into_nested", "another_url"))
+        base_branch.nest_branch("subdir", nested_branch)
+        base_branch.merge_branch(
+            RecipeBranch("another_nested", "yet_another_url"))
+        base_branch.run_command("a command")
+        self.assertEqual(
+            ["merged", "nested", "merged_into_nested", "another_nested"],
+            base_branch.list_branch_names())

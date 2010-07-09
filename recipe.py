@@ -498,6 +498,23 @@ class RecipeBranch(object):
                 return True
         return False
 
+    def _list_child_names(self):
+        child_names = []
+        for instruction in self.child_branches:
+            child_branch = instruction.recipe_branch
+            if child_branch is None:
+                continue
+            child_names += child_branch.list_branch_names()
+        return child_names
+
+    def list_branch_names(self):
+        """List all of the branch names under this one.
+
+        :return: a list of the branch names.
+        :rtype: list(str)
+        """
+        return [self.name] + self._list_child_names()
+
 
 class BaseRecipeBranch(RecipeBranch):
     """The RecipeBranch that is at the root of a recipe."""
@@ -602,6 +619,9 @@ class BaseRecipeBranch(RecipeBranch):
         # the branch that we built it from.
         RecipeParser(manifest).parse()
         return manifest
+
+    def list_branch_names(self):
+        return self._list_child_names()
 
 
 class RecipeParseError(errors.BzrError):
