@@ -29,11 +29,13 @@ from bzrlib.plugins.builder.recipe import (
         BaseRecipeBranch,
         build_tree,
         ensure_basedir,
+        ForbiddenInstructionError,
         pull_or_branch,
         RecipeParser,
         RecipeBranch,
         RecipeParseError,
         resolve_revisions,
+        RUN_INSTRUCTION,
         )
 
 
@@ -45,8 +47,8 @@ class RecipeParserTests(TestCaseInTempDir):
     basic_branch = "http://foo.org/"
     basic_header_and_branch = basic_header + basic_branch + "\n"
 
-    def get_recipe(self, recipe_text):
-        return RecipeParser(recipe_text).parse()
+    def get_recipe(self, recipe_text, **kwargs):
+        return RecipeParser(recipe_text).parse(**kwargs)
 
     def assertParseError(self, line, char, problem, callable, *args,
             **kwargs):
@@ -55,6 +57,7 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual(line, exc.line)
         self.assertEqual(char, exc.char)
         self.assertEqual("recipe", exc.filename)
+        return exc
 
     def check_recipe_branch(self, branch, name, url, revspec=None,
             num_child_branches=0, revid=None):
@@ -372,6 +375,16 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertParseError(3, 1, "Expecting 'merge' or 'nest', got 'run'"
                 , self.get_recipe, header + "http://foo.org/\n"
                 + "run touch test \n")
+
+    def test_error_on_forbidden_instructions(self):
+        base_branch = self.get_recipe(self.basic_header_and_branch
+                + "run some command")
+        exc = self.assertParseError(3, 1, "The 'run' instruction is "
+                "forbidden.", self.get_recipe, self.basic_header_and_branch
+                + "run touch test\n",
+                forbidden_instructions=[RUN_INSTRUCTION])
+        self.assertTrue(isinstance(exc, ForbiddenInstructionError))
+        self.assertEqual("run", exc.instruction_name)
 
 
 class BuildTreeTests(TestCaseWithTransport):

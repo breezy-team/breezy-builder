@@ -646,6 +646,13 @@ class RecipeParseError(errors.BzrError):
                 problem=problem)
 
 
+class ForbiddenInstructionError(RecipeParseError):
+
+    def __init__(self, filename, line, char, problem, instruction_name=None):
+        RecipeParseError.__init__(self, filename, line, char, problem)
+        self.instruction_name = instruction_name
+
+
 class RecipeParser(object):
     """Parse a recipe.
 
@@ -674,9 +681,12 @@ class RecipeParser(object):
         if filename is None:
             self.filename = "recipe"
 
-    def parse(self):
+    def parse(self, forbidden_instructions=None):
         """Parse the recipe.
 
+        :param forbidden_instructions: a list of instructions that you
+            don't want to allow. Defaults to None allowing them all.
+        :type forbidden_instructions: list(str) or None
         :return: a RecipeBranch representing the recipe.
         """
         self.lines = self.text.split("\n")
@@ -718,7 +728,8 @@ class RecipeParser(object):
                 active_branches = [last_branch]
                 last_instruction = ""
             else:
-                instruction = self.parse_instruction()
+                instruction = self.parse_instruction(
+                    forbidden_instructions=forbidden_instructions)
                 if instruction == RUN_INSTRUCTION:
                     self.parse_whitespace("the command")
                     command = self.take_to_newline().strip()
@@ -755,7 +766,7 @@ class RecipeParser(object):
         self.new_line()
         return version, deb_version
 
-    def parse_instruction(self):
+    def parse_instruction(self, forbidden_instructions=None):
         if self.version < 0.2:
             options = (MERGE_INSTRUCTION, NEST_INSTRUCTION)
             options_str = "'%s' or '%s'" % options
@@ -767,6 +778,12 @@ class RecipeParser(object):
             self.throw_parse_error("End of line while looking for %s"
                     % options_str)
         if instruction in options:
+            if forbidden_instructions is not None:
+                if instruction in forbidden_instructions:
+                    self.throw_parse_error("The '%s' instruction is "
+                            "forbidden." % instruction,
+                            cls=ForbiddenInstructionError,
+                            instruction_name=instruction)
             self.take_chars(len(instruction))
             return instruction
         self.throw_parse_error("Expecting %s, got '%s'"
@@ -803,9 +820,11 @@ class RecipeParser(object):
             self.take_chars(len(revspec))
         return revspec
 
-    def throw_parse_error(self, problem):
-        raise RecipeParseError(self.filename, self.line_index + 1,
-                self.index + 1, problem)
+    def throw_parse_error(self, problem, cls=None, **kwargs):
+        if cls is None:
+            cls = RecipeParseError
+        raise cls(self.filename, self.line_index + 1,
+                self.index + 1, problem, **kwargs)
 
     def throw_expecting_error(self, expected, actual):
         self.throw_parse_error("Expecting '%s', got '%s'"
