@@ -400,6 +400,11 @@ class RecipeParserTests(TestCaseInTempDir):
                 "of the one used on line 1.", self.get_recipe,
                 self.basic_header_and_branch + "nest nest url foo/..\n")
 
+    def test_error_absolute_path(self):
+        exc = self.assertParseError(3, 15, "Absolute paths are not allowed: "
+                "/etc/passwd", self.get_recipe, self.basic_header_and_branch
+                + "nest nest url /etc/passwd\n")
+
 
 class BuildTreeTests(TestCaseWithTransport):
 
