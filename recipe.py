@@ -311,8 +311,13 @@ def resolve_revisions(base_branch, if_changed_from=None):
     for token in ok_to_preserve:
         checked_version = checked_version.replace(token, "")
     if "{" in checked_version:
+        available_tokens = [TIME_VAR, REVNO_VAR]
+        for name in base_branch.list_branch_names():
+            available_tokens.append(REVNO_PARAM_VAR % name)
+        available_tokens.append(DEBUPSTREAM_VAR)
         raise errors.BzrCommandError("deb-version not fully "
-                "expanded: %s" % base_branch.deb_version)
+                "expanded: %s. Valid substitutions are: %s"
+                % (base_branch.deb_version, available_tokens))
     if if_changed_from is not None and not changed:
         return False
     return True
