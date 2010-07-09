@@ -23,7 +23,6 @@ import pwd
 import re
 import socket
 import shutil
-import StringIO
 import subprocess
 import tempfile
 
@@ -171,7 +170,7 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
         file_found = True
         cl_f = open(cl_path)
         try:
-            contents = StringIO.StringIO(cl_f.read())
+            contents = cl_f.read()
         finally:
             cl_f.close()
         cl = changelog.Changelog(file=contents)
