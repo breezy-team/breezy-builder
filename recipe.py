@@ -695,6 +695,7 @@ class RecipeParser(object):
         self.current_line = self.lines[self.line_index]
         self.current_indent_level = 0
         self.seen_nicks = set()
+        self.seen_paths = {".": 1}
         (version, deb_version) = self.parse_header()
         self.version = version
         last_instruction = None
@@ -810,7 +811,17 @@ class RecipeParser(object):
     def parse_branch_location(self):
         # FIXME: Needs a better term
         self.parse_whitespace("the location to nest")
-        location = self.take_to_whitespace("the location to nest")
+        location = self.peek_to_whitespace()
+        if location is None:
+            self.throw_parse_error("End of line while looking for the "
+                    "location to nest")
+        norm_location = os.path.normpath(location)
+        if norm_location in self.seen_paths:
+            self.throw_parse_error("The path '%s' is a duplicate of "
+                    "the one used on line %d." % (location,
+                        self.seen_paths[norm_location]))
+        self.take_chars(len(location))
+        self.seen_paths[norm_location] = self.line_index + 1
         return location
 
     def parse_optional_revspec(self):

@@ -377,14 +377,28 @@ class RecipeParserTests(TestCaseInTempDir):
                 + "run touch test \n")
 
     def test_error_on_forbidden_instructions(self):
-        base_branch = self.get_recipe(self.basic_header_and_branch
-                + "run some command")
         exc = self.assertParseError(3, 1, "The 'run' instruction is "
                 "forbidden.", self.get_recipe, self.basic_header_and_branch
                 + "run touch test\n",
                 forbidden_instructions=[RUN_INSTRUCTION])
         self.assertTrue(isinstance(exc, ForbiddenInstructionError))
         self.assertEqual("run", exc.instruction_name)
+
+    def test_error_on_duplicate_path(self):
+        exc = self.assertParseError(3, 15, "The path '.' is a duplicate "
+                "of the one used on line 1.", self.get_recipe,
+                self.basic_header_and_branch + "nest nest url .\n")
+
+    def test_error_on_duplicate_path_with_another_nest(self):
+        exc = self.assertParseError(4, 16, "The path 'foo' is a duplicate "
+                "of the one used on line 3.", self.get_recipe,
+                self.basic_header_and_branch + "nest nest url foo\n"
+                + "nest nest2 url foo\n")
+
+    def test_duplicate_path_check_uses_normpath(self):
+        exc = self.assertParseError(3, 15, "The path 'foo/..' is a duplicate "
+                "of the one used on line 1.", self.get_recipe,
+                self.basic_header_and_branch + "nest nest url foo/..\n")
 
 
 class BuildTreeTests(TestCaseWithTransport):
