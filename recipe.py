@@ -25,10 +25,16 @@ from bzrlib import (
         revision,
         revisionspec,
         tag,
+        trace,
         transport,
-        ui,
         urlutils,
         )
+
+
+try:
+    from debian import changelog
+except ImportError:
+    from debian_bundle import changelog
 
 
 def subprocess_setup():
@@ -39,6 +45,29 @@ MERGE_INSTRUCTION = "merge"
 NEST_PART_INSTRUCTION = "nest-part"
 NEST_INSTRUCTION = "nest"
 RUN_INSTRUCTION = "run"
+
+TIME_VAR = "{time}"
+DATE_VAR = "{date}"
+REVNO_VAR = "{revno}"
+REVNO_PARAM_VAR = "{revno:%s}"
+DEBUPSTREAM_VAR = "{debupstream}"
+
+ok_to_preserve = [DEBUPSTREAM_VAR]
+# The variables that don't require substitution in their name
+simple_vars = [TIME_VAR, DATE_VAR, REVNO_VAR, DEBUPSTREAM_VAR]
+
+
+def check_expanded_deb_version(base_branch):
+    checked_version = base_branch.deb_version
+    for token in ok_to_preserve:
+        checked_version = checked_version.replace(token, "")
+    if "{" in checked_version:
+        available_tokens = simple_vars
+        for name in base_branch.list_branch_names():
+            available_tokens.append(REVNO_PARAM_VAR % name)
+        raise errors.BzrCommandError("deb-version not fully "
+                "expanded: %s. Valid substitutions are: %s"
+                % (base_branch.deb_version, available_tokens))
 
 
 class CommandFailedError(errors.BzrError):
@@ -115,10 +144,10 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
         # We do a "pull"
         if tree_to is not None:
             # FIXME: should these pulls overwrite?
-            result = tree_to.pull(br_from, stop_revision=revision_id,
+            tree_to.pull(br_from, stop_revision=revision_id,
                     possible_transports=possible_transports)
         else:
-            result = br_to.pull(br_from, stop_revision=revision_id,
+            br_to.pull(br_from, stop_revision=revision_id,
                     possible_transports=possible_transports)
             tree_to = br_to.bzrdir.create_workingtree()
             # Ugh, we have to assume that the caller replaces their reference
@@ -148,7 +177,7 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
     return tree_to, br_to
 
 
-def merge_branch(child_branch, tree_to, br_to):
+def merge_branch(child_branch, tree_to, br_to, possible_transports=None):
     """Merge the branch specified by child_branch.
 
     :param child_branch: the RecipeBranch to retrieve the branch and revision to
@@ -156,38 +185,44 @@ def merge_branch(child_branch, tree_to, br_to):
     :param tree_to: the WorkingTree to merge in to.
     :param br_to: the Branch to merge in to.
     """
-    merge_from = branch.Branch.open(child_branch.url)
-    merge_from.lock_read()
+    if child_branch.branch is None:
+        child_branch.branch = branch.Branch.open(child_branch.url,
+                possible_transports=possible_transports)
+    child_branch.branch.lock_read()
     try:
-        pb = ui.ui_factory.nested_progress_bar()
-        try:
-            tag._merge_tags_if_possible(merge_from, br_to)
-            if child_branch.revspec is not None:
-                merge_revspec = revisionspec.RevisionSpec.from_string(
-                        child_branch.revspec)
-                merge_revid = merge_revspec.as_revision_id(merge_from)
-            else:
-                merge_revid = merge_from.last_revision()
-            child_branch.revid = merge_revid
-            merger = merge.Merger.from_revision_ids(pb, tree_to, merge_revid,
-                    other_branch=merge_from, tree_branch=br_to)
-            merger.merge_type = merge.Merge3Merger
-            if (merger.base_rev_id == merger.other_rev_id and
-                    merger.other_rev_id is not None):
-                # Nothing to do.
-                return
-            conflict_count = merger.do_merge()
-            merger.set_pending()
-            if conflict_count:
-                # FIXME: better reporting
-                raise errors.BzrCommandError("Conflicts from merge")
-            tree_to.commit("Merge %s" %
-                    urlutils.unescape_for_display(
-                        child_branch.url, 'utf-8'))
-        finally:
-            pb.finished()
+        tag._merge_tags_if_possible(child_branch.branch, br_to)
+        if child_branch.revspec is not None:
+            merge_revspec = revisionspec.RevisionSpec.from_string(
+                    child_branch.revspec)
+            try:
+                merge_revid = merge_revspec.as_revision_id(
+                    child_branch.branch)
+            except errors.InvalidRevisionSpec, e:
+                # Give the user a hint if they didn't mean to speciy
+                # a revspec.
+                e.extra = (". Did you not mean to specify a revspec "
+                    "at the end of the merge line?")
+                raise e
+        else:
+            merge_revid = child_branch.branch.last_revision()
+        child_branch.revid = merge_revid
+        merger = merge.Merger.from_revision_ids(None, tree_to, merge_revid,
+                other_branch=child_branch.branch, tree_branch=br_to)
+        merger.merge_type = merge.Merge3Merger
+        if (merger.base_rev_id == merger.other_rev_id and
+                merger.other_rev_id is not None):
+            # Nothing to do.
+            return
+        conflict_count = merger.do_merge()
+        merger.set_pending()
+        if conflict_count:
+            # FIXME: better reporting
+            raise errors.BzrCommandError("Conflicts from merge")
+        tree_to.commit("Merge %s" %
+                urlutils.unescape_for_display(
+                    child_branch.url, 'utf-8'))
     finally:
-        merge_from.unlock()
+        child_branch.branch.unlock()
 
 
 def nest_part_branch(op, child_branch, tree_to, br_to, subpath,
@@ -203,8 +238,6 @@ def nest_part_branch(op, child_branch, tree_to, br_to, subpath,
     :param target_subdir: (optional) directory in target to merge that
         subpath into.  Defaults to basename of subpath.
     """
-    pb = ui.ui_factory.nested_progress_bar()
-    op.add_cleanup(pb.finished)
     merge_from = branch.Branch.open(child_branch.url)
     merge_from.lock_read()
     op.add_cleanup(merge_from.unlock)
@@ -233,48 +266,48 @@ def nest_part_branch(op, child_branch, tree_to, br_to, subpath,
         (subpath, urlutils.unescape_for_display(child_branch.url, 'utf-8')))
 
 
-def update_branch(base_branch, tree_to, br_to, to_transport):
-    from_location = base_branch.url
-    accelerator_tree, br_from = bzrdir.BzrDir.open_tree_or_branch(
-                        from_location)
-    br_from.lock_read()
+def update_branch(base_branch, tree_to, br_to, to_transport,
+        possible_transports=None):
+    if base_branch.branch is None:
+        base_branch.branch = branch.Branch.open(base_branch.url,
+                possible_transports=possible_transports)
+    base_branch.branch.lock_read()
     try:
         if base_branch.revspec is not None:
             revspec = revisionspec.RevisionSpec.from_string(
                     base_branch.revspec)
-            revision_id = revspec.as_revision_id(br_from)
+            revision_id = revspec.as_revision_id(base_branch.branch)
         else:
-            revision_id = br_from.last_revision()
+            revision_id = base_branch.branch.last_revision()
         base_branch.revid = revision_id
-        tree_to, br_to = pull_or_branch(tree_to, br_to, br_from,
+        tree_to, br_to = pull_or_branch(tree_to, br_to, base_branch.branch,
                 to_transport, revision_id,
-                accelerator_tree=accelerator_tree,
-                possible_transports=[to_transport])
+                possible_transports=possible_transports)
     finally:
-        br_from.unlock()
+        base_branch.branch.unlock()
     return tree_to, br_to
 
 
 def _resolve_revisions_recurse(new_branch, substitute_revno,
         if_changed_from=None):
     changed = False
-    br_from = branch.Branch.open(new_branch.url)
-    br_from.lock_read()
+    new_branch.branch = branch.Branch.open(new_branch.url)
+    new_branch.branch.lock_read()
     try:
         if new_branch.revspec is not None:
             revspec = revisionspec.RevisionSpec.from_string(
                     new_branch.revspec)
-            revision_id = revspec.as_revision_id(br_from)
+            revision_id = revspec.as_revision_id(new_branch.branch)
         else:
-            revision_id = br_from.last_revision()
+            revision_id = new_branch.branch.last_revision()
         new_branch.revid = revision_id
         def get_revno():
             try:
-                revno = br_from.revision_id_to_revno(revision_id)
+                revno = new_branch.branch.revision_id_to_revno(revision_id)
                 return str(revno)
             except errors.NoSuchRevision:
                 # We need to load and use the full revno map after all
-                result = br_from.get_revision_id_to_revno_map().get(
+                result = new_branch.branch.get_revision_id_to_revno_map().get(
                         revision_id)
             if result is None:
                 return result
@@ -287,14 +320,13 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
                 changed_revspec = revisionspec.RevisionSpec.from_string(
                         if_changed_from.revspec)
                 changed_revision_id = changed_revspec.as_revision_id(
-                        br_from)
+                        new_branch.branch)
             else:
-                changed_revision_id = br_from.last_revision()
+                changed_revision_id = new_branch.branch.last_revision()
             if revision_id != changed_revision_id:
                 changed = True
         for index, instruction in enumerate(new_branch.child_branches):
             child_branch = instruction.recipe_branch
-            nest_location = instruction.nest_path
             if_changed_child = None
             if if_changed_from is not None:
                 if_changed_child = if_changed_from.child_branches[index].recipe_branch
@@ -306,7 +338,7 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
                     changed = child_changed
         return changed
     finally:
-        br_from.unlock()
+        new_branch.branch.unlock()
 
 
 def resolve_revisions(base_branch, if_changed_from=None):
@@ -334,30 +366,20 @@ def resolve_revisions(base_branch, if_changed_from=None):
             if_changed_from=if_changed_from_revisions)
     if not changed:
         changed = changed_revisions
-    ok_to_preserve = ["{debupstream}"]
-    checked_version = base_branch.deb_version
-    for token in ok_to_preserve:
-        checked_version = checked_version.replace(token, "")
-    if "{" in checked_version:
-        raise errors.BzrCommandError("deb-version not fully "
-                "expanded: %s" % base_branch.deb_version)
+    check_expanded_deb_version(base_branch)
     if if_changed_from is not None and not changed:
         return False
     return True
 
 
-def build_tree(base_branch, target_path):
-    """Build the RecipeBranch at a path.
-
-    Follow the instructions embodied in RecipeBranch and build a tree
-    based on them rooted at target_path. If target_path exists and
-    is the root of the branch then the branch will be updated based on
-    what the RecipeBranch requires.
-
-    :param base_branch: a RecipeBranch to build.
-    :param target_path: the path to the base of the desired output.
-    """
-    to_transport = transport.get_transport(target_path)
+def _build_inner_tree(base_branch, target_path, possible_transports=None):
+    revision_of = ""
+    if base_branch.revspec is not None:
+        revision_of = "revision '%s' of " % base_branch.revspec
+    trace.note("Retrieving %s'%s' to put at '%s'."
+        % (revision_of, base_branch.url, target_path))
+    to_transport = transport.get_transport(target_path,
+            possible_transports=possible_transports)
     try:
         tree_to, br_to = bzrdir.BzrDir.open_tree_or_branch(target_path)
         # Should we commit any changes in the tree here? If we don't
@@ -372,7 +394,7 @@ def build_tree(base_branch, target_path):
             br_to.lock_write()
         try:
             tree_to, br_to = update_branch(base_branch, tree_to, br_to,
-                    to_transport)
+                    to_transport, possible_transports=possible_transports)
             for instruction in base_branch.child_branches:
                 instruction.apply(target_path, tree_to, br_to)
         finally:
@@ -384,49 +406,25 @@ def build_tree(base_branch, target_path):
             tree_to.unlock()
 
 
-def _add_child_branches_to_manifest(child_branches, indent_level):
-    manifest = ""
-    for instruction in child_branches:
-        child_branch = instruction.recipe_branch
-        nest_location = instruction.nest_path
-        if child_branch is None:
-            manifest += "%s%s %s\n" % ("  " * indent_level, RUN_INSTRUCTION,
-                    nest_location)
-        else:
-            assert child_branch.revid is not None, "Branch hasn't been built"
-            if nest_location is not None:
-                manifest += "%s%s %s %s %s revid:%s\n" % \
-                             ("  " * indent_level, NEST_INSTRUCTION,
-                              child_branch.name,
-                              child_branch.url, nest_location,
-                              child_branch.revid)
-                manifest += _add_child_branches_to_manifest(
-                        child_branch.child_branches, indent_level+1)
-            else:
-                manifest += "%s%s %s %s revid:%s\n" % \
-                             ("  " * indent_level, MERGE_INSTRUCTION,
-                              child_branch.name,
-                              child_branch.url, child_branch.revid)
-    return manifest
+def build_tree(base_branch, target_path, possible_transports=None):
+    """Build the RecipeBranch at a path.
 
+    Follow the instructions embodied in RecipeBranch and build a tree
+    based on them rooted at target_path. If target_path exists and
+    is the root of the branch then the branch will be updated based on
+    what the RecipeBranch requires.
 
-def build_manifest(base_branch):
-    manifest = "# bzr-builder format %s deb-version " % str(base_branch.format)
-    # TODO: should we store the expanded version that was used?
-    manifest += "%s\n" % (base_branch.deb_version,)
-    assert base_branch.revid is not None, "Branch hasn't been built"
-    manifest += "%s revid:%s\n" % (base_branch.url, base_branch.revid)
-    manifest += _add_child_branches_to_manifest(base_branch.child_branches, 0)
-    # Sanity check.
-    # TODO: write a function that compares the result of this parse with
-    # the branch that we built it from.
-    RecipeParser(manifest).parse()
-    return manifest
+    :param base_branch: a RecipeBranch to build.
+    :param target_path: the path to the base of the desired output.
+    """
+    trace.note("Building tree.")
+    _build_inner_tree(base_branch, target_path,
+            possible_transports=possible_transports)
 
 
 class ChildBranch(object):
     """A child branch in a recipe.
-    
+
     If the nest path is not None it is the path relative to the recipe branch
     where the child branch should be placed.  If it is None then the child
     branch should be merged instead of nested.
@@ -435,8 +433,8 @@ class ChildBranch(object):
     def __init__(self, recipe_branch, nest_path=None):
         self.recipe_branch = recipe_branch
         self.nest_path = nest_path
-        
-    def apply(self, target_path, tree_to, br_to):
+
+    def apply(self, target_path, tree_to, br_to, possible_transports=None):
         raise NotImplementedError(self.apply)
 
     def as_tuple(self):
@@ -445,8 +443,9 @@ class ChildBranch(object):
 
 class CommandInstruction(ChildBranch):
 
-    def apply(self, target_path, tree_to, br_to):
+    def apply(self, target_path, tree_to, br_to, possible_transports=None):
         # it's a command
+        trace.note("Running '%s' in '%s'." % (self.nest_path, target_path))
         proc = subprocess.Popen(self.nest_path, cwd=target_path,
             preexec_fn=subprocess_setup, shell=True, stdin=subprocess.PIPE)
         proc.communicate()
@@ -456,8 +455,14 @@ class CommandInstruction(ChildBranch):
 
 class MergeInstruction(ChildBranch):
 
-    def apply(self, target_path, tree_to, br_to):
-        merge_branch(self.recipe_branch, tree_to, br_to)
+    def apply(self, target_path, tree_to, br_to, possible_transports=None):
+        revision_of = ""
+        if self.recipe_branch.revspec is not None:
+            revision_of = "revision '%s' of " % self.recipe_branch.revspec
+        trace.note("Merging %s'%s' in to '%s'."
+                % (revision_of, self.recipe_branch.url, target_path))
+        merge_branch(self.recipe_branch, tree_to, br_to,
+                possible_transports=possible_transports)
 
 
 class NestPartInstruction(ChildBranch):
@@ -476,10 +481,10 @@ class NestPartInstruction(ChildBranch):
 
 class NestInstruction(ChildBranch):
 
-    def apply(self, target_path, tree_to, br_to):
-        # FIXME: pass possible_transports around
-        build_tree(self.recipe_branch,
-            target_path=os.path.join(target_path, self.nest_path))
+    def apply(self, target_path, tree_to, br_to, possible_transports=None):
+        _build_inner_tree(self.recipe_branch,
+            target_path=os.path.join(target_path, self.nest_path),
+            possible_transports=possible_transports)
 
 
 class RecipeBranch(object):
@@ -489,7 +494,7 @@ class RecipeBranch(object):
     root branch), and optionally child branches that are either merged
     or nested.
 
-    The child_branches attribute is a list of tuples of ChildBranch objects. 
+    The child_branches attribute is a list of tuples of ChildBranch objects.
     The revid attribute records the revid that the url and revspec resolved
     to when the RecipeBranch was built, or None if it has not been built.
 
@@ -510,6 +515,7 @@ class RecipeBranch(object):
         self.revspec = revspec
         self.child_branches = []
         self.revid = None
+        self.branch = None
 
     def merge_branch(self, branch):
         """Merge a child branch in to this one.
@@ -566,9 +572,31 @@ class RecipeBranch(object):
             if ((child_branch is None and other_child_branch is not None)
                     or (child_branch is not None and other_child_branch is None)):
                 return True
-            if child_branch.different_shape_to(other_child_branch):
+            # if child_branch is None then other_child_branch must be
+            # None too, meaning that they are both run instructions,
+            # we would compare their nest locations (commands), but
+            # that has already been done, so just guard
+            if (child_branch is not None
+                    and child_branch.different_shape_to(other_child_branch)):
                 return True
         return False
+
+    def _list_child_names(self):
+        child_names = []
+        for instruction in self.child_branches:
+            child_branch = instruction.recipe_branch
+            if child_branch is None:
+                continue
+            child_names += child_branch.list_branch_names()
+        return child_names
+
+    def list_branch_names(self):
+        """List all of the branch names under this one.
+
+        :return: a list of the branch names.
+        :rtype: list(str)
+        """
+        return [self.name] + self._list_child_names()
 
 
 class BaseRecipeBranch(RecipeBranch):
@@ -595,9 +623,9 @@ class BaseRecipeBranch(RecipeBranch):
             needed.
         """
         if branch_name is None:
-            subst_string = "{revno}"
+            subst_string = REVNO_VAR
         else:
-            subst_string = "{revno:%s}" % branch_name
+            subst_string = REVNO_PARAM_VAR % branch_name
         if subst_string in self.deb_version:
             revno = get_revno_cb()
             if revno is None:
@@ -611,9 +639,75 @@ class BaseRecipeBranch(RecipeBranch):
 
         :param time: a datetime.datetime with the desired time.
         """
-        if "{time}" in self.deb_version:
-            self.deb_version = self.deb_version.replace("{time}",
+        if TIME_VAR in self.deb_version:
+            self.deb_version = self.deb_version.replace(TIME_VAR,
                     time.strftime("%Y%m%d%H%M"))
+        if DATE_VAR in self.deb_version:
+            self.deb_version = self.deb_version.replace(DATE_VAR,
+                    time.strftime("%Y%m%d"))
+
+    def substitute_debupstream(self, version):
+        """Substitute {debupstream} in to deb_version if needed.
+
+        :param version: the Version object to take the upstream version
+            from.
+        """
+        if DEBUPSTREAM_VAR in self.deb_version:
+            # Should we include the epoch?
+            self.deb_version = self.deb_version.replace(DEBUPSTREAM_VAR,
+                    version.upstream_version)
+
+    def _add_child_branches_to_manifest(self, child_branches, indent_level):
+        manifest = ""
+        for instruction in child_branches:
+            child_branch = instruction.recipe_branch
+            nest_location = instruction.nest_path
+            if child_branch is None:
+                manifest += "%s%s %s\n" % ("  " * indent_level, RUN_INSTRUCTION,
+                        nest_location)
+            else:
+                if child_branch.revid is not None:
+                    revid_part = " revid:%s" % child_branch.revid
+                elif child_branch.revspec is not None:
+                    revid_part = " %s" % child_branch.revspec
+                else:
+                    revid_part = ""
+                if nest_location is not None:
+                    manifest += "%s%s %s %s %s%s\n" % \
+                                 ("  " * indent_level, NEST_INSTRUCTION,
+                                  child_branch.name,
+                                  child_branch.url, nest_location,
+                                  revid_part)
+                    manifest += self._add_child_branches_to_manifest(
+                            child_branch.child_branches, indent_level+1)
+                else:
+                    manifest += "%s%s %s %s%s\n" % \
+                                 ("  " * indent_level, MERGE_INSTRUCTION,
+                                  child_branch.name,
+                                  child_branch.url, revid_part)
+        return manifest
+
+
+    def __str__(self):
+        manifest = "# bzr-builder format %s deb-version " % str(self.format)
+        # TODO: should we store the expanded version that was used?
+        manifest += "%s\n" % (self.deb_version,)
+        if self.revid is not None:
+            manifest += "%s revid:%s\n" % (self.url, self.revid)
+        elif self.revspec is not None:
+            manifest += "%s %s\n" % (self.url, self.revspec)
+        else:
+            manifest += "%s\n" % (self.url,)
+        manifest += self._add_child_branches_to_manifest(self.child_branches,
+                0)
+        # Sanity check.
+        # TODO: write a function that compares the result of this parse with
+        # the branch that we built it from.
+        RecipeParser(manifest).parse()
+        return manifest
+
+    def list_branch_names(self):
+        return self._list_child_names()
 
 
 class RecipeParseError(errors.BzrError):
@@ -622,6 +716,13 @@ class RecipeParseError(errors.BzrError):
     def __init__(self, filename, line, char, problem):
         errors.BzrError.__init__(self, filename=filename, line=line, char=char,
                 problem=problem)
+
+
+class ForbiddenInstructionError(RecipeParseError):
+
+    def __init__(self, filename, line, char, problem, instruction_name=None):
+        RecipeParseError.__init__(self, filename, line, char, problem)
+        self.instruction_name = instruction_name
 
 
 class RecipeParser(object):
@@ -652,9 +753,12 @@ class RecipeParser(object):
         if filename is None:
             self.filename = "recipe"
 
-    def parse(self):
+    def parse(self, forbidden_instructions=None):
         """Parse the recipe.
 
+        :param forbidden_instructions: a list of instructions that you
+            don't want to allow. Defaults to None allowing them all.
+        :type forbidden_instructions: list(str) or None
         :return: a RecipeBranch representing the recipe.
         """
         self.lines = self.text.split("\n")
@@ -662,12 +766,21 @@ class RecipeParser(object):
         self.line_index = 0
         self.current_line = self.lines[self.line_index]
         self.current_indent_level = 0
+        self.seen_nicks = set()
+        self.seen_paths = {".": 1}
         (version, deb_version) = self.parse_header()
         self.version = version
         last_instruction = None
         active_branches = []
         last_branch = None
         while self.line_index < len(self.lines):
+            if self.is_blankline():
+                self.new_line()
+                continue
+            comment = self.parse_comment_line()
+            if comment is not None:
+                self.new_line()
+                continue
             old_indent_level = self.parse_indent()
             if old_indent_level is not None:
                 if (old_indent_level < self.current_indent_level
@@ -679,10 +792,6 @@ class RecipeParser(object):
                 else:
                     unindent = self.current_indent_level - old_indent_level
                     active_branches = active_branches[:unindent]
-            comment = self.parse_comment_line()
-            if comment is not None:
-                self.new_line()
-                continue
             if last_instruction is None:
                 url = self.take_to_whitespace("branch to start from")
                 revspec = self.parse_optional_revspec()
@@ -692,7 +801,8 @@ class RecipeParser(object):
                 active_branches = [last_branch]
                 last_instruction = ""
             else:
-                instruction = self.parse_instruction()
+                instruction = self.parse_instruction(
+                    forbidden_instructions=forbidden_instructions)
                 if instruction == RUN_INSTRUCTION:
                     self.parse_whitespace("the command")
                     command = self.take_to_newline().strip()
@@ -739,7 +849,7 @@ class RecipeParser(object):
         self.new_line()
         return version, deb_version
 
-    def parse_instruction(self):
+    def parse_instruction(self, forbidden_instructions=None):
         if self.version < 0.2:
             options = (MERGE_INSTRUCTION, NEST_INSTRUCTION)
             options_str = "'%s' or '%s'" % options
@@ -755,6 +865,12 @@ class RecipeParser(object):
             self.throw_parse_error("End of line while looking for %s"
                     % options_str)
         if instruction in options:
+            if forbidden_instructions is not None:
+                if instruction in forbidden_instructions:
+                    self.throw_parse_error("The '%s' instruction is "
+                            "forbidden." % instruction,
+                            cls=ForbiddenInstructionError,
+                            instruction_name=instruction)
             self.take_chars(len(instruction))
             return instruction
         self.throw_parse_error("Expecting %s, got '%s'"
@@ -762,7 +878,15 @@ class RecipeParser(object):
 
     def parse_branch_id(self):
         self.parse_whitespace("the branch id")
-        branch_id = self.take_to_whitespace("the branch id")
+        branch_id = self.peek_to_whitespace()
+        if branch_id is None:
+            self.throw_parse_error("End of line while looking for the "
+                    "branch id")
+        if branch_id in self.seen_nicks:
+            self.throw_parse_error("'%s' was already used to identify "
+                    "a branch." % branch_id)
+        self.take_chars(len(branch_id))
+        self.seen_nicks.add(branch_id)
         return branch_id
 
     def parse_branch_url(self):
@@ -773,7 +897,23 @@ class RecipeParser(object):
     def parse_branch_location(self):
         # FIXME: Needs a better term
         self.parse_whitespace("the location to nest")
-        location = self.take_to_whitespace("the location to nest")
+        location = self.peek_to_whitespace()
+        if location is None:
+            self.throw_parse_error("End of line while looking for the "
+                    "location to nest")
+        norm_location = os.path.normpath(location)
+        if norm_location in self.seen_paths:
+            self.throw_parse_error("The path '%s' is a duplicate of "
+                    "the one used on line %d." % (location,
+                        self.seen_paths[norm_location]))
+        if os.path.isabs(norm_location):
+            self.throw_parse_error("Absolute paths are not allowed: %s"
+                    % location)
+        if norm_location.startswith(".."):
+            self.throw_parse_error("Paths outside the current directory "
+                    "are not allowed: %s" % location)
+        self.take_chars(len(location))
+        self.seen_paths[norm_location] = self.line_index + 1
         return location
 
     def parse_subpath(self):
@@ -800,9 +940,11 @@ class RecipeParser(object):
             self.take_chars(len(path))
         return path
 
-    def throw_parse_error(self, problem):
-        raise RecipeParseError(self.filename, self.line_index + 1,
-                self.index + 1, problem)
+    def throw_parse_error(self, problem, cls=None, **kwargs):
+        if cls is None:
+            cls = RecipeParseError
+        raise cls(self.filename, self.line_index + 1,
+                self.index + 1, problem, **kwargs)
 
     def throw_expecting_error(self, expected, actual):
         self.throw_parse_error("Expecting '%s', got '%s'"
@@ -824,6 +966,12 @@ class RecipeParser(object):
             self.current_line = None
         else:
             self.current_line = self.lines[self.line_index]
+
+    def is_blankline(self):
+        whitespace = self.peek_whitespace()
+        if whitespace is None:
+            return True
+        return self.peek_char(skip=len(whitespace)) is None
 
     def take_char(self):
         if self.index >= len(self.current_line):
@@ -892,6 +1040,18 @@ class RecipeParser(object):
             self.take_char()
             ret += actual
             actual = self.peek_char()
+        return ret
+
+    def peek_whitespace(self):
+        ret = ""
+        char = self.peek_char()
+        if char is None:
+            return char
+        count = 0
+        while char is not None and char in self.whitespace_chars:
+            ret += char
+            count += 1
+            char = self.peek_char(skip=count)
         return ret
 
     def parse_word(self, expected, require_whitespace=True):
@@ -970,10 +1130,14 @@ class RecipeParser(object):
         return text
 
     def parse_comment_line(self):
-        if self.peek_char() is None:
+        whitespace = self.peek_whitespace()
+        if whitespace is None:
             return ""
-        if self.peek_char() != "#":
+        if self.peek_char(skip=len(whitespace)) is None:
+            return ""
+        if self.peek_char(skip=len(whitespace)) != "#":
             return None
+        self.parse_whitespace(None, require=False)
         comment = self.current_line[self.index:]
         self.index += len(comment)
         return comment
