@@ -70,17 +70,17 @@ will nest the revision pointed to by the "1.0" tag of that branch. The format
 for the revisionspec is indentical to that taken by the "--revision" argument
 to many bzr commands, see "bzr help revisionspec".
 
-You can also merge specific subdirectories from a branch with a "merge-part"
+You can also merge specific subdirectories from a branch with a "nest-part"
 line like
 
-merge-part packaging lp:~foo-dev/foo/packaging -1 debian
+nest-part packaging lp:~foo-dev/foo/packaging -1 debian
 
 which specifies that the only the debian/ subdirectory from revision -1 (i.e.
 the latest revision) should be merged.  This works even if the branches share
 no revision history.  You can optionally specify the subdirectory in the target
 with a line like
 
-merge-part libfoo lp:libfoo -1 src lib/foo
+nest-part libfoo lp:libfoo -1 src lib/foo
 
 will put the "src" directory of libfoo in "lib/foo".
 
@@ -126,14 +126,14 @@ Instruction syntax summary:
 
   * nest NAME BRANCH TARGET-DIR [REVISION]
   * merge NAME BRANCH [REVISION]
-  * merge-part NAME BRANCH REVISION SUBDIR [TARGET-DIR]
+  * nest-part NAME BRANCH REVISION SUBDIR [TARGET-DIR]
   * run COMMAND
 
 Format versions:
 
   0.1 - original format.
   0.2 - added "run" instruction.
-  0.3 - added "merge-part" instruction.
+  0.3 - added "nest-part" instruction.
 """
 
 if __name__ == '__main__':

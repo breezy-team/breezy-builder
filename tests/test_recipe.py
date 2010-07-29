@@ -130,7 +130,7 @@ class RecipeParserTests(TestCaseInTempDir):
                 self.basic_header + "http://foo.org/ 2 foo")
 
     def tests_rejects_unknown_instruction(self):
-        self.assertParseError(3, 1, "Expecting 'merge', 'merge-part', 'nest' "
+        self.assertParseError(3, 1, "Expecting 'merge', 'nest', 'nest-part' "
                 "or 'run', got 'cat'", self.get_recipe,
                 self.basic_header + "http://foo.org/\n" + "cat")
 
@@ -149,25 +149,25 @@ class RecipeParserTests(TestCaseInTempDir):
                 "got 'bar'", self.get_recipe,
                 self.basic_header_and_branch + "merge foo url 2 bar")
 
-    def test_rejects_merge_part_no_name(self):
-        self.assertParseError(3, 12, "End of line while looking for "
+    def test_rejects_nest_part_no_name(self):
+        self.assertParseError(3, 11, "End of line while looking for "
                 "the branch id", self.get_recipe,
-                self.basic_header_and_branch + "merge-part ")
+                self.basic_header_and_branch + "nest-part ")
 
-    def test_rejects_merge_part_no_url(self):
-        self.assertParseError(3, 16, "End of line while looking for "
+    def test_rejects_nest_part_no_url(self):
+        self.assertParseError(3, 15, "End of line while looking for "
                 "the branch url", self.get_recipe,
-                self.basic_header_and_branch + "merge-part foo ")
+                self.basic_header_and_branch + "nest-part foo ")
 
-    def test_rejects_merge_part_no_revspec(self):
-        self.assertParseError(3, 23, "End of line while looking for "
+    def test_rejects_nest_part_no_revspec(self):
+        self.assertParseError(3, 22, "End of line while looking for "
                 "the revspec", self.get_recipe,
-                self.basic_header_and_branch + "merge-part foo url:// ")
+                self.basic_header_and_branch + "nest-part foo url:// ")
 
-    def test_rejects_merge_part_no_subpath(self):
-        self.assertParseError(3, 26, "End of line while looking for "
+    def test_rejects_nest_part_no_subpath(self):
+        self.assertParseError(3, 25, "End of line while looking for "
                 "the subpath to merge", self.get_recipe,
-                self.basic_header_and_branch + "merge-part foo url:// -1 ")
+                self.basic_header_and_branch + "nest-part foo url:// -1 ")
 
     def test_rejects_nest_no_name(self):
         self.assertParseError(3, 6, "End of line while looking for "
@@ -240,9 +240,9 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org")
 
-    def test_builds_recipe_with_merge_part(self):
+    def test_builds_recipe_with_nest_part(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
-                + "merge-part bar http://bar.org -1 some/path")
+                + "nest-part bar http://bar.org -1 some/path")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
         instruction = base_branch.child_branches[0]
@@ -252,9 +252,9 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual("some/path", instruction.subpath)
         self.assertEqual(None, instruction.target_subdir)
 
-    def test_builds_recipe_with_merge_part_target(self):
+    def test_builds_recipe_with_nest_part_target(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
-                + "merge-part bar http://bar.org -1 some/path target-subdir")
+                + "nest-part bar http://bar.org -1 some/path target-subdir")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
         instruction = base_branch.child_branches[0]
@@ -447,7 +447,7 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source1_rev_id, base_branch.revid)
         self.assertEqual(source2_rev_id, merged_branch.revid)
 
-    def test_build_tree_merge_part(self):
+    def test_build_tree_nest_part(self):
         """A recipe can specify a merge of just part of an unrelated tree."""
         source1 = self.make_source_branch("source1")
         source2 = self.make_source_branch("source2")
@@ -462,7 +462,7 @@ class BuildTreeTests(TestCaseWithTransport):
         base_branch = BaseRecipeBranch("source1", "1", 0.2)
         merged_branch = RecipeBranch("merged", "source2")
         # Merge just 'b' from source2; 'a' is untouched.
-        base_branch.merge_part_branch(merged_branch, "b")
+        base_branch.nest_part_branch(merged_branch, "b")
         build_tree(base_branch, "target")
         file_id = source1.path2id("a")
         self.check_file_contents("target/a", source1.get_file_text(file_id))
@@ -471,7 +471,7 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source1_rev_id, base_branch.revid)
         self.assertEqual(source2_rev_id, merged_branch.revid)
 
-    def test_build_tree_merge_part_explicit_target(self):
+    def test_build_tree_nest_part_explicit_target(self):
         """A recipe can specify a merge of just part of an unrelated tree into
         a specific subdirectory of the target tree.
         """
@@ -491,7 +491,7 @@ class BuildTreeTests(TestCaseWithTransport):
         base_branch = BaseRecipeBranch("source1", "1", 0.2)
         merged_branch = RecipeBranch("merged", "source2")
         # Merge just 'b' from source2; 'a' is untouched.
-        base_branch.merge_part_branch(merged_branch, "b", "dir/b")
+        base_branch.nest_part_branch(merged_branch, "b", "dir/b")
         build_tree(base_branch, "target")
         self.check_file_contents("target/dir/b", "new file")
         self.assertNotInWorkingTree("dir/not-b", "target")

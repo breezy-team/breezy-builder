@@ -36,7 +36,7 @@ def subprocess_setup():
 
 
 MERGE_INSTRUCTION = "merge"
-MERGE_PART_INSTRUCTION = "merge-part"
+NEST_PART_INSTRUCTION = "nest-part"
 NEST_INSTRUCTION = "nest"
 RUN_INSTRUCTION = "run"
 
@@ -190,7 +190,7 @@ def merge_branch(child_branch, tree_to, br_to):
         merge_from.unlock()
 
 
-def merge_part_branch(op, child_branch, tree_to, br_to, subpath,
+def nest_part_branch(op, child_branch, tree_to, br_to, subpath,
         target_subdir=None):
     """Merge the branch subdirectory specified by child_branch.
 
@@ -460,7 +460,7 @@ class MergeInstruction(ChildBranch):
         merge_branch(self.recipe_branch, tree_to, br_to)
 
 
-class MergePartInstruction(ChildBranch):
+class NestPartInstruction(ChildBranch):
 
     def __init__(self, recipe_branch, subpath, target_subdir):
         ChildBranch.__init__(self, recipe_branch)
@@ -469,7 +469,7 @@ class MergePartInstruction(ChildBranch):
 
     def apply(self, target_path, tree_to, br_to):
         from bzrlib.cleanup import OperationWithCleanups
-        op = OperationWithCleanups(merge_part_branch)
+        op = OperationWithCleanups(nest_part_branch)
         op.run(self.recipe_branch, tree_to, br_to, self.subpath,
             self.target_subdir)
 
@@ -518,7 +518,7 @@ class RecipeBranch(object):
         """
         self.child_branches.append(MergeInstruction(branch))
 
-    def merge_part_branch(self, branch, subpath=None, target_subdir=None):
+    def nest_part_branch(self, branch, subpath=None, target_subdir=None):
         """Merge subdir of a child branch into this one.
 
         :param branch: the RecipeBranch to merge.
@@ -528,7 +528,7 @@ class RecipeBranch(object):
             subpath into.  Defaults to basename of subpath.
         """
         self.child_branches.append(
-            MergePartInstruction(branch, subpath, target_subdir))
+            NestPartInstruction(branch, subpath, target_subdir))
 
     def nest_branch(self, location, branch):
         """Nest a child branch in to this one.
@@ -703,7 +703,7 @@ class RecipeParser(object):
                     url = self.parse_branch_url()
                     if instruction == NEST_INSTRUCTION:
                         location = self.parse_branch_location()
-                    if instruction == MERGE_PART_INSTRUCTION:
+                    if instruction == NEST_PART_INSTRUCTION:
                         revspec = self.parse_revspec()
                         path = self.parse_subpath()
                         target_subdir = self.parse_optional_path()
@@ -717,8 +717,8 @@ class RecipeParser(object):
                         active_branches[-1].nest_branch(location, last_branch)
                     elif instruction == MERGE_INSTRUCTION:
                         active_branches[-1].merge_branch(last_branch)
-                    elif instruction == MERGE_PART_INSTRUCTION:
-                        active_branches[-1].merge_part_branch(
+                    elif instruction == NEST_PART_INSTRUCTION:
+                        active_branches[-1].nest_part_branch(
                             last_branch, path, target_subdir)
                 last_instruction = instruction
         if len(active_branches) == 0:
@@ -747,8 +747,8 @@ class RecipeParser(object):
             options = (MERGE_INSTRUCTION, NEST_INSTRUCTION, RUN_INSTRUCTION)
             options_str = "'%s', '%s' or '%s'" % options
         else:
-            options = (MERGE_INSTRUCTION, MERGE_PART_INSTRUCTION,
-                NEST_INSTRUCTION, RUN_INSTRUCTION)
+            options = (MERGE_INSTRUCTION, NEST_INSTRUCTION,
+                NEST_PART_INSTRUCTION, RUN_INSTRUCTION)
             options_str = "'%s', '%s', '%s' or '%s'" % options
         instruction = self.peek_to_whitespace()
         if instruction is None:
