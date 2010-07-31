@@ -274,5 +274,5 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "deb-version $\nsource 1\n")])
         err = self.run_bzr("dailydeb -q test.recipe working --package foo",
                 retcode=3)[1]
-        self.assertEqual("bzr: ERROR: Invalid deb-version: $: "
-                "Could not parse version: $\n", err)
+        self.assertContainsRe(err, "bzr: ERROR: Invalid deb-version: \\$: "
+            "(Could not parse version: \\$|Invalid version string '\\$')\n")
