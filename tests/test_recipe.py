@@ -42,7 +42,7 @@ from bzrlib.plugins.builder.recipe import (
 class RecipeParserTests(TestCaseInTempDir):
 
     deb_version = "0.1-{revno}"
-    basic_header = ("# bzr-builder format 0.2 deb-version "
+    basic_header = ("# bzr-builder format 0.3 deb-version "
             + deb_version +"\n")
     basic_branch = "http://foo.org/"
     basic_header_and_branch = basic_header + basic_branch + "\n"
@@ -133,8 +133,8 @@ class RecipeParserTests(TestCaseInTempDir):
                 self.basic_header + "http://foo.org/ 2 foo")
 
     def tests_rejects_unknown_instruction(self):
-        self.assertParseError(3, 1, "Expecting 'merge', 'nest' or 'run', "
-                "got 'cat'", self.get_recipe,
+        self.assertParseError(3, 1, "Expecting 'merge', 'nest', 'nest-part' "
+                "or 'run', got 'cat'", self.get_recipe,
                 self.basic_header + "http://foo.org/\n" + "cat")
 
     def test_rejects_merge_no_name(self):
@@ -151,6 +151,21 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertParseError(3, 17, "Expecting the end of the line, "
                 "got 'bar'", self.get_recipe,
                 self.basic_header_and_branch + "merge foo url 2 bar")
+
+    def test_rejects_nest_part_no_name(self):
+        self.assertParseError(3, 11, "End of line while looking for "
+                "the branch id", self.get_recipe,
+                self.basic_header_and_branch + "nest-part ")
+
+    def test_rejects_nest_part_no_url(self):
+        self.assertParseError(3, 15, "End of line while looking for "
+                "the branch url", self.get_recipe,
+                self.basic_header_and_branch + "nest-part foo ")
+
+    def test_rejects_nest_part_no_subpath(self):
+        self.assertParseError(3, 22, "End of line while looking for "
+                "the subpath to merge", self.get_recipe,
+                self.basic_header_and_branch + "nest-part foo url:// ")
 
     def test_rejects_nest_no_name(self):
         self.assertParseError(3, 6, "End of line while looking for "
@@ -228,6 +243,42 @@ class RecipeParserTests(TestCaseInTempDir):
         child_branch, location = base_branch.child_branches[0].as_tuple()
         self.assertEqual(None, location)
         self.check_recipe_branch(child_branch, "bar", "http://bar.org")
+
+    def test_builds_recipe_with_nest_part(self):
+        base_branch = self.get_recipe(self.basic_header_and_branch
+                + "nest-part bar http://bar.org some/path")
+        self.check_base_recipe_branch(base_branch, "http://foo.org/",
+                num_child_branches=1)
+        instruction = base_branch.child_branches[0]
+        self.assertEqual(None, instruction.nest_path)
+        self.check_recipe_branch(
+            instruction.recipe_branch, "bar", "http://bar.org")
+        self.assertEqual("some/path", instruction.subpath)
+        self.assertEqual(None, instruction.target_subdir)
+
+    def test_builds_recipe_with_nest_part_target(self):
+        base_branch = self.get_recipe(self.basic_header_and_branch
+                + "nest-part bar http://bar.org some/path target-subdir")
+        self.check_base_recipe_branch(base_branch, "http://foo.org/",
+                num_child_branches=1)
+        instruction = base_branch.child_branches[0]
+        self.assertEqual(None, instruction.nest_path)
+        self.check_recipe_branch(
+            instruction.recipe_branch, "bar", "http://bar.org")
+        self.assertEqual("some/path", instruction.subpath)
+        self.assertEqual("target-subdir", instruction.target_subdir)
+
+    def test_builds_recipe_with_nest_part_revision(self):
+        base_branch = self.get_recipe(self.basic_header_and_branch
+                + "nest-part bar http://bar.org some/path target-subdir -1")
+        self.check_base_recipe_branch(base_branch, "http://foo.org/",
+                num_child_branches=1)
+        instruction = base_branch.child_branches[0]
+        self.assertEqual(None, instruction.nest_path)
+        self.check_recipe_branch(
+            instruction.recipe_branch, "bar", "http://bar.org", "-1")
+        self.assertEqual("some/path", instruction.subpath)
+        self.assertEqual("target-subdir", instruction.target_subdir)
 
     def test_builds_recipe_with_nest(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
@@ -376,6 +427,13 @@ class RecipeParserTests(TestCaseInTempDir):
                 , self.get_recipe, header + "http://foo.org/\n"
                 + "run touch test \n")
 
+    def test_old_format_rejects_nest_part(self):
+        header = ("# bzr-builder format 0.2 deb-version "
+                + self.deb_version +"\n")
+        self.assertParseError(3, 1, "Expecting 'merge', 'nest' or 'run', "
+                "got 'nest-part'" , self.get_recipe,
+                header + "http://foo.org/\nnest-part packaging foo test \n")
+
     def test_error_on_forbidden_instructions(self):
         exc = self.assertParseError(3, 1, "The 'run' instruction is "
                 "forbidden.", self.get_recipe, self.basic_header_and_branch
@@ -462,15 +520,17 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(revid, tree.last_revision())
         self.assertEqual(revid, base_branch.revid)
 
-    def test_build_tree_nested(self):
-        source1 = self.make_branch_and_tree("source1")
-        self.build_tree(["source1/a"])
+    def make_source_branch(self, relpath):
+        """Make a branch with one file and one commit."""
+        source1 = self.make_branch_and_tree(relpath)
+        self.build_tree([relpath + "/a"])
         source1.add(["a"])
-        source1_rev_id = source1.commit("one")
-        source2 = self.make_branch_and_tree("source2")
-        self.build_tree(["source2/a"])
-        source2.add(["a"])
-        source2_rev_id = source2.commit("one")
+        source1.commit("one")
+        return source1
+
+    def test_build_tree_nested(self):
+        source1_rev_id = self.make_source_branch("source1").last_revision()
+        source2_rev_id = self.make_source_branch("source2").last_revision()
         base_branch = BaseRecipeBranch("source1", "1", 0.2)
         nested_branch = RecipeBranch("nested", "source2")
         base_branch.nest_branch("sub", nested_branch)
@@ -484,10 +544,8 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source2_rev_id, nested_branch.revid)
 
     def test_build_tree_merged(self):
-        source1 = self.make_branch_and_tree("source1")
-        self.build_tree(["source1/a"])
-        source1.add(["a"])
-        source1_rev_id = source1.commit("one")
+        source1 = self.make_source_branch("source1")
+        source1_rev_id = source1.last_revision()
         source2 = source1.bzrdir.sprout("source2").open_workingtree()
         self.build_tree_contents([("source2/a", "other change")])
         source2_rev_id = source2.commit("one")
@@ -505,11 +563,60 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source1_rev_id, base_branch.revid)
         self.assertEqual(source2_rev_id, merged_branch.revid)
 
-    def test_build_tree_merge_twice(self):
+    def test_build_tree_nest_part(self):
+        """A recipe can specify a merge of just part of an unrelated tree."""
+        source1 = self.make_source_branch("source1")
+        source2 = self.make_source_branch("source2")
+        source1.lock_read()
+        self.addCleanup(source1.unlock)
+        source1_rev_id = source1.last_revision()
+        # Add 'b' to source2.
+        self.build_tree_contents([
+            ("source2/b", "new file"), ("source2/not-b", "other file")])
+        source2.add(["b", "not-b"])
+        source2_rev_id = source2.commit("two")
+        base_branch = BaseRecipeBranch("source1", "1", 0.2)
+        merged_branch = RecipeBranch("merged", "source2")
+        # Merge just 'b' from source2; 'a' is untouched.
+        base_branch.nest_part_branch(merged_branch, "b")
+        build_tree(base_branch, "target")
+        file_id = source1.path2id("a")
+        self.check_file_contents("target/a", source1.get_file_text(file_id))
+        self.check_file_contents("target/b", "new file")
+        self.assertNotInWorkingTree("not-b", "target")
+        self.assertEqual(source1_rev_id, base_branch.revid)
+        self.assertEqual(source2_rev_id, merged_branch.revid)
+
+    def test_build_tree_nest_part_explicit_target(self):
+        """A recipe can specify a merge of just part of an unrelated tree into
+        a specific subdirectory of the target tree.
+        """
         source1 = self.make_branch_and_tree("source1")
-        self.build_tree(["source1/a"])
-        source1.add(["a"])
-        source1_rev_id = source1.commit("one")
+        self.build_tree(["source1/dir/"])
+        source1.add(["dir"])
+        source1.commit("one")
+        source2 = self.make_source_branch("source2")
+        source1.lock_read()
+        self.addCleanup(source1.unlock)
+        source1_rev_id = source1.last_revision()
+        # Add 'b' to source2.
+        self.build_tree_contents([
+            ("source2/b", "new file"), ("source2/not-b", "other file")])
+        source2.add(["b", "not-b"])
+        source2_rev_id = source2.commit("two")
+        base_branch = BaseRecipeBranch("source1", "1", 0.2)
+        merged_branch = RecipeBranch("merged", "source2")
+        # Merge just 'b' from source2; 'a' is untouched.
+        base_branch.nest_part_branch(merged_branch, "b", "dir/b")
+        build_tree(base_branch, "target")
+        self.check_file_contents("target/dir/b", "new file")
+        self.assertNotInWorkingTree("dir/not-b", "target")
+        self.assertEqual(source1_rev_id, base_branch.revid)
+        self.assertEqual(source2_rev_id, merged_branch.revid)
+
+    def test_build_tree_merge_twice(self):
+        source1 = self.make_source_branch("source1")
+        source1_rev_id = source1.last_revision()
         source2 = source1.bzrdir.sprout("source2").open_workingtree()
         self.build_tree_contents([("source2/a", "other change")])
         source2_rev_id = source2.commit("one")
@@ -538,10 +645,7 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source3_rev_id, merged_branch2.revid)
 
     def test_build_tree_merged_with_conflicts(self):
-        source1 = self.make_branch_and_tree("source1")
-        self.build_tree(["source1/a"])
-        source1.add(["a"])
-        source1_rev_id = source1.commit("one")
+        source1 = self.make_source_branch("source1")
         source2 = source1.bzrdir.sprout("source2").open_workingtree()
         self.build_tree_contents([("source2/a", "other change\n")])
         source2_rev_id = source2.commit("one")
@@ -567,10 +671,8 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source2_rev_id, merged_branch.revid)
 
     def test_build_tree_with_revspecs(self):
-        source1 = self.make_branch_and_tree("source1")
-        self.build_tree(["source1/a"])
-        source1.add(["a"])
-        source1_rev_id = source1.commit("one")
+        source1 = self.make_source_branch("source1")
+        source1_rev_id = source1.last_revision()
         source2 = source1.bzrdir.sprout("source2").open_workingtree()
         self.build_tree_contents([("source2/a", "other change\n")])
         source2_rev_id = source2.commit("one")
