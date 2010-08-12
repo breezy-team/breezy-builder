@@ -162,15 +162,10 @@ class RecipeParserTests(TestCaseInTempDir):
                 "the branch url", self.get_recipe,
                 self.basic_header_and_branch + "nest-part foo ")
 
-    def test_rejects_nest_part_no_revspec(self):
-        self.assertParseError(3, 22, "End of line while looking for "
-                "the revspec", self.get_recipe,
-                self.basic_header_and_branch + "nest-part foo url:// ")
-
     def test_rejects_nest_part_no_subpath(self):
-        self.assertParseError(3, 25, "End of line while looking for "
+        self.assertParseError(3, 22, "End of line while looking for "
                 "the subpath to merge", self.get_recipe,
-                self.basic_header_and_branch + "nest-part foo url:// -1 ")
+                self.basic_header_and_branch + "nest-part foo url:// ")
 
     def test_rejects_nest_no_name(self):
         self.assertParseError(3, 6, "End of line while looking for "
@@ -251,25 +246,37 @@ class RecipeParserTests(TestCaseInTempDir):
 
     def test_builds_recipe_with_nest_part(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
-                + "nest-part bar http://bar.org -1 some/path")
+                + "nest-part bar http://bar.org some/path")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
         instruction = base_branch.child_branches[0]
         self.assertEqual(None, instruction.nest_path)
         self.check_recipe_branch(
-            instruction.recipe_branch, "bar", "http://bar.org", "-1")
+            instruction.recipe_branch, "bar", "http://bar.org")
         self.assertEqual("some/path", instruction.subpath)
         self.assertEqual(None, instruction.target_subdir)
 
-    def test_builds_recipe_with_nest_part_target(self):
+    def test_builds_recipe_with_nest_part_subdir(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
-                + "nest-part bar http://bar.org -1 some/path target-subdir")
+                + "nest-part bar http://bar.org some/path target-subdir")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
         instruction = base_branch.child_branches[0]
         self.assertEqual(None, instruction.nest_path)
         self.check_recipe_branch(
-            instruction.recipe_branch, "bar", "http://bar.org", "-1")
+            instruction.recipe_branch, "bar", "http://bar.org")
+        self.assertEqual("some/path", instruction.subpath)
+        self.assertEqual("target-subdir", instruction.target_subdir)
+
+    def test_builds_recipe_with_nest_part_subdir_and_revspec(self):
+        base_branch = self.get_recipe(self.basic_header_and_branch
+                + "nest-part bar http://bar.org some/path target-subdir 1234")
+        self.check_base_recipe_branch(base_branch, "http://foo.org/",
+                num_child_branches=1)
+        instruction = base_branch.child_branches[0]
+        self.assertEqual(None, instruction.nest_path)
+        self.check_recipe_branch(
+            instruction.recipe_branch, "bar", "http://bar.org", "1234")
         self.assertEqual("some/path", instruction.subpath)
         self.assertEqual("target-subdir", instruction.target_subdir)
 

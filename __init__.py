@@ -73,16 +73,16 @@ to many bzr commands. See "bzr help revisionspec" for details.
 You can also merge specific subdirectories from a branch with a "nest-part"
 line like
 
-nest-part packaging lp:~foo-dev/foo/packaging -1 debian
+nest-part packaging lp:~foo-dev/foo/packaging debian
 
-which specifies that the only the debian/ subdirectory from revision -1 (i.e.
-the latest revision) should be merged.  This works even if the branches share
-no revision history.  You can optionally specify the subdirectory in the target
-with a line like
+which specifies that the only the debian/ subdirectory should be merged.  This
+works even if the branches share no revision history.  You can optionally
+specify the revision and subdirectory in the target with a line like
 
-nest-part libfoo lp:libfoo -1 src lib/foo
+nest-part libfoo lp:libfoo src lib/foo tag:release-1.2
 
-will put the "src" directory of libfoo in "lib/foo".
+will put the "src" directory of libfoo in "lib/foo", using the revision of
+libfoo tagged "release-1.2"
 
 It is also possible to run an arbitrary command at a particular point in the
 construction process. For example::
@@ -132,7 +132,7 @@ Instruction syntax summary:
 
   * nest NAME BRANCH TARGET-DIR [REVISION]
   * merge NAME BRANCH [REVISION]
-  * nest-part NAME BRANCH REVISION SUBDIR [TARGET-DIR]
+  * nest-part NAME BRANCH SUBDIR [TARGET-DIR [REVISION]]
   * run COMMAND
 
 Format versions:

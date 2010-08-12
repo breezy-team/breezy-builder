@@ -814,11 +814,13 @@ class RecipeParser(object):
                     if instruction == NEST_INSTRUCTION:
                         location = self.parse_branch_location()
                     if instruction == NEST_PART_INSTRUCTION:
-                        revspec = self.parse_revspec()
                         path = self.parse_subpath()
                         target_subdir = self.parse_optional_path()
                         if target_subdir == '':
                             target_subdir = None
+                            revspec = None
+                        else:
+                            revspec = self.parse_optional_revspec()
                     else:
                         revspec = self.parse_optional_revspec()
                     self.new_line()
