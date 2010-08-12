@@ -818,7 +818,11 @@ class RecipeParser(object):
                         target_subdir = self.parse_optional_path()
                         if target_subdir == '':
                             target_subdir = None
-                    revspec = self.parse_optional_revspec()
+                            revspec = None
+                        else:
+                            revspec = self.parse_optional_revspec()
+                    else:
+                        revspec = self.parse_optional_revspec()
                     self.new_line()
                     last_branch = RecipeBranch(branch_id, url, revspec=revspec)
                     if instruction == NEST_INSTRUCTION:

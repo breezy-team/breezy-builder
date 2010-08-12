@@ -256,7 +256,7 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual("some/path", instruction.subpath)
         self.assertEqual(None, instruction.target_subdir)
 
-    def test_builds_recipe_with_nest_part_target(self):
+    def test_builds_recipe_with_nest_part_subdir(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
                 + "nest-part bar http://bar.org some/path target-subdir")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
@@ -268,15 +268,15 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual("some/path", instruction.subpath)
         self.assertEqual("target-subdir", instruction.target_subdir)
 
-    def test_builds_recipe_with_nest_part_revision(self):
+    def test_builds_recipe_with_nest_part_subdir_and_revspec(self):
         base_branch = self.get_recipe(self.basic_header_and_branch
-                + "nest-part bar http://bar.org some/path target-subdir -1")
+                + "nest-part bar http://bar.org some/path target-subdir 1234")
         self.check_base_recipe_branch(base_branch, "http://foo.org/",
                 num_child_branches=1)
         instruction = base_branch.child_branches[0]
         self.assertEqual(None, instruction.nest_path)
         self.check_recipe_branch(
-            instruction.recipe_branch, "bar", "http://bar.org", "-1")
+            instruction.recipe_branch, "bar", "http://bar.org", "1234")
         self.assertEqual("some/path", instruction.subpath)
         self.assertEqual("target-subdir", instruction.target_subdir)
 
