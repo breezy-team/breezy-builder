@@ -38,7 +38,7 @@ except ImportError:
 
 try:
     MergeIntoMerger = merge.MergeIntoMerger
-except NameError:
+except (AttributeError, NameError):
     from bzrlib.plugins.builder.bzrlibbackports import MergeIntoMerger
 
 
@@ -257,7 +257,7 @@ def nest_part_branch(child_branch, tree_to, br_to, subpath, target_subdir=None):
         try:
             if target_subdir is None:
                 target_subdir = os.path.basename(subpath)
-            merger = merge.MergeIntoMerger(this_tree=tree_to, other_tree=other_tree,
+            merger = MergeIntoMerger(this_tree=tree_to, other_tree=other_tree,
                 other_branch=merge_from, target_subdir=target_subdir,
                 source_subpath=subpath, other_rev_id=merge_revid)
             merger.set_base_revision(revision.NULL_REVISION, merge_from)

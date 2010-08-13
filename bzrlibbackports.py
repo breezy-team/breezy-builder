@@ -131,6 +131,29 @@ class _MergeTypeParameterizer(object):
 class MergeIntoMergeType(Merge3Merger):
     """Merger that incorporates a tree (or part of a tree) into another."""
 
+    # Backport note: the definition of _finish_computing_transform is copied
+    # from Merge3Merger in bzr 2.2 (it is supposed to be inherited from
+    # Merge3Merger, but was only introduced in 2.2).
+    def _finish_computing_transform(self):
+        """Finalize the transform and report the changes.
+
+        This is the second half of _compute_transform.
+        """
+        child_pb = ui.ui_factory.nested_progress_bar()
+        try:
+            fs_conflicts = transform.resolve_conflicts(self.tt, child_pb,
+                lambda t, c: transform.conflict_pass(t, c, self.other_tree))
+        finally:
+            child_pb.finished()
+        if self.change_reporter is not None:
+            from bzrlib import delta
+            delta.report_changes(
+                self.tt.iter_changes(), self.change_reporter)
+        self.cook_conflicts(fs_conflicts)
+        from bzrlib import trace
+        for conflict in self.cooked_conflicts:
+            trace.warning(conflict)
+
     def __init__(self, *args, **kwargs):
         """Initialize the merger object.
 
