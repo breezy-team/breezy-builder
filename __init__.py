@@ -77,12 +77,12 @@ line like
 
 which specifies that the only the debian/ subdirectory should be merged.  This
 works even if the branches share no revision history.  You can optionally
-specify the revision and subdirectory in the target with a line like
+specify the subdirectory and revision in the target with a line like
 
   nest-part libfoo lp:libfoo src lib/foo tag:release-1.2
 
-will put the "src" directory of libfoo in "lib/foo", using the revision of
-libfoo tagged "release-1.2"
+which will put the "src" directory of libfoo in "lib/foo", using the revision
+of libfoo tagged "release-1.2".
 
 It is also possible to run an arbitrary command at a particular point in the
 construction process. For example::
