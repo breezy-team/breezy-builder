@@ -30,6 +30,11 @@ from bzrlib import (
     urlutils,
     )
 
+try:
+    from bzrlib.errors import NoWhoami
+except ImportError:
+    NoWhoami = object()
+
 
 try:
     from debian import changelog
@@ -223,9 +228,14 @@ def merge_branch(child_branch, tree_to, br_to, possible_transports=None):
         if conflict_count:
             # FIXME: better reporting
             raise errors.BzrCommandError("Conflicts from merge")
+        config = br_to.get_config()
+        try:
+            committer = config.username()
+        except NoWhoami:
+            committer = "bzr-builder <nobody@example.com>"
         tree_to.commit("Merge %s" %
-                urlutils.unescape_for_display(
-                    child_branch.url, 'utf-8'))
+                urlutils.unescape_for_display(child_branch.url, 'utf-8'),
+                committer=committer)
     finally:
         child_branch.branch.unlock()
 
