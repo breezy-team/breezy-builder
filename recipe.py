@@ -18,23 +18,28 @@ import signal
 import subprocess
 
 from bzrlib import (
-        branch,
-        bzrdir,
-        errors,
-        merge,
-        revision,
-        revisionspec,
-        tag,
-        trace,
-        transport,
-        urlutils,
-        )
+    branch,
+    bzrdir,
+    errors,
+    merge,
+    revision,
+    revisionspec,
+    tag,
+    trace,
+    transport,
+    urlutils,
+    )
 
 
 try:
     from debian import changelog
 except ImportError:
     from debian_bundle import changelog
+
+try:
+    MergeIntoMerger = merge.MergeIntoMerger
+except (AttributeError, NameError):
+    from bzrlib.plugins.builder.bzrlibbackports import MergeIntoMerger
 
 
 def subprocess_setup():
@@ -225,8 +230,7 @@ def merge_branch(child_branch, tree_to, br_to, possible_transports=None):
         child_branch.branch.unlock()
 
 
-def nest_part_branch(op, child_branch, tree_to, br_to, subpath,
-        target_subdir=None):
+def nest_part_branch(child_branch, tree_to, br_to, subpath, target_subdir=None):
     """Merge the branch subdirectory specified by child_branch.
 
     :param child_branch: the RecipeBranch to retrieve the branch and revision to
@@ -240,25 +244,30 @@ def nest_part_branch(op, child_branch, tree_to, br_to, subpath,
     """
     merge_from = branch.Branch.open(child_branch.url)
     merge_from.lock_read()
-    op.add_cleanup(merge_from.unlock)
-    if child_branch.revspec is not None:
-        merge_revspec = revisionspec.RevisionSpec.from_string(
-                child_branch.revspec)
-        merge_revid = merge_revspec.as_revision_id(merge_from)
-    else:
-        merge_revid = merge_from.last_revision()
-    child_branch.revid = merge_revid
-    other_tree = merge_from.basis_tree()
-    other_tree.lock_read()
-    op.add_cleanup(other_tree.unlock)
-    if target_subdir is None:
-        target_subdir = os.path.basename(subpath)
-    merger = merge.MergeIntoMerger(this_tree=tree_to, other_tree=other_tree,
-        other_branch=merge_from, target_subdir=target_subdir,
-        source_subpath=subpath, other_rev_id=merge_revid)
-    merger.set_base_revision(revision.NULL_REVISION, merge_from)
-    conflict_count = merger.do_merge()
-    merger.set_pending()
+    try:
+        if child_branch.revspec is not None:
+            merge_revspec = revisionspec.RevisionSpec.from_string(
+                    child_branch.revspec)
+            merge_revid = merge_revspec.as_revision_id(merge_from)
+        else:
+            merge_revid = merge_from.last_revision()
+        child_branch.revid = merge_revid
+        other_tree = merge_from.basis_tree()
+        other_tree.lock_read()
+        try:
+            if target_subdir is None:
+                target_subdir = os.path.basename(subpath)
+            merger = MergeIntoMerger(this_tree=tree_to, other_tree=other_tree,
+                other_branch=merge_from, target_subdir=target_subdir,
+                source_subpath=subpath, other_rev_id=merge_revid)
+            merger.set_base_revision(revision.NULL_REVISION, merge_from)
+            conflict_count = merger.do_merge()
+            merger.set_pending()
+        finally:
+            other_tree.unlock()
+    finally:
+        merge_from.unlock()
+
     if conflict_count:
         # FIXME: better reporting
         raise errors.BzrCommandError("Conflicts from merge")
@@ -473,9 +482,7 @@ class NestPartInstruction(ChildBranch):
         self.target_subdir = target_subdir
 
     def apply(self, target_path, tree_to, br_to):
-        from bzrlib.cleanup import OperationWithCleanups
-        op = OperationWithCleanups(nest_part_branch)
-        op.run(self.recipe_branch, tree_to, br_to, self.subpath,
+        nest_part_branch(self.recipe_branch, tree_to, br_to, self.subpath,
             self.target_subdir)
 
 
