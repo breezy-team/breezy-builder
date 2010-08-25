@@ -35,7 +35,7 @@ from bzrlib.plugins.builder.recipe import (
         RecipeBranch,
         RecipeParseError,
         resolve_revisions,
-        RUN_INSTRUCTION,
+        SAFE_INSTRUCTIONS,
         )
 
 
@@ -438,7 +438,7 @@ class RecipeParserTests(TestCaseInTempDir):
         exc = self.assertParseError(3, 1, "The 'run' instruction is "
                 "forbidden.", self.get_recipe, self.basic_header_and_branch
                 + "run touch test\n",
-                forbidden_instructions=[RUN_INSTRUCTION])
+                permitted_instructions=[SAFE_INSTRUCTIONS])
         self.assertTrue(isinstance(exc, ForbiddenInstructionError))
         self.assertEqual("run", exc.instruction_name)
 

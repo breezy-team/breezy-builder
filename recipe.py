@@ -56,6 +56,9 @@ NEST_PART_INSTRUCTION = "nest-part"
 NEST_INSTRUCTION = "nest"
 RUN_INSTRUCTION = "run"
 
+SAFE_INSTRUCTIONS = [
+    MERGE_INSTRUCTION, NEST_PART_INSTRUCTION, NEST_INSTRUCTION]
+
 TIME_VAR = "{time}"
 DATE_VAR = "{date}"
 REVNO_VAR = "{revno}"
@@ -770,12 +773,12 @@ class RecipeParser(object):
         if filename is None:
             self.filename = "recipe"
 
-    def parse(self, forbidden_instructions=None):
+    def parse(self, permitted_instructions=None):
         """Parse the recipe.
 
-        :param forbidden_instructions: a list of instructions that you
-            don't want to allow. Defaults to None allowing them all.
-        :type forbidden_instructions: list(str) or None
+        :param permitted_instructions: a list of instructions that you
+            want to allow. Defaults to None allowing them all.
+        :type permitted_instructions: list(str) or None
         :return: a RecipeBranch representing the recipe.
         """
         self.lines = self.text.split("\n")
@@ -819,7 +822,7 @@ class RecipeParser(object):
                 last_instruction = ""
             else:
                 instruction = self.parse_instruction(
-                    forbidden_instructions=forbidden_instructions)
+                    permitted_instructions=permitted_instructions)
                 if instruction == RUN_INSTRUCTION:
                     self.parse_whitespace("the command")
                     command = self.take_to_newline().strip()
@@ -868,7 +871,7 @@ class RecipeParser(object):
         self.new_line()
         return version, deb_version
 
-    def parse_instruction(self, forbidden_instructions=None):
+    def parse_instruction(self, permitted_instructions=None):
         if self.version < 0.2:
             options = (MERGE_INSTRUCTION, NEST_INSTRUCTION)
             options_str = "'%s' or '%s'" % options
@@ -884,10 +887,10 @@ class RecipeParser(object):
             self.throw_parse_error("End of line while looking for %s"
                     % options_str)
         if instruction in options:
-            if forbidden_instructions is not None:
-                if instruction in forbidden_instructions:
+            if permitted_instructions is not None:
+                if instruction not in permitted_instructions:
                     self.throw_parse_error("The '%s' instruction is "
-                            "forbidden." % instruction,
+                            "forbidden" % instruction,
                             cls=ForbiddenInstructionError,
                             instruction_name=instruction)
             self.take_chars(len(instruction))
