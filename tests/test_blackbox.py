@@ -1,5 +1,5 @@
-# bzr-builter: a bzr plugin to constuct trees based on recipes
-# Copyright 2009 Canonical Ltd.
+# bzr-builder: a bzr plugin to constuct trees based on recipes
+# Copyright 2009-2010 Canonical Ltd.
 
 # This program is free software: you can redistribute it and/or modify it 
 # under the terms of the GNU General Public License version 3, as published 
@@ -274,5 +274,13 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "deb-version $\nsource 1\n")])
         err = self.run_bzr("dailydeb -q test.recipe working --package foo",
                 retcode=3)[1]
-        self.assertEqual("bzr: ERROR: Invalid deb-version: $: "
-                "Could not parse version: $\n", err)
+        self.assertContainsRe(err, "bzr: ERROR: Invalid deb-version: \$: ")
+
+    def test_cmd_dailydeb_with_safe(self):
+        self.make_simple_package()
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
+                    "deb-version 1\nsource 1\nrun something bad")])
+        out, err = self.run_bzr("dailydeb -q test.recipe working --safe",
+            retcode=3)
+        self.assertContainsRe(err, "The 'run' instruction is forbidden.$")
+

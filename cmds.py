@@ -46,6 +46,7 @@ from bzrlib.plugins.builder.recipe import (
         DEBUPSTREAM_VAR,
         RecipeParser,
         resolve_revisions,
+        SAFE_INSTRUCTIONS,
         )
 
 
@@ -68,7 +69,13 @@ def write_manifest_to_path(path, base_branch):
         manifest_f.close()
 
 
-def get_branch_from_recipe_file(recipe_file):
+def get_branch_from_recipe_file(recipe_file, safe=False):
+    """Return the base branch for the specified recipe.
+
+    :param recipe_file: The URL of the recipe file to retrieve.
+    :param safe: if True, reject recipes that would cause arbitrary code
+        execution.
+    """
     recipe_transport = transport.get_transport(os.path.dirname(recipe_file))
     try:
         recipe_contents = recipe_transport.get_bytes(
@@ -76,8 +83,12 @@ def get_branch_from_recipe_file(recipe_file):
     except errors.NoSuchFile:
         raise errors.BzrCommandError("Specified recipe does not exist: "
                 "%s" % recipe_file)
+    if safe:
+        permitted_instructions = SAFE_INSTRUCTIONS
+    else:
+        permitted_instructions = None
     parser = RecipeParser(recipe_contents, filename=recipe_file)
-    return parser.parse()
+    return parser.parse(permitted_instructions=permitted_instructions)
 
 
 def get_old_recipe(if_changed_from):
@@ -318,16 +329,18 @@ class cmd_build(Command):
                     ]
 
     def _get_prepared_branch_from_recipe(self, recipe_file,
-            if_changed_from=None):
+            if_changed_from=None, safe=False):
         """Common code to prepare a branch and do substitutions.
 
         :param recipe_file: a path to a recipe file to work from.
         :param if_changed_from: an optional path to a manifest to
             compare the recipe against.
+        :param safe: if True, reject recipes that would cause arbitrary code
+            execution.
         :return: A tuple with (retcode, base_branch). If retcode is None
             then the command execution should continue.
         """
-        base_branch = get_branch_from_recipe_file(recipe_file)
+        base_branch = get_branch_from_recipe_file(recipe_file, safe=safe)
         time = datetime.datetime.utcnow()
         base_branch.substitute_time(time)
         old_recipe = None
@@ -388,6 +401,8 @@ class cmd_dailydeb(cmd_build):
                 Option("append-version", type=str, help="Append the "
                         "specified string to the end of the version used "
                         "in debian/changelog."),
+                Option("safe", help="Error if the recipe would cause"
+                       " arbitrary code execution.")
             ]
 
     takes_args = ["recipe_file", "working_basedir?"]
@@ -395,7 +410,7 @@ class cmd_dailydeb(cmd_build):
     def run(self, recipe_file, working_basedir=None, manifest=None,
             if_changed_from=None, package=None, distribution=None,
             dput=None, key_id=None, no_build=None, watch_ppa=False,
-            append_version=None):
+            append_version=None, safe=False):
 
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
@@ -409,7 +424,7 @@ class cmd_dailydeb(cmd_build):
                 target_from_dput(dput)
 
         result, base_branch = self._get_prepared_branch_from_recipe(recipe_file,
-            if_changed_from=if_changed_from)
+            if_changed_from=if_changed_from, safe=safe)
         if result is not None:
             return result
         if working_basedir is None:
