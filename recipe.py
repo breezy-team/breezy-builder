@@ -56,6 +56,9 @@ NEST_PART_INSTRUCTION = "nest-part"
 NEST_INSTRUCTION = "nest"
 RUN_INSTRUCTION = "run"
 
+SAFE_INSTRUCTIONS = [
+    MERGE_INSTRUCTION, NEST_PART_INSTRUCTION, NEST_INSTRUCTION]
+
 TIME_VAR = "{time}"
 DATE_VAR = "{date}"
 REVNO_VAR = "{revno}"
@@ -115,9 +118,6 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
     returns this function will return a branch and tree for the target,
     after creating either if necessary.
 
-    :param tree_to: The WorkingTree to pull in to, or None. If not None then
-            br_to must not be None.
-    :param br_to: The Branch to pull in to, or None to branch.
     :param tree_to: The WorkingTree to pull in to, or None. If not None then
             br_to must not be None.
     :param br_to: The Branch to pull in to, or None to branch.
@@ -1121,6 +1121,9 @@ class RecipeParser(object):
                 self.throw_parse_error("Expecting a float, got '%s'" %
                     self.peek_to_whitespace())
             ret += "." + ret2
+        try:
+            fl = conv_fn(ret)
+        except ValueError:
             self.throw_parse_error("Expecting a float, got '%s'" % ret)
         return (fl, ret)
 
