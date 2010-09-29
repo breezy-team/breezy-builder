@@ -452,6 +452,8 @@ class ChildBranch(object):
     branch should be merged instead of nested.
     """
 
+    can_have_children = False
+
     def __init__(self, recipe_branch, nest_path=None):
         self.recipe_branch = recipe_branch
         self.nest_path = nest_path
@@ -461,6 +463,15 @@ class ChildBranch(object):
 
     def as_tuple(self):
         return (self.recipe_branch, self.nest_path)
+
+    def _get_revid_part(self):
+        if self.recipe_branch.revid is not None:
+            revid_part = " revid:%s" % self.recipe_branch.revid
+        elif self.recipe_branch.revspec is not None:
+            revid_part = " %s" % self.recipe_branch.revspec
+        else:
+            revid_part = ""
+        return revid_part
 
 
 class CommandInstruction(ChildBranch):
@@ -474,6 +485,9 @@ class CommandInstruction(ChildBranch):
         if proc.returncode != 0:
             raise CommandFailedError(self.nest_path)
 
+    def as_text(self):
+        return "%s %s" % (RUN_INSTRUCTION, self.nest_path)
+
 
 class MergeInstruction(ChildBranch):
 
@@ -485,6 +499,12 @@ class MergeInstruction(ChildBranch):
                 % (revision_of, self.recipe_branch.url, target_path))
         merge_branch(self.recipe_branch, tree_to, br_to,
                 possible_transports=possible_transports)
+
+    def as_text(self):
+        revid_part = self._get_revid_part()
+        return "%s %s %s%s" % (
+            MERGE_INSTRUCTION, self.recipe_branch.name,
+            self.recipe_branch.url, revid_part)
 
 
 class NestPartInstruction(ChildBranch):
@@ -498,13 +518,32 @@ class NestPartInstruction(ChildBranch):
         nest_part_branch(self.recipe_branch, tree_to, br_to, self.subpath,
             self.target_subdir)
 
+    def as_text(self):
+        revid_part = self._get_revid_part()
+        if self.target_subdir is not None:
+            target_revid_part = " %s%s" % (
+                self.target_subdir, revid_part)
+        else:
+            target_revid_part = revid_part
+        return "%s %s %s %s%s" % (
+            NEST_PART_INSTRUCTION, self.recipe_branch.name,
+            self.recipe_branch.url, self.subpath, target_revid_part)
+
 
 class NestInstruction(ChildBranch):
+
+    can_have_children = True
 
     def apply(self, target_path, tree_to, br_to, possible_transports=None):
         _build_inner_tree(self.recipe_branch,
             target_path=os.path.join(target_path, self.nest_path),
             possible_transports=possible_transports)
+
+    def as_text(self):
+        revid_part = self._get_revid_part()
+        return "%s %s %s %s%s" % (
+            NEST_INSTRUCTION, self.recipe_branch.name,
+            self.recipe_branch.url, self.nest_path, revid_part)
 
 
 class RecipeBranch(object):
@@ -680,31 +719,12 @@ class BaseRecipeBranch(RecipeBranch):
     def _add_child_branches_to_manifest(self, child_branches, indent_level):
         manifest = ""
         for instruction in child_branches:
-            child_branch = instruction.recipe_branch
-            nest_location = instruction.nest_path
-            if child_branch is None:
-                manifest += "%s%s %s\n" % ("  " * indent_level, RUN_INSTRUCTION,
-                        nest_location)
-            else:
-                if child_branch.revid is not None:
-                    revid_part = " revid:%s" % child_branch.revid
-                elif child_branch.revspec is not None:
-                    revid_part = " %s" % child_branch.revspec
-                else:
-                    revid_part = ""
-                if nest_location is not None:
-                    manifest += "%s%s %s %s %s%s\n" % \
-                                 ("  " * indent_level, NEST_INSTRUCTION,
-                                  child_branch.name,
-                                  child_branch.url, nest_location,
-                                  revid_part)
-                    manifest += self._add_child_branches_to_manifest(
-                            child_branch.child_branches, indent_level+1)
-                else:
-                    manifest += "%s%s %s %s%s\n" % \
-                                 ("  " * indent_level, MERGE_INSTRUCTION,
-                                  child_branch.name,
-                                  child_branch.url, revid_part)
+            manifest += "%s%s\n" % (
+                "  " * indent_level, instruction.as_text())
+            if instruction.can_have_children:
+                manifest += self._add_child_branches_to_manifest(
+                    instruction.recipe_branch.child_branches,
+                    indent_level+1)
         return manifest
 
 

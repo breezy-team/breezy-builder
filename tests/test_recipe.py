@@ -1075,6 +1075,18 @@ class StringifyTests(TestCaseInTempDir):
         base_branch.nest_branch(".", nested_branch1)
         self.assertRaises(RecipeParseError, str, base_branch)
 
+    def test_with_nest_part(self):
+        base_branch = BaseRecipeBranch("base_url", "1", 0.1)
+        base_branch.revid = "base_revid"
+        nested_branch1 = RecipeBranch("nested1", "nested1_url",
+                revspec="tag:foo")
+        base_branch.nest_part_branch(nested_branch1, "foo", "bar")
+        manifest = base_branch.get_recipe_text()
+        self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
+                "base_url revid:base_revid\n"
+                "nest-part nested1 nested1_url foo bar tag:foo\n",
+                manifest)
+
 
 class RecipeBranchTests(TestCaseInTempDir):
 
