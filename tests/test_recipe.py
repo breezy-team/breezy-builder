@@ -1040,6 +1040,41 @@ class StringifyTests(TestCaseInTempDir):
                 "  nest nested2 nested2_url nested2\n"
                 "merge merged merged_url\n", manifest)
 
+    def test_get_recipe_text(self):
+        base_branch = BaseRecipeBranch("base_url", "1", 0.1)
+        base_branch.revid = "base_revid"
+        manifest = base_branch.get_recipe_text()
+        self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
+                "base_url revid:base_revid\n", manifest)
+
+    def test_get_recipe_doesnt_raise_on_invalid_recipe(self):
+        base_branch = BaseRecipeBranch("base_url", "1", 0.1)
+        base_branch.revid = "base_revid"
+        nested_branch1 = RecipeBranch("nested1", "nested1_url",
+                revspec="tag:foo")
+        base_branch.nest_branch(".", nested_branch1)
+        manifest = base_branch.get_recipe_text()
+        self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
+                "base_url revid:base_revid\n"
+                "nest nested1 nested1_url . tag:foo\n", manifest)
+
+    def test_get_recipe_text_validate_True(self):
+        base_branch = BaseRecipeBranch("base_url", "1", 0.1)
+        base_branch.revid = "base_revid"
+        nested_branch1 = RecipeBranch("nested1", "nested1_url",
+                revspec="tag:foo")
+        base_branch.nest_branch(".", nested_branch1)
+        self.assertRaises(RecipeParseError, base_branch.get_recipe_text,
+                validate=True)
+
+    def test_str_validates(self):
+        base_branch = BaseRecipeBranch("base_url", "1", 0.1)
+        base_branch.revid = "base_revid"
+        nested_branch1 = RecipeBranch("nested1", "nested1_url",
+                revspec="tag:foo")
+        base_branch.nest_branch(".", nested_branch1)
+        self.assertRaises(RecipeParseError, str, base_branch)
+
 
 class RecipeBranchTests(TestCaseInTempDir):
 

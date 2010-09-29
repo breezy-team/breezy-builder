@@ -709,6 +709,12 @@ class BaseRecipeBranch(RecipeBranch):
 
 
     def __str__(self):
+        return self.get_recipe_text(validate=True)
+
+    def list_branch_names(self):
+        return self._list_child_names()
+
+    def get_recipe_text(self, validate=False):
         manifest = "# bzr-builder format %s deb-version " % str(self.format)
         # TODO: should we store the expanded version that was used?
         manifest += "%s\n" % (self.deb_version,)
@@ -720,14 +726,12 @@ class BaseRecipeBranch(RecipeBranch):
             manifest += "%s\n" % (self.url,)
         manifest += self._add_child_branches_to_manifest(self.child_branches,
                 0)
-        # Sanity check.
-        # TODO: write a function that compares the result of this parse with
-        # the branch that we built it from.
-        RecipeParser(manifest).parse()
+        if validate:
+            # Sanity check.
+            # TODO: write a function that compares the result of this parse with
+            # the branch that we built it from.
+            RecipeParser(manifest).parse()
         return manifest
-
-    def list_branch_names(self):
-        return self._list_child_names()
 
 
 class RecipeParseError(errors.BzrError):
