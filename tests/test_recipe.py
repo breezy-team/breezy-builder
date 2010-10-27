@@ -1099,6 +1099,17 @@ class StringifyTests(TestCaseInTempDir):
                 "nest-part nested1 nested1_url foo foo tag:foo\n",
                 manifest)
 
+    def test_with_nest_part_with_no_target_dir_no_revspec(self):
+        base_branch = BaseRecipeBranch("base_url", "1", 0.1)
+        base_branch.revid = "base_revid"
+        nested_branch1 = RecipeBranch("nested1", "nested1_url")
+        base_branch.nest_part_branch(nested_branch1, "foo", None)
+        manifest = base_branch.get_recipe_text()
+        self.assertEqual("# bzr-builder format 0.1 deb-version 1\n"
+                "base_url revid:base_revid\n"
+                "nest-part nested1 nested1_url foo\n",
+                manifest)
+
 
 class RecipeBranchTests(TestCaseInTempDir):
 
