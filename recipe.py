@@ -520,11 +520,11 @@ class NestPartInstruction(ChildBranch):
 
     def as_text(self):
         revid_part = self._get_revid_part()
-        if self.target_subdir is not None:
-            target_revid_part = " %s%s" % (
-                self.target_subdir, revid_part)
-        else:
-            target_revid_part = revid_part
+        target_subdir = self.target_subdir
+        if target_subdir is None:
+            target_subdir = self.subpath
+        target_revid_part = " %s%s" % (
+            target_subdir, revid_part)
         return "%s %s %s %s%s" % (
             NEST_PART_INSTRUCTION, self.recipe_branch.name,
             self.recipe_branch.url, self.subpath, target_revid_part)
