@@ -55,6 +55,13 @@ MERGE_INSTRUCTION = "merge"
 NEST_PART_INSTRUCTION = "nest-part"
 NEST_INSTRUCTION = "nest"
 RUN_INSTRUCTION = "run"
+USAGE = {
+    MERGE_INSTRUCTION: 'merge NAME BRANCH [REVISION]',
+    NEST_INSTRUCTION: 'nest NAME BRANCH TARGET-DIR [REVISION]',
+    NEST_PART_INSTRUCTION:
+        'nest-part NAME BRANCH SUBDIR [TARGET-DIR [REVISION]]',
+    RUN_INSTRUCTION: 'run COMMAND',
+    }
 
 SAFE_INSTRUCTIONS = [
     MERGE_INSTRUCTION, NEST_PART_INSTRUCTION, NEST_INSTRUCTION]
@@ -767,6 +774,14 @@ class RecipeParseError(errors.BzrError):
                 problem=problem)
 
 
+class InstructionParseError(RecipeParseError):
+    _fmt = RecipeParseError._fmt + "\nUsage: %(usage)s"
+
+    def __init__(self, filename, line, char, problem, instruction):
+        RecipeParseError.__init__(self, filename, line, char, problem)
+        self.usage = USAGE[instruction]
+
+
 class ForbiddenInstructionError(RecipeParseError):
 
     def __init__(self, filename, line, char, problem, instruction_name=None):
@@ -853,17 +868,18 @@ class RecipeParser(object):
                 instruction = self.parse_instruction(
                     permitted_instructions=permitted_instructions)
                 if instruction == RUN_INSTRUCTION:
-                    self.parse_whitespace("the command")
+                    self.parse_whitespace("the command",
+                        instruction=instruction)
                     command = self.take_to_newline().strip()
                     self.new_line()
                     active_branches[-1].run_command(command)
                 else:
-                    branch_id = self.parse_branch_id()
-                    url = self.parse_branch_url()
+                    branch_id = self.parse_branch_id(instruction)
+                    url = self.parse_branch_url(instruction)
                     if instruction == NEST_INSTRUCTION:
-                        location = self.parse_branch_location()
+                        location = self.parse_branch_location(instruction)
                     if instruction == NEST_PART_INSTRUCTION:
-                        path = self.parse_subpath()
+                        path = self.parse_subpath(instruction)
                         target_subdir = self.parse_optional_path()
                         if target_subdir == '':
                             target_subdir = None
@@ -872,7 +888,7 @@ class RecipeParser(object):
                             revspec = self.parse_optional_revspec()
                     else:
                         revspec = self.parse_optional_revspec()
-                    self.new_line()
+                    self.new_line(instruction)
                     last_branch = RecipeBranch(branch_id, url, revspec=revspec)
                     if instruction == NEST_INSTRUCTION:
                         active_branches[-1].nest_branch(location, last_branch)
@@ -927,12 +943,13 @@ class RecipeParser(object):
         self.throw_parse_error("Expecting %s, got '%s'"
                 % (options_str, instruction))
 
-    def parse_branch_id(self):
-        self.parse_whitespace("the branch id")
+    def parse_branch_id(self, instruction):
+        self.parse_whitespace("the branch id", instruction=instruction)
         branch_id = self.peek_to_whitespace()
         if branch_id is None:
             self.throw_parse_error("End of line while looking for the "
-                    "branch id")
+                    "branch id", cls=InstructionParseError,
+                    instruction=instruction)
         if branch_id in self.seen_nicks:
             self.throw_parse_error("'%s' was already used to identify "
                     "a branch." % branch_id)
@@ -940,36 +957,39 @@ class RecipeParser(object):
         self.seen_nicks.add(branch_id)
         return branch_id
 
-    def parse_branch_url(self):
-        self.parse_whitespace("the branch url")
-        branch_url = self.take_to_whitespace("the branch url")
+    def parse_branch_url(self, instruction):
+        self.parse_whitespace("the branch url", instruction=instruction)
+        branch_url = self.take_to_whitespace("the branch url", instruction)
         return branch_url
 
-    def parse_branch_location(self):
+    def parse_branch_location(self, instruction):
         # FIXME: Needs a better term
         self.parse_whitespace("the location to nest")
         location = self.peek_to_whitespace()
         if location is None:
             self.throw_parse_error("End of line while looking for the "
-                    "location to nest")
+                    "location to nest", cls=InstructionParseError,
+                    instruction=instruction)
         norm_location = os.path.normpath(location)
         if norm_location in self.seen_paths:
             self.throw_parse_error("The path '%s' is a duplicate of "
                     "the one used on line %d." % (location,
-                        self.seen_paths[norm_location]))
+                        self.seen_paths[norm_location]),
+                    InstructionParseError, instruction=instruction)
         if os.path.isabs(norm_location):
             self.throw_parse_error("Absolute paths are not allowed: %s"
-                    % location)
+                    % location, InstructionParseError, instruction=instruction)
         if norm_location.startswith(".."):
             self.throw_parse_error("Paths outside the current directory "
-                    "are not allowed: %s" % location)
+                    "are not allowed: %s" % location,
+                    cls=InstructionParseError, instruction=instruction)
         self.take_chars(len(location))
         self.seen_paths[norm_location] = self.line_index + 1
         return location
 
-    def parse_subpath(self):
-        self.parse_whitespace("the subpath to merge")
-        location = self.take_to_whitespace("the subpath to merge")
+    def parse_subpath(self, instruction):
+        self.parse_whitespace("the subpath to merge", instruction=instruction)
+        location = self.take_to_whitespace("the subpath to merge", instruction)
         return location
 
     def parse_revspec(self):
@@ -1004,13 +1024,18 @@ class RecipeParser(object):
     def throw_eol(self, expected):
         self.throw_parse_error("End of line while looking for '%s'" % expected)
 
-    def new_line(self):
+    def new_line(self, instruction=None):
         # Jump over any whitespace
         self.parse_whitespace(None, require=False)
         remaining = self.peek_to_whitespace()
         if remaining != None:
+            kwargs = {}
+            if instruction is not None:
+                kwargs = {
+                    'cls': InstructionParseError,
+                    'instruction': instruction}
             self.throw_parse_error("Expecting the end of the line, got '%s'"
-                    % remaining)
+                    % remaining, **kwargs)
         self.index = 0
         self.line_index += 1
         if self.line_index >= len(self.lines):
@@ -1076,12 +1101,18 @@ class RecipeParser(object):
            return old_indent_level
         return None
 
-    def parse_whitespace(self, looking_for, require=True):
+    def parse_whitespace(self, looking_for, require=True, instruction=None):
         if require:
             actual = self.peek_char()
             if actual is None:
+                kwargs = {}
+                if instruction is not None:
+                    kwargs = {
+                        'cls': InstructionParseError,
+                        'instruction': instruction,
+                        }
                 self.throw_parse_error("End of line while looking for "
-                        "%s" % looking_for)
+                        "%s" % looking_for, **kwargs)
             if actual not in self.whitespace_chars:
                 self.throw_parse_error("Expecting whitespace before %s, "
                         "got '%s'." % (looking_for, actual))
@@ -1128,11 +1159,16 @@ class RecipeParser(object):
             char = self.peek_char(skip=count)
         return ret
 
-    def take_to_whitespace(self, looking_for):
+    def take_to_whitespace(self, looking_for, instruction=None):
         text = self.peek_to_whitespace()
         if text is None:
+            kwargs = {}
+            if instruction is not None:
+                kwargs = {
+                    'cls': InstructionParseError,
+                    'instruction': instruction}
             self.throw_parse_error("End of line while looking for %s"
-                    % looking_for)
+                    % looking_for, **kwargs)
         self.take_chars(len(text))
         return text
 

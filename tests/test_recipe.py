@@ -29,13 +29,19 @@ from bzrlib.plugins.builder.recipe import (
         BaseRecipeBranch,
         build_tree,
         ensure_basedir,
+        InstructionParseError,
         ForbiddenInstructionError,
+        MERGE_INSTRUCTION,
+        NEST_INSTRUCTION,
+        NEST_PART_INSTRUCTION,
         pull_or_branch,
         RecipeParser,
         RecipeBranch,
         RecipeParseError,
         resolve_revisions,
+        RUN_INSTRUCTION,
         SAFE_INSTRUCTIONS,
+        USAGE,
         )
 
 
@@ -58,6 +64,13 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual(char, exc.char)
         self.assertEqual("recipe", exc.filename)
         return exc
+
+    def assertInstructionParseError(self, line, char, problem, instruction,
+            callable, *args, **kwargs):
+        exc = self.assertParseError(line, char, problem, callable, *args,
+                **kwargs)
+        self.assertIsInstance(exc, InstructionParseError),
+        self.assertEqual(USAGE[instruction], exc.usage)
 
     def check_recipe_branch(self, branch, name, url, revspec=None,
             num_child_branches=0, revid=None):
@@ -138,53 +151,69 @@ class RecipeParserTests(TestCaseInTempDir):
                 self.basic_header + "http://foo.org/\n" + "cat")
 
     def test_rejects_merge_no_name(self):
-        self.assertParseError(3, 7, "End of line while looking for "
-                "the branch id", self.get_recipe,
+        self.assertInstructionParseError(3, 7, "End of line while looking for "
+                "the branch id", MERGE_INSTRUCTION, self.get_recipe,
                 self.basic_header_and_branch + "merge ")
 
+    def test_rejects_merge_no_name_no_space(self):
+        self.assertInstructionParseError(3, 6, "End of line while looking for "
+                "the branch id", MERGE_INSTRUCTION, self.get_recipe,
+                self.basic_header_and_branch + "merge")
+
     def test_rejects_merge_no_url(self):
-        self.assertParseError(3, 11, "End of line while looking for "
-                "the branch url", self.get_recipe,
+        self.assertInstructionParseError(3, 11, "End of line while looking for"
+                " the branch url", MERGE_INSTRUCTION, self.get_recipe,
                 self.basic_header_and_branch + "merge foo ")
 
     def test_rejects_text_at_end_of_merge_line(self):
-        self.assertParseError(3, 17, "Expecting the end of the line, "
-                "got 'bar'", self.get_recipe,
+        self.assertInstructionParseError(3, 17,
+                "Expecting the end of the line, got 'bar'",
+                MERGE_INSTRUCTION, self.get_recipe,
                 self.basic_header_and_branch + "merge foo url 2 bar")
 
     def test_rejects_nest_part_no_name(self):
-        self.assertParseError(3, 11, "End of line while looking for "
-                "the branch id", self.get_recipe,
+        self.assertInstructionParseError(3, 11, "End of line while looking for"
+                " the branch id", NEST_PART_INSTRUCTION, self.get_recipe,
                 self.basic_header_and_branch + "nest-part ")
 
     def test_rejects_nest_part_no_url(self):
-        self.assertParseError(3, 15, "End of line while looking for "
-                "the branch url", self.get_recipe,
+        self.assertInstructionParseError(3, 15, "End of line while looking for"
+                " the branch url", NEST_PART_INSTRUCTION, self.get_recipe,
                 self.basic_header_and_branch + "nest-part foo ")
 
     def test_rejects_nest_part_no_subpath(self):
-        self.assertParseError(3, 22, "End of line while looking for "
-                "the subpath to merge", self.get_recipe,
+        self.assertInstructionParseError(3, 22, "End of line while looking for"
+                " the subpath to merge", NEST_PART_INSTRUCTION,
+                self.get_recipe,
                 self.basic_header_and_branch + "nest-part foo url:// ")
 
+    def test_rejects_nest_part_no_subpath_no_space(self):
+        self.assertInstructionParseError(3, 21, "End of line while looking for"
+                " the subpath to merge", NEST_PART_INSTRUCTION,
+                self.get_recipe,
+                self.basic_header_and_branch + "nest-part foo url://")
+
     def test_rejects_nest_no_name(self):
-        self.assertParseError(3, 6, "End of line while looking for "
-                "the branch id", self.get_recipe,
+        self.assertInstructionParseError(3, 6, "End of line while looking for"
+                " the branch id", NEST_INSTRUCTION, self.get_recipe,
                 self.basic_header_and_branch + "nest ")
 
     def test_rejects_nest_no_url(self):
-        self.assertParseError(3, 10, "End of line while looking for "
-                "the branch url", self.get_recipe,
-                self.basic_header_and_branch + "nest foo ")
+        self.assertInstructionParseError(3, 10,
+            "End of line while looking for the branch url",
+            NEST_INSTRUCTION, self.get_recipe,
+            self.basic_header_and_branch + "nest foo ")
 
     def test_rejects_nest_no_location(self):
-        self.assertParseError(3, 14, "End of line while looking for "
-                "the location to nest", self.get_recipe,
+        self.assertInstructionParseError(3, 14,
+                "End of line while looking for the location to nest",
+                NEST_INSTRUCTION, self.get_recipe,
                 self.basic_header_and_branch + "nest foo url ")
 
     def test_rejects_text_at_end_of_nest_line(self):
-        self.assertParseError(3, 20, "Expecting the end of the line, "
-                "got 'baz'", self.get_recipe,
+        self.assertInstructionParseError(3, 20,
+                "Expecting the end of the line, got 'baz'",
+                NEST_INSTRUCTION, self.get_recipe,
                 self.basic_header_and_branch + "nest foo url bar 2 baz")
 
     def test_rejects_indent_after_first_branch(self):
@@ -225,6 +254,12 @@ class RecipeParserTests(TestCaseInTempDir):
                 "a branch.", self.get_recipe,
                 self.basic_header_and_branch + "merge foo url\n"
                 + "merge foo other-url\n")
+
+    def test_rejects_run_with_no_instruction(self):
+        self.assertInstructionParseError(3, 4,
+                "End of line while looking for the command",
+                RUN_INSTRUCTION, self.get_recipe,
+                self.basic_header_and_branch + "run\n")
 
     def test_builds_simplest_recipe(self):
         base_branch = self.get_recipe(self.basic_header_and_branch)
@@ -443,34 +478,40 @@ class RecipeParserTests(TestCaseInTempDir):
         self.assertEqual("run", exc.instruction_name)
 
     def test_error_on_duplicate_path(self):
-        exc = self.assertParseError(3, 15, "The path '.' is a duplicate "
-                "of the one used on line 1.", self.get_recipe,
+        exc = self.assertInstructionParseError(3, 15,
+                "The path '.' is a duplicate of the one used on line 1.",
+                NEST_INSTRUCTION, self.get_recipe,
                 self.basic_header_and_branch + "nest nest url .\n")
 
     def test_error_on_duplicate_path_with_another_nest(self):
-        exc = self.assertParseError(4, 16, "The path 'foo' is a duplicate "
-                "of the one used on line 3.", self.get_recipe,
+        exc = self.assertInstructionParseError(4, 16,
+                "The path 'foo' is a duplicate of the one used on line 3.",
+                NEST_INSTRUCTION, self.get_recipe,
                 self.basic_header_and_branch + "nest nest url foo\n"
                 + "nest nest2 url foo\n")
 
     def test_duplicate_path_check_uses_normpath(self):
-        exc = self.assertParseError(3, 15, "The path 'foo/..' is a duplicate "
-                "of the one used on line 1.", self.get_recipe,
+        exc = self.assertInstructionParseError(3, 15,
+                "The path 'foo/..' is a duplicate of the one used on line 1.",
+                NEST_INSTRUCTION, self.get_recipe,
                 self.basic_header_and_branch + "nest nest url foo/..\n")
 
     def test_error_absolute_path(self):
-        exc = self.assertParseError(3, 15, "Absolute paths are not allowed: "
-                "/etc/passwd", self.get_recipe, self.basic_header_and_branch
-                + "nest nest url /etc/passwd\n")
+        exc = self.assertInstructionParseError(3, 15,
+                "Absolute paths are not allowed: /etc/passwd",
+                NEST_INSTRUCTION, self.get_recipe,
+                self.basic_header_and_branch + "nest nest url /etc/passwd\n")
 
     def test_error_simple_parent_dir(self):
-        exc = self.assertParseError(3, 15, "Paths outside the current "
-                "directory are not allowed: ../foo", self.get_recipe,
+        exc = self.assertInstructionParseError(3, 15,
+                "Paths outside the current directory are not allowed: ../foo",
+                NEST_INSTRUCTION, self.get_recipe,
                 self.basic_header_and_branch + "nest nest url ../foo\n")
 
     def test_error_complex_parent_dir(self):
-        exc = self.assertParseError(3, 15, "Paths outside the current "
-                "directory are not allowed: ./foo/../..", self.get_recipe,
+        exc = self.assertInstructionParseError(3, 15,
+                "Paths outside the current directory are not allowed:"
+                " ./foo/../..", NEST_INSTRUCTION, self.get_recipe,
                 self.basic_header_and_branch + "nest nest url ./foo/../..\n")
 
 
@@ -1064,8 +1105,8 @@ class StringifyTests(TestCaseInTempDir):
         nested_branch1 = RecipeBranch("nested1", "nested1_url",
                 revspec="tag:foo")
         base_branch.nest_branch(".", nested_branch1)
-        self.assertRaises(RecipeParseError, base_branch.get_recipe_text,
-                validate=True)
+        self.assertRaises(InstructionParseError,
+            base_branch.get_recipe_text, validate=True)
 
     def test_str_validates(self):
         base_branch = BaseRecipeBranch("base_url", "1", 0.1)
@@ -1073,7 +1114,7 @@ class StringifyTests(TestCaseInTempDir):
         nested_branch1 = RecipeBranch("nested1", "nested1_url",
                 revspec="tag:foo")
         base_branch.nest_branch(".", nested_branch1)
-        self.assertRaises(RecipeParseError, str, base_branch)
+        self.assertRaises(InstructionParseError, str, base_branch)
 
     def test_with_nest_part(self):
         base_branch = BaseRecipeBranch("base_url", "1", 0.1)
