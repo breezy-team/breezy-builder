@@ -284,3 +284,19 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             retcode=3)
         self.assertContainsRe(err, "The 'run' instruction is forbidden.$")
 
+    def test_cmd_dailydeb_with_native(self):
+        source = self.make_simple_package()
+        self.build_tree_contents([
+            ("source/debian/source/format", "3.0 (quilt)")])
+        source.add(["debian/source/format"])
+        source.commit("set source format")
+
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
+                    "deb-version 1\nsource 2\n")])
+        out, err = self.run_bzr(
+            "dailydeb -q test.recipe working --force-native", retcode=0)
+        f = open("working/test-2/debian/source/format")
+        try:
+            self.assertEquals("3.0 (native)", f.read())
+        finally:
+            f.close()
