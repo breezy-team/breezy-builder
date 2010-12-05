@@ -297,6 +297,11 @@ def build_source_package(basedir):
             "the devscripts package.")
 
 def get_source_format(path):
+    """Retrieve the source format name from a package.
+
+    :param path: Path to the package
+    :return: String with package format
+    """
     source_format_path = os.path.join(path, "debian", "source", "format")
     if not os.path.exists(source_format_path):
         return "1.0"
@@ -308,14 +313,22 @@ def get_source_format(path):
 
 
 def convert_3_0_quilt_to_native(path):
+    """Convert a package in 3.0 (quilt) format to 3.0 (native).
+
+    This applies all patches in the package and updates the 
+    debian/source/format file.
+
+    :param path: Path to the package on disk
+    """
+    path = os.path.abspath(path)
     patches_dir = os.path.join(path, "debian", "patches")
     series_file = os.path.join(patches_dir, "series")
     if os.path.exists(series_file):
-        _run_command(["quilt", "push", "-a"], path,
+        _run_command(["quilt", "push", "-a", "-v"], path,
             "Applying quilt patches",
             "Failed to apply quilt patches",
             not_installed_msg="quilt is not installed, please install it.",
-            env={"QUILT_SERIES": series_file})
+            env={"QUILT_SERIES": series_file, "QUILT_PATCHES": patches_dir})
         shutil.rmtree(os.path.join(path, "debian/patches"))
     f = open(os.path.join(path, "debian", "source", "format"), 'w')
     try:
@@ -325,6 +338,10 @@ def convert_3_0_quilt_to_native(path):
 
 
 def force_native_format(working_tree_path):
+    """Make sure a package is a format that supports native packages.
+
+    :param working_tree_path: Path to the package
+    """
     current_format = get_source_format(working_tree_path)
     if current_format == "3.0 (quilt)":
         convert_3_0_quilt_to_native(working_tree_path)
