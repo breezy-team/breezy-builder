@@ -14,6 +14,7 @@
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
+from textwrap import dedent
 
 from bzrlib import workingtree
 from bzrlib.tests import (
@@ -284,19 +285,48 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             retcode=3)
         self.assertContainsRe(err, "The 'run' instruction is forbidden.$")
 
-    def test_cmd_dailydeb_with_native(self):
+    def make_simple_quilt_package(self):
         source = self.make_simple_package()
+        self.build_tree(["source/debian/source/"])
         self.build_tree_contents([
             ("source/debian/source/format", "3.0 (quilt)")])
-        source.add(["debian/source/format"])
+        source.add(["debian/source", "debian/source/format"])
         source.commit("set source format")
+        return source
 
+    def test_cmd_dailydeb_force_native(self):
+        self.make_simple_quilt_package()
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version 1\nsource 2\n")])
         out, err = self.run_bzr(
             "dailydeb -q test.recipe working --force-native", retcode=0)
-        f = open("working/test-2/debian/source/format")
-        try:
-            self.assertEquals("3.0 (native)", f.read())
-        finally:
-            f.close()
+        self.assertFileEqual("3.0 (native)",
+            "working/test-1/debian/source/format")
+
+    def test_cmd_dailydeb_force_native_apply_quilt(self):
+        source = self.make_simple_quilt_package()
+        self.build_tree(["source/debian/patches/"])
+        patch = dedent(
+        """diff -ur a/thefile b/thefile
+           --- a/thefile	2010-12-05 20:14:22.000000000 +0100
+           +++ b/thefile	2010-12-05 20:14:26.000000000 +0100
+           @@ -1 +1 @@
+           -old-contents
+           +new-contents
+           """)
+        self.build_tree_contents([
+            ("source/thefile", "old-contents\n"),
+            ("source/debian/patches/series", "01_foo.patch"),
+            ("source/debian/patches/01_foo.patch", patch)])
+        source.add(["thefile", "debian/patches", "debian/patches/series",
+                    "debian/patches/01_foo.patch"])
+        source.commit("add patch")
+
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
+                    "deb-version 1\nsource 3\n")])
+        out, err = self.run_bzr(
+            "dailydeb -q test.recipe working --force-native", retcode=0)
+        self.assertFileEqual("3.0 (native)",
+            "working/test-1/debian/source/format")
+        self.assertFileEqual("new-contents\n",
+            "working/test-1/thefile")
