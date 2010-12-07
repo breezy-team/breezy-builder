@@ -289,7 +289,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source = self.make_simple_package()
         self.build_tree(["source/debian/source/"])
         self.build_tree_contents([
-            ("source/debian/source/format", "3.0 (quilt)")])
+            ("source/debian/source/format", "3.0 (quilt)\n")])
         source.add(["debian/source", "debian/source/format"])
         source.commit("set source format")
         return source
@@ -300,7 +300,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "deb-version 1\nsource 2\n")])
         out, err = self.run_bzr(
             "dailydeb -q test.recipe working --force-native", retcode=0)
-        self.assertFileEqual("3.0 (native)",
+        self.assertFileEqual("3.0 (native)\n",
             "working/test-1/debian/source/format")
 
     def test_cmd_dailydeb_force_native_apply_quilt(self):
@@ -326,7 +326,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "deb-version 1\nsource\n")])
         out, err = self.run_bzr(
             "dailydeb -q test.recipe working --force-native", retcode=0)
-        self.assertFileEqual("3.0 (native)",
+        self.assertFileEqual("3.0 (native)\n",
             "working/test-1/debian/source/format")
         self.assertFileEqual("new-contents\n",
             "working/test-1/thefile")

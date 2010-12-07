@@ -332,7 +332,7 @@ def convert_3_0_quilt_to_native(path):
         shutil.rmtree(os.path.join(path, "debian/patches"))
     f = open(os.path.join(path, "debian", "source", "format"), 'w')
     try:
-        f.write("3.0 (native)")
+        f.write("3.0 (native)\n")
     finally:
         f.close()
 
