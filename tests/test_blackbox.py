@@ -299,7 +299,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version 1\nsource 2\n")])
         out, err = self.run_bzr(
-            "dailydeb -q test.recipe working --force-native", retcode=0)
+            "dailydeb -q test.recipe working", retcode=0)
         self.assertFileEqual("3.0 (native)\n",
             "working/test-1/debian/source/format")
 
@@ -325,7 +325,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version 1\nsource\n")])
         out, err = self.run_bzr(
-            "dailydeb -q test.recipe working --force-native", retcode=0)
+            "dailydeb -q test.recipe working", retcode=0)
         self.assertFileEqual("3.0 (native)\n",
             "working/test-1/debian/source/format")
         self.assertFileEqual("new-contents\n",
@@ -354,5 +354,20 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version 1\nsource\n")])
         out, err = self.run_bzr(
-            "dailydeb -q test.recipe working --force-native", retcode=3)
+            "dailydeb -q test.recipe working", retcode=3)
         self.assertContainsRe(err, "bzr: ERROR: Failed to apply quilt patches")
+
+    def test_unknown_source_format(self):
+        source = self.make_simple_package()
+        self.build_tree(["source/debian/source/"])
+        self.build_tree_contents([
+            ("source/debian/source/format", "2.0\n")])
+        source.add(["debian/source", "debian/source/format"])
+        source.commit("set source format")
+
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
+                    "deb-version 1\nsource\n")])
+        out, err = self.run_bzr(
+            "dailydeb -q test.recipe working", retcode=3)
+        self.assertEquals(err, "bzr: ERROR: Unknown source format 2.0\n")
+

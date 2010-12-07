@@ -345,6 +345,9 @@ def force_native_format(working_tree_path):
     current_format = get_source_format(working_tree_path)
     if current_format == "3.0 (quilt)":
         convert_3_0_quilt_to_native(working_tree_path)
+    elif current_format not in ("1.0", "3.0 (native)"):
+        raise errors.BzrCommandError("Unknown source format %s" %
+                                     current_format)
 
 
 def sign_source_package(basedir, key_id):
@@ -456,8 +459,6 @@ class cmd_dailydeb(cmd_build):
                         "in debian/changelog."),
                 Option("safe", help="Error if the recipe would cause"
                        " arbitrary code execution."),
-                Option("force-native",
-                       help="Force the source package format to be native."),
             ]
 
     takes_args = ["recipe_file", "working_basedir?"]
@@ -465,7 +466,7 @@ class cmd_dailydeb(cmd_build):
     def run(self, recipe_file, working_basedir=None, manifest=None,
             if_changed_from=None, package=None, distribution=None,
             dput=None, key_id=None, no_build=None, watch_ppa=False,
-            append_version=None, safe=False, force_native=False):
+            append_version=None, safe=False):
 
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
@@ -506,8 +507,7 @@ class cmd_dailydeb(cmd_build):
             add_changelog_entry(base_branch, working_directory,
                 distribution=distribution, package=package,
                 append_version=append_version)
-            if force_native:
-               force_native_format(working_directory)
+            force_native_format(working_directory)
             package_dir = calculate_package_dir(base_branch,
                     package_name, working_basedir)
             # working_directory -> package_dir: after this debian stuff works.
