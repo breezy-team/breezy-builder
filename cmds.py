@@ -251,7 +251,7 @@ def calculate_package_dir(base_branch, package_name, working_basedir):
 
 
 def _run_command(command, basedir, msg, error_msg,
-        not_installed_msg=None):
+        not_installed_msg=None, env=None):
     """ Run a command in a subprocess.
 
     :param command: list with command and parameters
@@ -259,6 +259,7 @@ def _run_command(command, basedir, msg, error_msg,
     :param error_msg: message to display if something fails.
     :param not_installed_msg: the message to display if the command
         isn't available.
+    :param env: Optional environment to use rather than os.environ.
     """
     trace.note(msg)
     # Hide output if -q is in use.
@@ -267,6 +268,8 @@ def _run_command(command, basedir, msg, error_msg,
         kwargs = {"stderr": subprocess.STDOUT, "stdout": subprocess.PIPE}
     else:
         kwargs = {}
+    if env is not None:
+        kwargs["env"] = env
     try:
         proc = subprocess.Popen(command, cwd=basedir,
                 stdin=subprocess.PIPE, **kwargs)
@@ -292,6 +295,59 @@ def build_source_package(basedir):
         "Failed to build the source package",
         not_installed_msg="debuild is not installed, please install "
             "the devscripts package.")
+
+def get_source_format(path):
+    """Retrieve the source format name from a package.
+
+    :param path: Path to the package
+    :return: String with package format
+    """
+    source_format_path = os.path.join(path, "debian", "source", "format")
+    if not os.path.exists(source_format_path):
+        return "1.0"
+    f = open(source_format_path, 'r')
+    try:
+        return f.read().strip()
+    finally:
+        f.close()
+
+
+def convert_3_0_quilt_to_native(path):
+    """Convert a package in 3.0 (quilt) format to 3.0 (native).
+
+    This applies all patches in the package and updates the 
+    debian/source/format file.
+
+    :param path: Path to the package on disk
+    """
+    path = os.path.abspath(path)
+    patches_dir = os.path.join(path, "debian", "patches")
+    series_file = os.path.join(patches_dir, "series")
+    if os.path.exists(series_file):
+        _run_command(["quilt", "push", "-a", "-v"], path,
+            "Applying quilt patches",
+            "Failed to apply quilt patches",
+            not_installed_msg="quilt is not installed, please install it.",
+            env={"QUILT_SERIES": series_file, "QUILT_PATCHES": patches_dir})
+        shutil.rmtree(os.path.join(path, "debian/patches"))
+    f = open(os.path.join(path, "debian", "source", "format"), 'w')
+    try:
+        f.write("3.0 (native)\n")
+    finally:
+        f.close()
+
+
+def force_native_format(working_tree_path):
+    """Make sure a package is a format that supports native packages.
+
+    :param working_tree_path: Path to the package
+    """
+    current_format = get_source_format(working_tree_path)
+    if current_format == "3.0 (quilt)":
+        convert_3_0_quilt_to_native(working_tree_path)
+    elif current_format not in ("1.0", "3.0 (native)"):
+        raise errors.BzrCommandError("Unknown source format %s" %
+                                     current_format)
 
 
 def sign_source_package(basedir, key_id):
@@ -402,7 +458,7 @@ class cmd_dailydeb(cmd_build):
                         "specified string to the end of the version used "
                         "in debian/changelog."),
                 Option("safe", help="Error if the recipe would cause"
-                       " arbitrary code execution.")
+                       " arbitrary code execution."),
             ]
 
     takes_args = ["recipe_file", "working_basedir?"]
@@ -451,6 +507,7 @@ class cmd_dailydeb(cmd_build):
             add_changelog_entry(base_branch, working_directory,
                 distribution=distribution, package=package,
                 append_version=append_version)
+            force_native_format(working_directory)
             package_dir = calculate_package_dir(base_branch,
                     package_name, working_basedir)
             # working_directory -> package_dir: after this debian stuff works.
