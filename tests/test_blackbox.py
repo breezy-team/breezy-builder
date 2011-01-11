@@ -28,8 +28,12 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         super(BlackboxBuilderTests, self).setUp()
         # Replace DEBEMAIL and DEBFULLNAME so that they are known values
         # for the changelog checks.
-        self._captureVar("DEBEMAIL", "maint@maint.org")
-        self._captureVar("DEBFULLNAME", "M. Maintainer")
+        overrideEnv = getattr(self, "overrideEnv", None)
+        if overrideEnv is None:
+            # Pre-2.3 versions of Bazaar did not provide self.overrideEnv
+            overrideEnv = self._captureVar
+        overrideEnv("DEBEMAIL", "maint@maint.org")
+        overrideEnv("DEBFULLNAME", "M. Maintainer")
 
     def test_cmd_builder_exists(self):
         self.run_bzr("build --help")
