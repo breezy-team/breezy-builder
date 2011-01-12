@@ -279,7 +279,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "deb-version $\nsource 1\n")])
         err = self.run_bzr("dailydeb -q test.recipe working --package foo",
                 retcode=3)[1]
-        self.assertContainsRe(err, "bzr: ERROR: Invalid deb-version: \$: ")
+        self.assertContainsRe(err, "bzr: ERROR: Invalid deb-version: \\$: "
+            "(Could not parse version: \\$|Invalid version string '\\$')\n")
 
     def test_cmd_dailydeb_with_safe(self):
         self.make_simple_package()
@@ -374,4 +375,3 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         out, err = self.run_bzr(
             "dailydeb -q test.recipe working", retcode=3)
         self.assertEquals(err, "bzr: ERROR: Unknown source format 2.0\n")
-
