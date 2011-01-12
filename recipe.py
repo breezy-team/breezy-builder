@@ -150,7 +150,7 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
                                     possible_transports=possible_transports,
                                     accelerator_tree=accelerator_tree,
                                     source_branch=br_from,
-                                    stacked=(bzr_version_info >= (2, 3, 0, 'dev', 5)))
+                                    stacked=(bzr_version_info >= (2, 3, 0)))
         try:
             tree_to = dir.open_workingtree()
         except errors.NoWorkingTree:
