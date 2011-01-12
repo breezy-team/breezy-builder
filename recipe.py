@@ -28,6 +28,7 @@ from bzrlib import (
     trace,
     transport,
     urlutils,
+    version_info as bzr_version_info,
     )
 
 try:
@@ -148,7 +149,8 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
         dir = br_from.bzrdir.sprout(to_transport.base, revision_id,
                                     possible_transports=possible_transports,
                                     accelerator_tree=accelerator_tree,
-                                    source_branch=br_from)
+                                    source_branch=br_from,
+                                    stacked=(bzr_version_info >= (2, 3, 0, 'dev', 5)))
         try:
             tree_to = dir.open_workingtree()
         except errors.NoWorkingTree:
