@@ -228,14 +228,21 @@ def merge_branch(child_branch, tree_to, br_to, possible_transports=None):
         else:
             merge_revid = child_branch.branch.last_revision()
         child_branch.revid = merge_revid
-        merger = merge.Merger.from_revision_ids(None, tree_to, merge_revid,
-                other_branch=child_branch.branch, tree_branch=br_to)
+        try:
+            merger = merge.Merger.from_revision_ids(None, tree_to, merge_revid,
+                    other_branch=child_branch.branch, tree_branch=br_to)
+        except errors.UnrelatedBranches:
+            # Let's just try and hope for the best.
+            merger = merge.Merger.from_revision_ids(None, tree_to, merge_revid,
+                    other_branch=child_branch.branch, tree_branch=br_to,
+                    base=revision.NULL_REVISION)
         merger.merge_type = merge.Merge3Merger
         if (merger.base_rev_id == merger.other_rev_id and
                 merger.other_rev_id is not None):
             # Nothing to do.
             return
         conflict_count = merger.do_merge()
+
         merger.set_pending()
         if conflict_count:
             # FIXME: better reporting
