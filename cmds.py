@@ -312,14 +312,14 @@ def get_source_format(path):
         f.close()
 
 
-def has_non_empty_quilt_series(series_file):
+def has_non_empty_quilt_series(path):
     """Check if a directory has a non-empty quilt series file.
 
     :param path: Path to the series file
     """
-    if not os.path.exists(series_file):
+    if not os.path.exists(path):
         return False
-    f = open(series_file, 'r')
+    f = open(path, 'r')
     try:
         for l in f.readlines():
             if l.strip():
@@ -340,7 +340,7 @@ def convert_3_0_quilt_to_native(path):
     """
     path = os.path.abspath(path)
     patches_dir = os.path.join(path, "debian", "patches")
-    series_file = os.path.join(path, "series")
+    series_file = os.path.join(patches_dir, "series")
     if has_non_empty_quilt_series(series_file):
         _run_command(["quilt", "push", "-a", "-v"], path,
             "Applying quilt patches",

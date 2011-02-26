@@ -372,9 +372,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.commit("add patch")
 
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
-                    "deb-version 1\nsource\n")])
-        out, err = self.run_bzr(
-            "dailydeb -q test.recipe working", retcode=3)
+                    "deb-version 1\nsource 3\n")])
+        out, err = self.run_bzr("dailydeb -q test.recipe working", retcode=3)
         self.assertContainsRe(err, "bzr: ERROR: Failed to apply quilt patches")
 
     def test_unknown_source_format(self):
