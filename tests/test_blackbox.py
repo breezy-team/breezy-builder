@@ -308,6 +308,21 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertFileEqual("3.0 (native)\n",
             "working/test-1/debian/source/format")
 
+    def test_cmd_dailydeb_force_native_empty_series(self):
+        source = self.make_simple_quilt_package()
+        self.build_tree(['source/debian/patches/'])
+        self.build_tree_contents([
+            ("test.recipe", "# bzr-builder format 0.3 "
+             "deb-version 1\nsource 3\n"),
+            ("source/debian/patches/series", "\n")])
+        source.add(["debian/patches", "debian/patches/series"])
+        source.commit("add patches")
+        out, err = self.run_bzr(
+            "dailydeb -q test.recipe working", retcode=0)
+        self.assertFileEqual("3.0 (native)\n",
+            "working/test-1/debian/source/format")
+        self.failIfExists("working/test-1/debian/patches")
+
     def test_cmd_dailydeb_force_native_apply_quilt(self):
         source = self.make_simple_quilt_package()
         self.build_tree(["source/debian/patches/"])
@@ -357,9 +372,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.commit("add patch")
 
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
-                    "deb-version 1\nsource\n")])
-        out, err = self.run_bzr(
-            "dailydeb -q test.recipe working", retcode=3)
+                    "deb-version 1\nsource 3\n")])
+        out, err = self.run_bzr("dailydeb -q test.recipe working", retcode=3)
         self.assertContainsRe(err, "bzr: ERROR: Failed to apply quilt patches")
 
     def test_unknown_source_format(self):
