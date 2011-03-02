@@ -251,7 +251,7 @@ def calculate_package_dir(base_branch, package_name, working_basedir):
 
 
 def _run_command(command, basedir, msg, error_msg,
-        not_installed_msg=None, env=None):
+        not_installed_msg=None, env=None, success_exit_codes=None):
     """ Run a command in a subprocess.
 
     :param command: list with command and parameters
@@ -260,6 +260,7 @@ def _run_command(command, basedir, msg, error_msg,
     :param not_installed_msg: the message to display if the command
         isn't available.
     :param env: Optional environment to use rather than os.environ.
+    :param success_exit_codes: Exit codes to consider succesfull, defaults to [0].
     """
     trace.note(msg)
     # Hide output if -q is in use.
@@ -280,7 +281,9 @@ def _run_command(command, basedir, msg, error_msg,
             raise
         raise MissingDependency(msg=not_installed_msg)
     output = proc.communicate()
-    if proc.returncode != 0:
+    if success_exit_codes is None:
+        success_exit_codes = [0]
+    if proc.returncode not in success_exit_codes:
         if quiet:
             raise errors.BzrCommandError("%s: %s" % (error_msg, output))
         else:
@@ -312,24 +315,6 @@ def get_source_format(path):
         f.close()
 
 
-def has_non_empty_quilt_series(path):
-    """Check if a directory has a non-empty quilt series file.
-
-    :param path: Path to the series file
-    """
-    if not os.path.exists(path):
-        return False
-    f = open(path, 'r')
-    try:
-        for l in f.readlines():
-            if l.strip():
-                return True
-        else:
-            return False
-    finally:
-        f.close()
-
-
 def convert_3_0_quilt_to_native(path):
     """Convert a package in 3.0 (quilt) format to 3.0 (native).
 
@@ -341,12 +326,13 @@ def convert_3_0_quilt_to_native(path):
     path = os.path.abspath(path)
     patches_dir = os.path.join(path, "debian", "patches")
     series_file = os.path.join(patches_dir, "series")
-    if has_non_empty_quilt_series(series_file):
+    if os.path.exists(series_file):
         _run_command(["quilt", "push", "-a", "-v"], path,
             "Applying quilt patches",
             "Failed to apply quilt patches",
             not_installed_msg="quilt is not installed, please install it.",
-            env={"QUILT_SERIES": series_file, "QUILT_PATCHES": patches_dir})
+            env={"QUILT_SERIES": series_file, "QUILT_PATCHES": patches_dir},
+            success_exit_codes=(0, 2))
     if os.path.exists(patches_dir):
         shutil.rmtree(patches_dir)
     f = open(os.path.join(path, "debian", "source", "format"), 'w')
