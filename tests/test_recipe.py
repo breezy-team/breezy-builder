@@ -604,6 +604,33 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source1_rev_id, base_branch.revid)
         self.assertEqual(source2_rev_id, merged_branch.revid)
 
+    def test_build_tree_merge_unrelated(self):
+        """Make a branch with one file and one commit."""
+        source1 = self.make_branch_and_tree("source1")
+        self.build_tree_contents([("source1/a", "file a")])
+        source1.add(["a"])
+        source1_rev_id = source1.commit("one")
+
+        source2 = self.make_branch_and_tree("source2")
+        self.build_tree_contents([("source2/b", "file b")])
+        source2.add(["b"])
+        source2_rev_id = source2.commit("one")
+
+        base_branch = BaseRecipeBranch("source1", "1", 0.2)
+        merged_branch = RecipeBranch("merged", "source2")
+        base_branch.merge_branch(merged_branch)
+        build_tree(base_branch, "target")
+        self.failUnlessExists("target")
+        tree = workingtree.WorkingTree.open("target")
+        last_revid = tree.last_revision()
+        last_revtree = tree.branch.repository.revision_tree(last_revid)
+        self.assertEqual([source1_rev_id, source2_rev_id],
+                last_revtree.get_parent_ids())
+        self.check_file_contents("target/a", "file a")
+        self.check_file_contents("target/b", "file b")
+        self.assertEqual(source1_rev_id, base_branch.revid)
+        self.assertEqual(source2_rev_id, merged_branch.revid)
+
     def test_build_tree_nest_part(self):
         """A recipe can specify a merge of just part of an unrelated tree."""
         source1 = self.make_source_branch("source1")
