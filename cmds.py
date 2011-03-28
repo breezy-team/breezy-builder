@@ -539,8 +539,8 @@ class cmd_dailydeb(cmd_build):
                 shutil.rmtree(temp_dir)
         if watch_ppa:
             from bzrlib.plugins.builder.ppa import watch
-            target = target_from_dput(dput)
-            if not watch(target, self.package, base_branch.deb_version):
+            (owner, archive) = target_from_dput(dput)
+            if not watch(owner, archive, package_name, base_branch.deb_version):
                 return 2
 
     def _calculate_package_name(self, recipe_file, package):
@@ -565,5 +565,5 @@ def target_from_dput(dput):
     base, _, suffix = dput[len(ppa_prefix):].partition('/')
     if not suffix:
         suffix = 'ppa'
-    return base + '/' + suffix
+    return base, suffix
 

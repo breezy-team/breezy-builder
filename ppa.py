@@ -31,24 +31,8 @@ from bzrlib import (
 
 
 def get_lp():
-    credentials = Credentials()
     oauth_file = os.path.expanduser('~/.cache/launchpadlib/bzr-builder')
-    if os.path.exists(oauth_file):
-        f = open(oauth_file)
-        try:
-            credentials.load(f)
-        finally:
-            f.close()
-        launchpad = Launchpad(credentials, EDGE_SERVICE_ROOT)
-    else:
-        launchpad = Launchpad.get_token_and_login('bzr-builder',
-                EDGE_SERVICE_ROOT)
-        f = open(oauth_file, 'wb')
-        try:
-            launchpad.credentials.save(f)
-        finally:
-            f.close()
-    return launchpad
+    return Launchpad.login_with('bzr-builder', 'production', credentials_file=oauth_file)
 
 
 def watch(owner_name, archive_name, package_name, version):
