@@ -123,12 +123,28 @@ class DebUpstreamVariable(SimpleSubstitutionVariable):
         return self._version.upstream_version
 
 
-REVNO_VAR = "{revno}"
-REVNO_PARAM_VAR = "{revno:%s}"
+class RevnoVariable(SimpleSubstitutionVariable):
+
+    def __init__(self, name, get_revno_cb):
+        if name is None:
+            self.name = "{revno}"
+        else:
+            self.name = "{revno:%s}" % name
+        self.get_revno_cb = get_revno_cb
+
+    def get(self):
+        revno = self.get_revno_cb()
+        if revno is None:
+            raise errors.BzrCommandError("Can't substitute revno of "
+                    "branch %s in deb-version, as it's revno can't be "
+                    "determined" % revno)
+        return str(revno)
+
 
 ok_to_preserve = [DebUpstreamVariable.name]
 # The variables that don't require substitution in their name
-simple_vars = [TimeVariable.name, DateVariable.name, REVNO_VAR, DebUpstreamVariable.name]
+simple_vars = [TimeVariable.name, DateVariable.name, RevnoVariable.name,
+    DebUpstreamVariable.name]
 
 
 def check_expanded_deb_version(base_branch):
@@ -138,7 +154,7 @@ def check_expanded_deb_version(base_branch):
     if "{" in checked_version:
         available_tokens = simple_vars
         for name in base_branch.list_branch_names():
-            available_tokens.append(REVNO_PARAM_VAR % name)
+            available_tokens.append(RevnoVariable(name, None).name)
         raise errors.BzrCommandError("deb-version not fully "
                 "expanded: %s. Valid substitutions are: %s"
                 % (base_branch.deb_version, available_tokens))
@@ -755,17 +771,8 @@ class BaseRecipeBranch(RecipeBranch):
         :param get_revno_cb: a callback to get the revno for that branch if
             needed.
         """
-        if branch_name is None:
-            subst_string = REVNO_VAR
-        else:
-            subst_string = REVNO_PARAM_VAR % branch_name
-        if subst_string in self.deb_version:
-            revno = get_revno_cb()
-            if revno is None:
-                raise errors.BzrCommandError("Can't substitute revno of "
-                        "branch %s in deb-version, as it's revno can't be "
-                        "determined")
-            self.deb_version = self.deb_version.replace(subst_string, revno)
+        revno_var = RevnoVariable(branch_name, get_revno_cb)
+        self.deb_version = revno_var.replace(self.deb_version)
 
     def substitute_time(self, time):
         """Substitute the time in to deb_version if needed.
@@ -793,7 +800,6 @@ class BaseRecipeBranch(RecipeBranch):
                     instruction.recipe_branch.child_branches,
                     indent_level+1)
         return manifest
-
 
     def __str__(self):
         return self.get_recipe_text(validate=True)
