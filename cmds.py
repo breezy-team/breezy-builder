@@ -47,6 +47,7 @@ from bzrlib.plugins.builder.recipe import (
         RecipeParser,
         resolve_revisions,
         SAFE_INSTRUCTIONS,
+        SubstitutionUnavailable,
         )
 
 
@@ -192,7 +193,6 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
             distribution = cl._blocks[0].distributions.split()[0]
         if package is None:
             package = cl._blocks[0].package
-        base_branch.substitute_debupstream(cl)
     else:
         if file_found:
             if len(contents.strip()) > 0:
@@ -206,12 +206,14 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
             raise errors.BzrCommandError("No previous changelog to "
                     "take the package name from, and --package not "
                     "specified: %s." % reason)
-        if DebUpstreamVariable.name in base_branch.deb_version:
-            raise errors.BzrCommandError("No previous changelog to "
-                    "take the upstream version from as %s was "
-                    "used: %s." % (DebUpstreamVariable.name, reason))
         if distribution is None:
             distribution = DEFAULT_UBUNTU_DISTRIBUTION
+    try:
+        base_branch.substitute_debupstream(cl)
+    except SubstitutionUnavailable:
+        raise errors.BzrCommandError("No previous changelog to "
+                "take the upstream version from as %s was "
+                "used: %s." % (DebUpstreamVariable.name, reason))
     # Use debian packaging environment variables
     # or default values if they don't exist
     if author_name is None or author_email is None:

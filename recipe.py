@@ -133,6 +133,9 @@ class DebUpstreamVariable(SimpleSubstitutionVariable):
             return cls(None)
 
     def get(self):
+        if self._version is None:
+            raise SubstitutionUnavailable(self.name,
+                "No previous changelog to take the upstream version from")
         # Should we include the epoch?
         return self._version.upstream_version
 
