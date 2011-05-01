@@ -111,13 +111,24 @@ class DateVariable(SimpleSubstitutionVariable):
         return self._time.strftime("%Y%m%d")
 
 
+class DebUpstreamVariable(SimpleSubstitutionVariable):
+
+    name = "{debupstream}"
+
+    def __init__(self, version):
+        self._version = version
+
+    def get(self):
+        # Should we include the epoch?
+        return self._version.upstream_version
+
+
 REVNO_VAR = "{revno}"
 REVNO_PARAM_VAR = "{revno:%s}"
-DEBUPSTREAM_VAR = "{debupstream}"
 
-ok_to_preserve = [DEBUPSTREAM_VAR]
+ok_to_preserve = [DebUpstreamVariable.name]
 # The variables that don't require substitution in their name
-simple_vars = [TimeVariable.name, DateVariable.name, REVNO_VAR, DEBUPSTREAM_VAR]
+simple_vars = [TimeVariable.name, DateVariable.name, REVNO_VAR, DebUpstreamVariable.name]
 
 
 def check_expanded_deb_version(base_branch):
@@ -770,10 +781,7 @@ class BaseRecipeBranch(RecipeBranch):
         :param version: the Version object to take the upstream version
             from.
         """
-        if DEBUPSTREAM_VAR in self.deb_version:
-            # Should we include the epoch?
-            self.deb_version = self.deb_version.replace(DEBUPSTREAM_VAR,
-                    version.upstream_version)
+        self.deb_version = DebUpstreamVariable(version).replace(self.deb_version)
 
     def _add_child_branches_to_manifest(self, child_branches, indent_level):
         manifest = ""
