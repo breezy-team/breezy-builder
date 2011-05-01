@@ -142,20 +142,33 @@ class DebUpstreamVariable(SimpleSubstitutionVariable):
 
 class RevnoVariable(SimpleSubstitutionVariable):
 
-    def __init__(self, name, get_revno_cb):
+    def __init__(self, name, branch, revid):
         if name is None:
             self.name = "{revno}"
         else:
             self.name = "{revno:%s}" % name
-        self.get_revno_cb = get_revno_cb
+        self.branch = branch
+        self.revid = revid
+
+    def get_revno(self):
+        try:
+            revno = self.branch.revision_id_to_revno(self.revid)
+            return str(revno)
+        except errors.NoSuchRevision:
+            # We need to load and use the full revno map after all
+            result = self.branch.get_revision_id_to_revno_map().get(
+                    self.revid)
+        if result is None:
+            return result
+        return ".".join(result)
 
     def get(self):
-        revno = self.get_revno_cb()
+        revno = self.get_revno()
         if revno is None:
             raise errors.BzrCommandError("Can't substitute revno of "
                     "branch %s in deb-version, as it's revno can't be "
                     "determined" % revno)
-        return str(revno)
+        return revno
 
 
 ok_to_preserve = [DebUpstreamVariable.name]
@@ -425,18 +438,7 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
         else:
             revision_id = new_branch.branch.last_revision()
         new_branch.revid = revision_id
-        def get_revno():
-            try:
-                revno = new_branch.branch.revision_id_to_revno(revision_id)
-                return str(revno)
-            except errors.NoSuchRevision:
-                # We need to load and use the full revno map after all
-                result = new_branch.branch.get_revision_id_to_revno_map().get(
-                        revision_id)
-            if result is None:
-                return result
-            return ".".join(result)
-        substitute_revno(new_branch.name, get_revno)
+        substitute_revno(new_branch.name, new_branch.branch, new_branch.revid)
         if (if_changed_from is not None
                 and (new_branch.revspec is not None
                         or if_changed_from.revspec is not None)):
@@ -778,17 +780,17 @@ class BaseRecipeBranch(RecipeBranch):
         self.deb_version = deb_version
         self.format = format
 
-    def substitute_revno(self, branch_name, get_revno_cb):
+    def substitute_revno(self, branch_name, branch, revid):
         """Substitute the revno for the given branch name in deb_version.
 
         Where deb_version has a place to substitute the revno for a branch
         this will substitute it for the given branch name.
 
         :param branch_name: the name of the RecipeBranch to substitute.
-        :param get_revno_cb: a callback to get the revno for that branch if
-            needed.
+        :param branch: Branch object for the branch
+        :param revid: Revision id in the branch for which to return the revno
         """
-        revno_var = RevnoVariable(branch_name, get_revno_cb)
+        revno_var = RevnoVariable(branch_name, branch, revid)
         self.deb_version = revno_var.replace(self.deb_version)
 
     def substitute_time(self, time):
