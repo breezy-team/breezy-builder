@@ -67,15 +67,57 @@ USAGE = {
 SAFE_INSTRUCTIONS = [
     MERGE_INSTRUCTION, NEST_PART_INSTRUCTION, NEST_INSTRUCTION]
 
-TIME_VAR = "{time}"
-DATE_VAR = "{date}"
+
+class SubstitutionVariable(object):
+    """A substitution variable for a version string."""
+
+    def replace(self, value):
+        """Replace name with value."""
+        raise NotImplementedError(self.replace)
+
+
+class SimpleSubstitutionVariable(object):
+
+    name = None
+
+    def replace(self, value):
+        if not self.name in value:
+            return value
+        return value.replace(self.name, self.get())
+
+    def get(self):
+        raise NotImplementedError(self.value)
+
+
+class TimeVariable(SimpleSubstitutionVariable):
+
+    name = "{time}"
+
+    def __init__(self, time):
+        self._time = time
+
+    def get(self):
+        return self._time.strftime("%Y%m%d%H%M")
+
+
+class DateVariable(SimpleSubstitutionVariable):
+
+    name = "{date}"
+
+    def __init__(self, time):
+        self._time = time
+
+    def get(self):
+        return self._time.strftime("%Y%m%d")
+
+
 REVNO_VAR = "{revno}"
 REVNO_PARAM_VAR = "{revno:%s}"
 DEBUPSTREAM_VAR = "{debupstream}"
 
 ok_to_preserve = [DEBUPSTREAM_VAR]
 # The variables that don't require substitution in their name
-simple_vars = [TIME_VAR, DATE_VAR, REVNO_VAR, DEBUPSTREAM_VAR]
+simple_vars = [TimeVariable.name, DateVariable.name, REVNO_VAR, DEBUPSTREAM_VAR]
 
 
 def check_expanded_deb_version(base_branch):
@@ -719,12 +761,8 @@ class BaseRecipeBranch(RecipeBranch):
 
         :param time: a datetime.datetime with the desired time.
         """
-        if TIME_VAR in self.deb_version:
-            self.deb_version = self.deb_version.replace(TIME_VAR,
-                    time.strftime("%Y%m%d%H%M"))
-        if DATE_VAR in self.deb_version:
-            self.deb_version = self.deb_version.replace(DATE_VAR,
-                    time.strftime("%Y%m%d"))
+        self.deb_version = TimeVariable(time).replace(self.deb_version)
+        self.deb_version = DateVariable(time).replace(self.deb_version)
 
     def substitute_debupstream(self, version):
         """Substitute {debupstream} in to deb_version if needed.
