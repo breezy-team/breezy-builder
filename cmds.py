@@ -192,9 +192,7 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
             distribution = cl._blocks[0].distributions.split()[0]
         if package is None:
             package = cl._blocks[0].package
-        if DebUpstreamVariable.name in base_branch.deb_version:
-            cl_version = cl._blocks[0].version
-            base_branch.substitute_debupstream(cl_version)
+        base_branch.substitute_debupstream(cl)
     else:
         if file_found:
             if len(contents.strip()) > 0:

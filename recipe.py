@@ -68,6 +68,13 @@ SAFE_INSTRUCTIONS = [
     MERGE_INSTRUCTION, NEST_PART_INSTRUCTION, NEST_INSTRUCTION]
 
 
+class SubstitutionUnavailable(errors.BzrError):
+    _fmt = """Substitution for %(name)s not available: %(reason)s"""
+
+    def __init__(self, name, reason):
+        errors.BzrError.__init__(self, name=name, reason=reason)
+
+
 class SubstitutionVariable(object):
     """A substitution variable for a version string."""
 
@@ -117,6 +124,13 @@ class DebUpstreamVariable(SimpleSubstitutionVariable):
 
     def __init__(self, version):
         self._version = version
+
+    @classmethod
+    def from_changelog(cls, changelog):
+        if len(changelog._blocks) > 0:
+            return cls(changelog._blocks[0].version)
+        else:
+            return cls(None)
 
     def get(self):
         # Should we include the epoch?
@@ -782,13 +796,13 @@ class BaseRecipeBranch(RecipeBranch):
         self.deb_version = TimeVariable(time).replace(self.deb_version)
         self.deb_version = DateVariable(time).replace(self.deb_version)
 
-    def substitute_debupstream(self, version):
+    def substitute_debupstream(self, changelog):
         """Substitute {debupstream} in to deb_version if needed.
 
-        :param version: the Version object to take the upstream version
-            from.
+        :param changelog: Changelog to take the upstream version from
         """
-        self.deb_version = DebUpstreamVariable(version).replace(self.deb_version)
+        debupstream_var = DebUpstreamVariable.from_changelog(changelog)
+        self.deb_version = debupstream_var.replace(self.deb_version)
 
     def _add_child_branches_to_manifest(self, child_branches, indent_level):
         manifest = ""
