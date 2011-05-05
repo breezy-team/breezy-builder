@@ -22,7 +22,7 @@ from bzrlib.tests import (
 class TestTargetFromDPut(TestCase):
 
     def test_default_ppa(self):
-        self.assertEqual('team-name/ppa', target_from_dput('ppa:team-name'))
+        self.assertEqual(('team-name', 'ppa'), target_from_dput('ppa:team-name'))
 
     def test_named_ppa(self):
-        self.assertEqual('team/ppa2', target_from_dput('ppa:team/ppa2'))
+        self.assertEqual(('team', 'ppa2'), target_from_dput('ppa:team/ppa2'))
