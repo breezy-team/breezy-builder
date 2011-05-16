@@ -67,15 +67,114 @@ USAGE = {
 SAFE_INSTRUCTIONS = [
     MERGE_INSTRUCTION, NEST_PART_INSTRUCTION, NEST_INSTRUCTION]
 
-TIME_VAR = "{time}"
-DATE_VAR = "{date}"
-REVNO_VAR = "{revno}"
-REVNO_PARAM_VAR = "{revno:%s}"
-DEBUPSTREAM_VAR = "{debupstream}"
 
-ok_to_preserve = [DEBUPSTREAM_VAR]
+class SubstitutionUnavailable(errors.BzrError):
+    _fmt = """Substitution for %(name)s not available: %(reason)s"""
+
+    def __init__(self, name, reason):
+        errors.BzrError.__init__(self, name=name, reason=reason)
+
+
+class SubstitutionVariable(object):
+    """A substitution variable for a version string."""
+
+    def replace(self, value):
+        """Replace name with value."""
+        raise NotImplementedError(self.replace)
+
+
+class SimpleSubstitutionVariable(object):
+
+    name = None
+
+    def replace(self, value):
+        if not self.name in value:
+            return value
+        return value.replace(self.name, self.get())
+
+    def get(self):
+        raise NotImplementedError(self.value)
+
+
+class TimeVariable(SimpleSubstitutionVariable):
+
+    name = "{time}"
+
+    def __init__(self, time):
+        self._time = time
+
+    def get(self):
+        return self._time.strftime("%Y%m%d%H%M")
+
+
+class DateVariable(SimpleSubstitutionVariable):
+
+    name = "{date}"
+
+    def __init__(self, time):
+        self._time = time
+
+    def get(self):
+        return self._time.strftime("%Y%m%d")
+
+
+class DebUpstreamVariable(SimpleSubstitutionVariable):
+
+    name = "{debupstream}"
+
+    def __init__(self, version):
+        self._version = version
+
+    @classmethod
+    def from_changelog(cls, changelog):
+        if len(changelog._blocks) > 0:
+            return cls(changelog._blocks[0].version)
+        else:
+            return cls(None)
+
+    def get(self):
+        if self._version is None:
+            raise SubstitutionUnavailable(self.name,
+                "No previous changelog to take the upstream version from")
+        # Should we include the epoch?
+        return self._version.upstream_version
+
+
+class RevnoVariable(SimpleSubstitutionVariable):
+
+    def __init__(self, name, branch, revid):
+        if name is None:
+            self.name = "{revno}"
+        else:
+            self.name = "{revno:%s}" % name
+        self.branch = branch
+        self.revid = revid
+
+    def get_revno(self):
+        try:
+            revno = self.branch.revision_id_to_revno(self.revid)
+            return str(revno)
+        except errors.NoSuchRevision:
+            # We need to load and use the full revno map after all
+            result = self.branch.get_revision_id_to_revno_map().get(
+                    self.revid)
+        if result is None:
+            return result
+        return ".".join(result)
+
+    def get(self):
+        revno = self.get_revno()
+        if revno is None:
+            raise errors.BzrCommandError("Can't substitute revno of "
+                    "branch %s in deb-version, as it's revno can't be "
+                    "determined" % revno)
+        return revno
+
+
+ok_to_preserve = [DebUpstreamVariable.name]
 # The variables that don't require substitution in their name
-simple_vars = [TIME_VAR, DATE_VAR, REVNO_VAR, DEBUPSTREAM_VAR]
+simple_vars = [TimeVariable.name, DateVariable.name, RevnoVariable.name,
+    DebUpstreamVariable.name]
 
 
 def check_expanded_deb_version(base_branch):
@@ -85,7 +184,7 @@ def check_expanded_deb_version(base_branch):
     if "{" in checked_version:
         available_tokens = simple_vars
         for name in base_branch.list_branch_names():
-            available_tokens.append(REVNO_PARAM_VAR % name)
+            available_tokens.append(RevnoVariable(name, None).name)
         raise errors.BzrCommandError("deb-version not fully "
                 "expanded: %s. Valid substitutions are: %s"
                 % (base_branch.deb_version, available_tokens))
@@ -339,18 +438,7 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
         else:
             revision_id = new_branch.branch.last_revision()
         new_branch.revid = revision_id
-        def get_revno():
-            try:
-                revno = new_branch.branch.revision_id_to_revno(revision_id)
-                return str(revno)
-            except errors.NoSuchRevision:
-                # We need to load and use the full revno map after all
-                result = new_branch.branch.get_revision_id_to_revno_map().get(
-                        revision_id)
-            if result is None:
-                return result
-            return ".".join(result)
-        substitute_revno(new_branch.name, get_revno)
+        substitute_revno(new_branch.name, new_branch.branch, new_branch.revid)
         if (if_changed_from is not None
                 and (new_branch.revspec is not None
                         or if_changed_from.revspec is not None)):
@@ -692,50 +780,34 @@ class BaseRecipeBranch(RecipeBranch):
         self.deb_version = deb_version
         self.format = format
 
-    def substitute_revno(self, branch_name, get_revno_cb):
+    def substitute_revno(self, branch_name, branch, revid):
         """Substitute the revno for the given branch name in deb_version.
 
         Where deb_version has a place to substitute the revno for a branch
         this will substitute it for the given branch name.
 
         :param branch_name: the name of the RecipeBranch to substitute.
-        :param get_revno_cb: a callback to get the revno for that branch if
-            needed.
+        :param branch: Branch object for the branch
+        :param revid: Revision id in the branch for which to return the revno
         """
-        if branch_name is None:
-            subst_string = REVNO_VAR
-        else:
-            subst_string = REVNO_PARAM_VAR % branch_name
-        if subst_string in self.deb_version:
-            revno = get_revno_cb()
-            if revno is None:
-                raise errors.BzrCommandError("Can't substitute revno of "
-                        "branch %s in deb-version, as it's revno can't be "
-                        "determined")
-            self.deb_version = self.deb_version.replace(subst_string, revno)
+        revno_var = RevnoVariable(branch_name, branch, revid)
+        self.deb_version = revno_var.replace(self.deb_version)
 
     def substitute_time(self, time):
         """Substitute the time in to deb_version if needed.
 
         :param time: a datetime.datetime with the desired time.
         """
-        if TIME_VAR in self.deb_version:
-            self.deb_version = self.deb_version.replace(TIME_VAR,
-                    time.strftime("%Y%m%d%H%M"))
-        if DATE_VAR in self.deb_version:
-            self.deb_version = self.deb_version.replace(DATE_VAR,
-                    time.strftime("%Y%m%d"))
+        self.deb_version = TimeVariable(time).replace(self.deb_version)
+        self.deb_version = DateVariable(time).replace(self.deb_version)
 
-    def substitute_debupstream(self, version):
+    def substitute_debupstream(self, changelog):
         """Substitute {debupstream} in to deb_version if needed.
 
-        :param version: the Version object to take the upstream version
-            from.
+        :param changelog: Changelog to take the upstream version from
         """
-        if DEBUPSTREAM_VAR in self.deb_version:
-            # Should we include the epoch?
-            self.deb_version = self.deb_version.replace(DEBUPSTREAM_VAR,
-                    version.upstream_version)
+        debupstream_var = DebUpstreamVariable.from_changelog(changelog)
+        self.deb_version = debupstream_var.replace(self.deb_version)
 
     def _add_child_branches_to_manifest(self, child_branches, indent_level):
         manifest = ""
@@ -747,7 +819,6 @@ class BaseRecipeBranch(RecipeBranch):
                     instruction.recipe_branch.child_branches,
                     indent_level+1)
         return manifest
-
 
     def __str__(self):
         return self.get_recipe_text(validate=True)
