@@ -203,7 +203,7 @@ class SubversionRevnumVariable(BranchSubstitutionVariable):
                 self.name)
         try:
             (uuid, branch_path, revno) = extract_svn_foreign_revid(rev)
-        except errors.InvalidRevisionid:
+        except errors.InvalidRevisionId:
             raise errors.BzrCommandError("unable to expand %s for %r in %r: "
                 "not a Subversion revision" % (
                     self.name, self.revid, self.branch))

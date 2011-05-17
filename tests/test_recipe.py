@@ -24,6 +24,7 @@ from bzrlib import (
 from bzrlib.tests import (
         TestCaseInTempDir,
         TestCaseWithTransport,
+        TestSkipped,
         )
 from bzrlib.plugins.builder.recipe import (
         BaseRecipeBranch,
@@ -1040,6 +1041,33 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source.commit("two")
         branch1 = BaseRecipeBranch("source", "{revno:packaging}", 0.2)
         self.assertRaises(errors.BzrCommandError, resolve_revisions, branch1)
+
+    def test_substitute_svn_not_svn(self):
+        try:
+            from bzrlib.plugins.svn import extract_svn_foreign_revid
+        except KeyError:
+            raise TestSkipped("bzr-svn not available")
+        br = self.make_branch("source")
+        source = br.create_checkout("checkout")
+        source.commit("one")
+        source.commit("two")
+        branch1 = BaseRecipeBranch("source", "foo-{svn-revno}", 0.2)
+        e = self.assertRaises(errors.BzrCommandError, resolve_revisions,
+            branch1)
+        self.assertTrue(str(e).startswith("unable to expand {svn-revno} "),
+            e)
+
+    def test_substitute_svn(self):
+        try:
+            br = self.make_branch("source", format="subversion")
+        except KeyError:
+            raise TestSkipped("bzr-svn not available")
+        source = br.create_checkout("checkout")
+        source.commit("one")
+        source.commit("two")
+        branch1 = BaseRecipeBranch("source", "foo-{svn-revno}", 0.2)
+        resolve_revisions(branch1)
+        self.assertEqual("foo-2", branch1.deb_version)
 
 
 class StringifyTests(TestCaseInTempDir):
