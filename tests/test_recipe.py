@@ -1069,6 +1069,32 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         resolve_revisions(branch1)
         self.assertEqual("foo-2", branch1.deb_version)
 
+    def test_substitute_git_not_git(self):
+        try:
+            from bzrlib.plugins.git import extract_git_foreign_revid
+        except KeyError:
+            raise TestSkipped("bzr-git not available")
+        source = self.make_branch_and_tree("source")
+        source.commit("one")
+        source.commit("two")
+        branch1 = BaseRecipeBranch("source", "foo-{git-commit}", 0.2)
+        e = self.assertRaises(errors.BzrCommandError, resolve_revisions,
+            branch1)
+        self.assertTrue(str(e).startswith("unable to expand {git-commit} "),
+            e)
+
+    def test_substitute_git(self):
+        try:
+            source = self.make_branch_and_tree("source", format="git")
+        except KeyError:
+            raise TestSkipped("bzr-git not available")
+        source.commit("one", lossy=True)
+        source.commit("two", lossy=True)
+        branch1 = BaseRecipeBranch("source", "foo-{git-commit}", 0.2)
+        resolve_revisions(branch1)
+        self.assertEqual("foo-", branch1.deb_version[:4])
+        self.assertEqual(7, len(branch1.deb_version[4:]))
+
 
 class StringifyTests(TestCaseInTempDir):
 

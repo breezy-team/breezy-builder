@@ -210,10 +210,36 @@ class SubversionRevnumVariable(BranchSubstitutionVariable):
         return str(revno)
 
 
+class GitCommitVariable(BranchSubstitutionVariable):
+
+    basename = "git-commit"
+
+    def __init__(self, branch_name, branch, revid):
+        super(GitCommitVariable, self).__init__(branch_name)
+        self.branch = branch
+        self.revid = revid
+
+    def get(self):
+        rev = self.branch.repository.get_revision(self.revid)
+        try:
+            from bzrlib.plugins.git import extract_git_foreign_revid
+        except ImportError:
+            raise errors.BzrCommandError("bzr-git not available for %s" %
+                self.name)
+        try:
+            commit_sha = extract_git_foreign_revid(rev)
+        except errors.InvalidRevisionId:
+            raise errors.BzrCommandError("unable to expand %s for %r in %r: "
+                "not a Git revision" % (
+                    self.name, self.revid, self.branch))
+        return commit_sha[:7]
+
+
 ok_to_preserve = [DebUpstreamVariable.name]
 # The variables that don't require substitution in their name
 simple_vars = [TimeVariable.name, DateVariable.name, RevnoVariable.name,
-    SubversionRevnumVariable.name, DebUpstreamVariable.name]
+    SubversionRevnumVariable.name, DebUpstreamVariable.name,
+    GitCommitVariable.name]
 
 
 def check_expanded_deb_version(base_branch):
@@ -225,6 +251,7 @@ def check_expanded_deb_version(base_branch):
         for name in base_branch.list_branch_names():
             available_tokens.append(RevnoVariable(name, None).name)
             available_tokens.append(SubversionRevnumVariable(name, None).name)
+            available_tokens.append(GitCommitVariable(name, None).name)
         raise errors.BzrCommandError("deb-version not fully "
                 "expanded: %s. Valid substitutions are: %s"
                 % (base_branch.deb_version, available_tokens))
@@ -834,6 +861,8 @@ class BaseRecipeBranch(RecipeBranch):
         self.deb_version = revno_var.replace(self.deb_version)
         svn_revno_var = SubversionRevnumVariable(branch_name, branch, revid)
         self.deb_version = svn_revno_var.replace(self.deb_version)
+        git_commit_var = GitCommitVariable(branch_name, branch, revid)
+        self.deb_version = git_commit_var.replace(self.deb_version)
 
     def substitute_time(self, time):
         """Substitute the time in to deb_version if needed.
