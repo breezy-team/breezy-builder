@@ -24,7 +24,6 @@ from bzrlib import (
 from bzrlib.tests import (
         TestCaseInTempDir,
         TestCaseWithTransport,
-        TestSkipped,
         )
 from bzrlib.plugins.builder.recipe import (
         BaseRecipeBranch,
