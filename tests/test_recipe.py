@@ -1062,6 +1062,24 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         resolve_revisions(branch1)
         self.assertEqual("foo-5344", branch1.deb_version)
 
+    def test_substitute_git_not_git(self):
+        source = self.make_branch_and_tree("source")
+        source.commit("one")
+        source.commit("two")
+        branch1 = BaseRecipeBranch("source", "foo-{git-commit}", 0.2)
+        e = self.assertRaises(errors.BzrCommandError, resolve_revisions,
+            branch1)
+        self.assertTrue(str(e).startswith("unable to expand {git-commit} "),
+            e)
+
+    def test_substitute_git(self):
+        source = self.make_branch_and_tree("source")
+        source.commit("one", 
+            rev_id="git-v1:a029d7b2cc83c26a53d8b2a24fa12c340fcfac58")
+        branch1 = BaseRecipeBranch("source", "foo-{git-commit}", 0.2)
+        resolve_revisions(branch1)
+        self.assertEqual("foo-a029d7b", branch1.deb_version)
+
 
 class StringifyTests(TestCaseInTempDir):
 
