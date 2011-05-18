@@ -81,15 +81,16 @@ def get_branch_from_recipe_location(recipe_location, safe=False,
     :param safe: if True, reject recipes that would cause arbitrary code
         execution.
     """
-    child_transport = _mod_transport.get_transport(recipe_location,
-        possible_transports=possible_transports)
-    recipe_transport = child_transport.clone('..')
-    basename = recipe_transport.relpath(child_transport.base)
     try:
-        recipe_contents = recipe_transport.get_bytes(basename)
+        (basename, f) = get_recipe_from_location(recipe_location, possible_transports)
     except errors.NoSuchFile:
         raise errors.BzrCommandError("Specified recipe does not exist: "
                 "%s" % recipe_location)
+    else:
+        try:
+            recipe_contents = f.read()
+        finally:
+            f.close()
     if safe:
         permitted_instructions = SAFE_INSTRUCTIONS
     else:
@@ -99,14 +100,15 @@ def get_branch_from_recipe_location(recipe_location, safe=False,
 
 
 def get_old_recipe(if_changed_from, possible_transports=None):
-    child_transport = _mod_transport.get_transport(if_changed_from,
-        possible_transports=possible_transports)
-    old_manifest_transport = child_transport.clone('..')
-    basename = old_manifest_transport.relpath(child_transport.base)
     try:
-        old_manifest_contents = old_manifest_transport.get_bytes(basename)
+        (basename, f) = get_recipe_from_location(if_changed_from, possible_transports)
     except errors.NoSuchFile:
         return None
+    else:
+        try:
+            old_manifest_contents = f.read()
+        finally:
+            f.close()
     old_recipe = RecipeParser(old_manifest_contents,
             filename=if_changed_from).parse()
     return old_recipe
@@ -395,6 +397,20 @@ def dput_source_package(basedir, target):
         "Uploading the package failed",
         not_installed_msg="debrelease is not installed, please "
             "install the devscripts package.")
+
+
+def get_recipe_from_location(location, possible_transports=None):
+    """Open a recipe as a file-like object from a URL.
+
+    :param location: The recipe location
+    :param possible_transports: Possible transports to use
+    :return: Tuple with basename and file-like object
+    """
+    child_transport = _mod_transport.get_transport(location,
+        possible_transports=possible_transports)
+    recipe_transport = child_transport.clone('..')
+    basename = recipe_transport.relpath(child_transport.base)
+    return basename, recipe_transport.get(basename)
 
 
 class cmd_build(Command):
