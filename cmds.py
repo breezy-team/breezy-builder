@@ -60,6 +60,11 @@ class MissingDependency(errors.BzrError):
 
 
 def write_manifest_to_path(path, base_branch):
+    """Write a manifest to disk.
+
+    :param path: Path to write to
+    :param base_branch: Recipe base branch
+    """
     parent_dir = os.path.dirname(path)
     if parent_dir != '' and not os.path.exists(parent_dir):
         os.makedirs(parent_dir)
@@ -252,7 +257,12 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
 
 
 def calculate_package_dir(base_branch, package_name, working_basedir):
-    """Calculate the directory name that should be used while debuilding."""
+    """Calculate the directory name that should be used while debuilding.
+
+    :param base_branch: Recipe base branch
+    :param package_name: Package name
+    :param working_basedir: Base directory
+    """
     version = base_branch.deb_version
     if "-" in version:
         version = version[:version.rindex("-")]
@@ -309,6 +319,7 @@ def build_source_package(basedir):
         "Failed to build the source package",
         not_installed_msg="debuild is not installed, please install "
             "the devscripts package.")
+
 
 def get_source_format(path):
     """Retrieve the source format name from a package.
