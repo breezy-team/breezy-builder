@@ -1043,10 +1043,6 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         self.assertRaises(errors.BzrCommandError, resolve_revisions, branch1)
 
     def test_substitute_svn_not_svn(self):
-        try:
-            from bzrlib.plugins.svn import extract_svn_foreign_revid
-        except KeyError:
-            raise TestSkipped("bzr-svn not available")
         br = self.make_branch("source")
         source = br.create_checkout("checkout")
         source.commit("one")
@@ -1058,16 +1054,14 @@ class ResolveRevisionsTests(TestCaseWithTransport):
             e)
 
     def test_substitute_svn(self):
-        try:
-            br = self.make_branch("source", format="subversion")
-        except KeyError:
-            raise TestSkipped("bzr-svn not available")
+        br = self.make_branch("source")
         source = br.create_checkout("checkout")
         source.commit("one")
-        source.commit("two")
+        source.commit("two",
+            rev_id="svn-v4:be7e6eca-30d4-0310-a8e5-ac0d63af7070:trunk:5344")
         branch1 = BaseRecipeBranch("source", "foo-{svn-revno}", 0.2)
         resolve_revisions(branch1)
-        self.assertEqual("foo-2", branch1.deb_version)
+        self.assertEqual("foo-5344", branch1.deb_version)
 
 
 class StringifyTests(TestCaseInTempDir):
