@@ -173,6 +173,17 @@ def get_maintainer():
 def add_changelog_entry(base_branch, basedir, distribution=None,
         package=None, author_name=None, author_email=None,
         append_version=None):
+    """Add a new changelog entry for an autobuild.
+
+    :param base_branch: Recipe base branch
+    :param basedir: Base working directory
+    :param distribution: Optional distribution (defaults to last entry
+        distribution)
+    :param package: Optional package name (defaults to last entry package name)
+    :param author_name: Name of the build requester
+    :param author_email: Email of the build requester
+    :param append_version: Optional version suffix to add
+    """
     debian_dir = os.path.join(basedir, "debian")
     if not os.path.exists(debian_dir):
         os.makedirs(debian_dir)
