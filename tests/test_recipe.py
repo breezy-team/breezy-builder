@@ -1041,6 +1041,27 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         branch1 = BaseRecipeBranch("source", "{revno:packaging}", 0.2)
         self.assertRaises(errors.BzrCommandError, resolve_revisions, branch1)
 
+    def test_substitute_svn_not_svn(self):
+        br = self.make_branch("source")
+        source = br.create_checkout("checkout")
+        source.commit("one")
+        source.commit("two")
+        branch1 = BaseRecipeBranch("source", "foo-{svn-revno}", 0.2)
+        e = self.assertRaises(errors.BzrCommandError, resolve_revisions,
+            branch1)
+        self.assertTrue(str(e).startswith("unable to expand {svn-revno} "),
+            e)
+
+    def test_substitute_svn(self):
+        br = self.make_branch("source")
+        source = br.create_checkout("checkout")
+        source.commit("one")
+        source.commit("two",
+            rev_id="svn-v4:be7e6eca-30d4-0310-a8e5-ac0d63af7070:trunk:5344")
+        branch1 = BaseRecipeBranch("source", "foo-{svn-revno}", 0.2)
+        resolve_revisions(branch1)
+        self.assertEqual("foo-5344", branch1.deb_version)
+
 
 class StringifyTests(TestCaseInTempDir):
 

@@ -140,13 +140,27 @@ class DebUpstreamVariable(SimpleSubstitutionVariable):
         return self._version.upstream_version
 
 
-class RevnoVariable(SimpleSubstitutionVariable):
+class BranchSubstitutionVariable(SimpleSubstitutionVariable):
 
-    def __init__(self, name, branch, revid):
-        if name is None:
-            self.name = "{revno}"
+    basename = None
+
+    def __init__(self, branch_name=None):
+        self.branch_name = branch_name
+
+    @property
+    def name(self):
+        if self.branch_name is None:
+            return "{%s}" % self.basename
         else:
-            self.name = "{revno:%s}" % name
+            return "{%s:%s}" % (self.basename, self.branch_name)
+
+
+class RevnoVariable(BranchSubstitutionVariable):
+
+    basename = "revno"
+
+    def __init__(self, branch_name, branch, revid):
+        super(RevnoVariable, self).__init__(branch_name)
         self.branch = branch
         self.revid = revid
 
@@ -171,10 +185,48 @@ class RevnoVariable(SimpleSubstitutionVariable):
         return revno
 
 
+def extract_svn_revnum(rev):
+    try:
+        foreign_revid = rev.foreign_revid
+    except AttributeError:
+        try:
+            (mapping_name, uuid, bp, srevnum) = rev.revision_id.split(":", 3)
+        except ValueError:
+            raise errors.InvalidRevisionId(rev.revision_id, None)
+        if not mapping_name.startswith("svn-"):
+            raise errors.InvalidRevisionId(rev.revision_id, None)
+        return int(srevnum)
+    else:
+        if rev.mapping.vcs.abbreviation == "svn":
+            return foreign_revid[2]
+        else:
+            raise errors.InvalidRevisionId(rev.revision_id, None)
+
+
+class SubversionRevnumVariable(BranchSubstitutionVariable):
+
+    basename = "svn-revno"
+
+    def __init__(self, branch_name, branch, revid):
+        super(SubversionRevnumVariable, self).__init__(branch_name)
+        self.branch = branch
+        self.revid = revid
+
+    def get(self):
+        rev = self.branch.repository.get_revision(self.revid)
+        try:
+            revno = extract_svn_revnum(rev)
+        except errors.InvalidRevisionId:
+            raise errors.BzrCommandError("unable to expand %s for %r in %r: "
+                "not a Subversion revision" % (
+                    self.name, self.revid, self.branch))
+        return str(revno)
+
+
 ok_to_preserve = [DebUpstreamVariable.name]
 # The variables that don't require substitution in their name
 simple_vars = [TimeVariable.name, DateVariable.name, RevnoVariable.name,
-    DebUpstreamVariable.name]
+    SubversionRevnumVariable.name, DebUpstreamVariable.name]
 
 
 def check_expanded_deb_version(base_branch):
@@ -185,6 +237,7 @@ def check_expanded_deb_version(base_branch):
         available_tokens = simple_vars
         for name in base_branch.list_branch_names():
             available_tokens.append(RevnoVariable(name, None).name)
+            available_tokens.append(SubversionRevnumVariable(name, None).name)
         raise errors.BzrCommandError("deb-version not fully "
                 "expanded: %s. Valid substitutions are: %s"
                 % (base_branch.deb_version, available_tokens))
@@ -792,6 +845,8 @@ class BaseRecipeBranch(RecipeBranch):
         """
         revno_var = RevnoVariable(branch_name, branch, revid)
         self.deb_version = revno_var.replace(self.deb_version)
+        svn_revno_var = SubversionRevnumVariable(branch_name, branch, revid)
+        self.deb_version = svn_revno_var.replace(self.deb_version)
 
     def substitute_time(self, time):
         """Substitute the time in to deb_version if needed.
