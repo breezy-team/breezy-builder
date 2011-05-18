@@ -27,11 +27,11 @@ import subprocess
 import tempfile
 
 try:
-    from debian import changelog
+    from debian import changelog, deb822
 except ImportError:
     # In older versions of python-debian the main package was named 
     # debian_bundle
-    from debian_bundle import changelog
+    from debian_bundle import changelog, deb822
 
 from bzrlib import (
         errors,
@@ -449,6 +449,16 @@ class cmd_build(Command):
         write_manifest_to_path(manifest_path, base_branch)
 
 
+def debian_source_package_name(path):
+    """Open a debian control file and extract the package name.
+
+    """
+    control_path = os.path.join(path, "debian", "control")
+    with open(control_path, 'r') as f:
+        control = deb822.Deb822(f)
+        return control["Source"]
+
+
 class cmd_dailydeb(cmd_build):
     """Build a deb based on a 'recipe'.
 
@@ -529,6 +539,8 @@ class cmd_dailydeb(cmd_build):
             manifest_path = os.path.join(working_directory, "debian",
                 "bzr-builder.manifest")
             build_tree(base_branch, working_directory)
+            if package is None:
+                package = debian_source_package_name(working_directory)
             write_manifest_to_path(manifest_path, base_branch)
             # Add changelog also substitutes {debupstream}.
             add_changelog_entry(base_branch, working_directory,

@@ -136,9 +136,9 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
         out, err = self.run_bzr("dailydeb -q test.recipe working "
-                "--manifest manifest --package foo")
+                "--manifest manifest")
         self.failIfExists("working/a")
-        package_root = "working/foo-1/"
+        package_root = "working/test-1/"
         self.failUnlessExists(os.path.join(package_root, "a"))
         self.failUnlessExists(os.path.join(package_root,
                     "debian/bzr-builder.manifest"))
@@ -173,7 +173,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
         out, err = self.run_bzr("dailydeb -q test.recipe "
-                "--manifest manifest --package foo")
+                "--manifest manifest")
 
     def test_cmd_dailydeb_if_changed_from_non_existant(self):
         #TODO: define a test feature for debuild and require it here.
@@ -190,7 +190,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
         out, err = self.run_bzr("dailydeb -q test.recipe "
-                "--manifest manifest --package foo --if-changed-from bar")
+                "--manifest manifest --if-changed-from bar")
 
     def make_simple_package(self):
         source = self.make_branch_and_tree("source")
@@ -277,7 +277,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         revid = source.commit("one")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version $\nsource 1\n")])
-        err = self.run_bzr("dailydeb -q test.recipe working --package foo",
+        err = self.run_bzr("dailydeb -q test.recipe working",
                 retcode=3)[1]
         self.assertContainsRe(err, "bzr: ERROR: Invalid deb-version: \\$: "
             "(Could not parse version: \\$|Invalid version string '\\$')\n")
