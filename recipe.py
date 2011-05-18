@@ -185,6 +185,24 @@ class RevnoVariable(BranchSubstitutionVariable):
         return revno
 
 
+def extract_svn_revnum(rev):
+    try:
+        foreign_revid = rev.foreign_revid
+    except AttributeError:
+        try:
+            (mapping_name, uuid, bp, srevnum) = rev.revision_id.split(":", 3)
+        except ValueError:
+            raise errors.InvalidRevisionId(rev.revision_id, None)
+        if not mapping_name.startswith("svn-"):
+            raise errors.InvalidRevisionId(rev.revision_id, None)
+        return int(srevnum)
+    else:
+        if rev.mapping.vcs.abbreviation == "svn":
+            return foreign_revid[2]
+        else:
+            raise errors.InvalidRevisionId(rev.revision_id, None)
+
+
 class SubversionRevnumVariable(BranchSubstitutionVariable):
 
     basename = "svn-revno"
@@ -197,12 +215,7 @@ class SubversionRevnumVariable(BranchSubstitutionVariable):
     def get(self):
         rev = self.branch.repository.get_revision(self.revid)
         try:
-            from bzrlib.plugins.svn import extract_svn_foreign_revid
-        except ImportError:
-            raise errors.BzrCommandError("bzr-svn not available for %s" %
-                self.name)
-        try:
-            (uuid, branch_path, revno) = extract_svn_foreign_revid(rev)
+            revno = extract_svn_revnum(rev)
         except errors.InvalidRevisionId:
             raise errors.BzrCommandError("unable to expand %s for %r in %r: "
                 "not a Subversion revision" % (
