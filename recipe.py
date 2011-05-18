@@ -261,11 +261,30 @@ class GitCommitVariable(BranchSubstitutionVariable):
         return commit_sha[:7]
 
 
+class LatestTagVariable(BranchSubstitutionVariable):
+
+    basename = "latest-tag"
+
+    def __init__(self, branch_name, branch, revid):
+        super(LatestTagVariable, self).__init__(branch_name)
+        self.branch = branch
+        self.revid = revid
+
+    def get(self):
+        reverse_tag_dict = self.branch.tags.get_reverse_tag_dict()
+        for revid in self.branch.repository.iter_reverse_revision_history(self.revid):
+            if revid in reverse_tag_dict:
+                return reverse_tag_dict[revid][0]
+        else:
+            raise errors.BzrCommandError("No tags set on branch %s mainline" %
+                self.branch_name)
+
+
 ok_to_preserve = [DebUpstreamVariable.name]
 # The variables that don't require substitution in their name
 simple_vars = [TimeVariable.name, DateVariable.name, RevnoVariable.name,
     SubversionRevnumVariable.name, DebUpstreamVariable.name,
-    GitCommitVariable.name]
+    GitCommitVariable.name, LatestTagVariable.name]
 
 
 def check_expanded_deb_version(base_branch):
@@ -278,6 +297,7 @@ def check_expanded_deb_version(base_branch):
             available_tokens.append(RevnoVariable(name, None).name)
             available_tokens.append(SubversionRevnumVariable(name, None).name)
             available_tokens.append(GitCommitVariable(name, None).name)
+            available_tokens.append(LatestTagVariable(name, None).name)
         raise errors.BzrCommandError("deb-version not fully "
                 "expanded: %s. Valid substitutions are: %s"
                 % (base_branch.deb_version, available_tokens))
@@ -889,6 +909,8 @@ class BaseRecipeBranch(RecipeBranch):
         self.deb_version = svn_revno_var.replace(self.deb_version)
         git_commit_var = GitCommitVariable(branch_name, branch, revid)
         self.deb_version = git_commit_var.replace(self.deb_version)
+        latest_tag_var = LatestTagVariable(branch_name, branch, revid)
+        self.deb_version = latest_tag_var.replace(self.deb_version)
 
     def substitute_time(self, time):
         """Substitute the time in to deb_version if needed.

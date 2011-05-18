@@ -1080,6 +1080,24 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         resolve_revisions(branch1)
         self.assertEqual("foo-a029d7b", branch1.deb_version)
 
+    def test_latest_tag(self):
+        source = self.make_branch_and_tree("source")
+        revid = source.commit("one", lossy=True)
+        source.branch.tags.set_tag("millbank", revid)
+        source.commit("two", lossy=True)
+        branch1 = BaseRecipeBranch("source", "foo-{latest-tag}", 0.2)
+        resolve_revisions(branch1)
+        self.assertEqual("foo-millbank", branch1.deb_version)
+
+    def test_latest_tag_no_tag(self):
+        source = self.make_branch_and_tree("source")
+        revid = source.commit("one", lossy=True)
+        source.commit("two", lossy=True)
+        branch1 = BaseRecipeBranch("source", "foo-{latest-tag}", 0.2)
+        e = self.assertRaises(errors.BzrCommandError, resolve_revisions, branch1)
+        self.assertTrue(str(e).startswith("No tags set on branch None mainline"),
+            e)
+
 
 class StringifyTests(TestCaseInTempDir):
 
