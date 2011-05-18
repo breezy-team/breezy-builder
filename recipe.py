@@ -210,6 +210,24 @@ class SubversionRevnumVariable(BranchSubstitutionVariable):
         return str(revno)
 
 
+def extract_git_foreign_revid(rev):
+    try:
+        foreign_revid = rev.foreign_revid
+    except AttributeError:
+        try:
+            (mapping_name, foreign_revid) = rev.revision_id.split(":", 1)
+        except ValueError:
+            raise errors.InvalidRevisionId(rev.revision_id, None)
+        if not mapping_name.startswith("git-"):
+            raise errors.InvalidRevisionId(rev.revision_id, None)
+        return foreign_revid
+    else:
+        if rev.mapping.vcs.abbreviation == "git":
+            return foreign_revid
+        else:
+            raise errors.InvalidRevisionId(rev.revision_id, None)
+
+
 class GitCommitVariable(BranchSubstitutionVariable):
 
     basename = "git-commit"
@@ -221,11 +239,6 @@ class GitCommitVariable(BranchSubstitutionVariable):
 
     def get(self):
         rev = self.branch.repository.get_revision(self.revid)
-        try:
-            from bzrlib.plugins.git import extract_git_foreign_revid
-        except ImportError:
-            raise errors.BzrCommandError("bzr-git not available for %s" %
-                self.name)
         try:
             commit_sha = extract_git_foreign_revid(rev)
         except errors.InvalidRevisionId:

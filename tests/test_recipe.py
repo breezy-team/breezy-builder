@@ -1070,10 +1070,6 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         self.assertEqual("foo-2", branch1.deb_version)
 
     def test_substitute_git_not_git(self):
-        try:
-            from bzrlib.plugins.git import extract_git_foreign_revid
-        except KeyError:
-            raise TestSkipped("bzr-git not available")
         source = self.make_branch_and_tree("source")
         source.commit("one")
         source.commit("two")
@@ -1084,16 +1080,12 @@ class ResolveRevisionsTests(TestCaseWithTransport):
             e)
 
     def test_substitute_git(self):
-        try:
-            source = self.make_branch_and_tree("source", format="git")
-        except KeyError:
-            raise TestSkipped("bzr-git not available")
-        source.commit("one", lossy=True)
-        source.commit("two", lossy=True)
+        source = self.make_branch_and_tree("source")
+        source.commit("one", 
+            rev_id="git-v1:a029d7b2cc83c26a53d8b2a24fa12c340fcfac58")
         branch1 = BaseRecipeBranch("source", "foo-{git-commit}", 0.2)
         resolve_revisions(branch1)
-        self.assertEqual("foo-", branch1.deb_version[:4])
-        self.assertEqual(7, len(branch1.deb_version[4:]))
+        self.assertEqual("foo-a029d7b", branch1.deb_version)
 
 
 class StringifyTests(TestCaseInTempDir):
