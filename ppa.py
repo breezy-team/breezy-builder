@@ -14,25 +14,17 @@
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
 import time
-
-
-from launchpadlib.launchpad import (
-    Launchpad,
-    EDGE_SERVICE_ROOT,
-    )
-from launchpadlib.credentials import Credentials
 
 from bzrlib import (
     errors,
     trace,
     )
+from launchpadlib.launchpad import Launchpad
 
 
 def get_lp():
-    oauth_file = os.path.expanduser('~/.cache/launchpadlib/bzr-builder')
-    return Launchpad.login_with('bzr-builder', 'production', credentials_file=oauth_file)
+    return Launchpad.login_with('bzr-builder', 'production')
 
 
 def watch(owner_name, archive_name, package_name, version):

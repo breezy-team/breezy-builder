@@ -41,7 +41,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
     def test_cmd_builder_requires_recipe_file_argument(self):
         err = self.run_bzr("build", retcode=3)[1]
         self.assertEqual("bzr: ERROR: command 'build' requires argument "
-                "RECIPE_FILE\n", err)
+                "RECIPE_LOCATION\n", err)
 
     def test_cmd_builder_requires_working_dir_argument(self):
         err = self.run_bzr("build recipe", retcode=3)[1]
