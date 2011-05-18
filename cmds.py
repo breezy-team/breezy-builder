@@ -27,11 +27,11 @@ import subprocess
 import tempfile
 
 try:
-    from debian import changelog
+    from debian import changelog, deb822
 except ImportError:
     # In older versions of python-debian the main package was named 
     # debian_bundle
-    from debian_bundle import changelog
+    from debian_bundle import changelog, deb822
 
 from bzrlib import (
         errors,
@@ -60,6 +60,11 @@ class MissingDependency(errors.BzrError):
 
 
 def write_manifest_to_path(path, base_branch):
+    """Write a manifest to disk.
+
+    :param path: Path to write to
+    :param base_branch: Recipe base branch
+    """
     parent_dir = os.path.dirname(path)
     if parent_dir != '' and not os.path.exists(parent_dir):
         os.makedirs(parent_dir)
@@ -173,6 +178,17 @@ def get_maintainer():
 def add_changelog_entry(base_branch, basedir, distribution=None,
         package=None, author_name=None, author_email=None,
         append_version=None):
+    """Add a new changelog entry for an autobuild.
+
+    :param base_branch: Recipe base branch
+    :param basedir: Base working directory
+    :param distribution: Optional distribution (defaults to last entry
+        distribution)
+    :param package: Optional package name (defaults to last entry package name)
+    :param author_name: Name of the build requester
+    :param author_email: Email of the build requester
+    :param append_version: Optional version suffix to add
+    """
     debian_dir = os.path.join(basedir, "debian")
     if not os.path.exists(debian_dir):
         os.makedirs(debian_dir)
@@ -241,7 +257,12 @@ def add_changelog_entry(base_branch, basedir, distribution=None,
 
 
 def calculate_package_dir(base_branch, package_name, working_basedir):
-    """Calculate the directory name that should be used while debuilding."""
+    """Calculate the directory name that should be used while debuilding.
+
+    :param base_branch: Recipe base branch
+    :param package_name: Package name
+    :param working_basedir: Base directory
+    """
     version = base_branch.deb_version
     if "-" in version:
         version = version[:version.rindex("-")]
@@ -298,6 +319,7 @@ def build_source_package(basedir):
         "Failed to build the source package",
         not_installed_msg="debuild is not installed, please install "
             "the devscripts package.")
+
 
 def get_source_format(path):
     """Retrieve the source format name from a package.
@@ -427,6 +449,15 @@ class cmd_build(Command):
         write_manifest_to_path(manifest_path, base_branch)
 
 
+def debian_source_package_name(control_path):
+    """Open a debian control file and extract the package name.
+
+    """
+    with open(control_path, 'r') as f:
+        control = deb822.Deb822(f)
+        return control["Source"]
+
+
 class cmd_dailydeb(cmd_build):
     """Build a deb based on a 'recipe'.
 
@@ -507,6 +538,12 @@ class cmd_dailydeb(cmd_build):
             manifest_path = os.path.join(working_directory, "debian",
                 "bzr-builder.manifest")
             build_tree(base_branch, working_directory)
+            if package is None:
+                control_path = os.path.join(working_directory, "debian", "control")
+                if not os.path.exists(control_path):
+                    raise errors.BzrCommandError("Missing debian/control file to "
+                        "read package name from.")
+                package = debian_source_package_name(control_path)
             write_manifest_to_path(manifest_path, base_branch)
             # Add changelog also substitutes {debupstream}.
             add_changelog_entry(base_branch, working_directory,
