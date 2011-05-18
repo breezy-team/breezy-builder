@@ -15,6 +15,7 @@
 
 """Subcommands provided by bzr-builder."""
 
+from StringIO import StringIO
 import datetime
 from email import utils
 import errno
@@ -35,6 +36,7 @@ except ImportError:
 
 from bzrlib import (
         errors,
+        lazy_regex,
         trace,
         transport as _mod_transport,
         urlutils,
@@ -86,16 +88,14 @@ def get_branch_from_recipe_location(recipe_location, safe=False,
     except errors.NoSuchFile:
         raise errors.BzrCommandError("Specified recipe does not exist: "
                 "%s" % recipe_location)
-    else:
-        try:
-            recipe_contents = f.read()
-        finally:
-            f.close()
-    if safe:
-        permitted_instructions = SAFE_INSTRUCTIONS
-    else:
-        permitted_instructions = None
-    parser = RecipeParser(recipe_contents, filename=recipe_location)
+    try:
+        if safe:
+            permitted_instructions = SAFE_INSTRUCTIONS
+        else:
+            permitted_instructions = None
+        parser = RecipeParser(f, filename=recipe_location)
+    finally:
+        f.close()
     return parser.parse(permitted_instructions=permitted_instructions)
 
 
@@ -104,13 +104,11 @@ def get_old_recipe(if_changed_from, possible_transports=None):
         (basename, f) = get_recipe_from_location(if_changed_from, possible_transports)
     except errors.NoSuchFile:
         return None
-    else:
-        try:
-            old_manifest_contents = f.read()
-        finally:
-            f.close()
-    old_recipe = RecipeParser(old_manifest_contents,
-            filename=if_changed_from).parse()
+    try:
+        old_recipe = RecipeParser(f,
+                filename=if_changed_from).parse()
+    finally:
+        f.close()
     return old_recipe
 
 
@@ -399,6 +397,33 @@ def dput_source_package(basedir, target):
             "install the devscripts package.")
 
 
+launchpad_recipe_re = lazy_regex.lazy_compile(
+    r'^https://code.launchpad.net/~(.*)/\+recipe/(.*)$')
+
+
+def get_recipe_from_launchpad(username, recipe_name, location):
+    """Load a recipe from Launchpad.
+
+    :param username: The launchpad user name
+    :param recipe_name: Recipe name
+    :param location: Original location (used for error reporting)
+    :return: Text of the recipe
+    """
+    from launchpadlib.launchpad import Launchpad
+    lp = Launchpad.login_with("bzr-builder", "production")
+    try:
+        person = lp.people[username]
+    except KeyError:
+        raise errors.NoSuchFile(location,
+            "No such Launchpad user %s" % username)
+    recipe = person.getRecipe(name=recipe_name)
+    if recipe is None:
+        raise errors.NoSuchFile(location,
+            "Launchpad user %s has no recipe %s" % (
+            username, recipe_name))
+    return recipe.recipe_text
+
+
 def get_recipe_from_location(location, possible_transports=None):
     """Open a recipe as a file-like object from a URL.
 
@@ -406,6 +431,12 @@ def get_recipe_from_location(location, possible_transports=None):
     :param possible_transports: Possible transports to use
     :return: Tuple with basename and file-like object
     """
+    m = launchpad_recipe_re.match(location)
+    if m:
+        (username, recipe_name) = m.groups()
+        text = get_recipe_from_launchpad(username, recipe_name,
+            location)
+        return (recipe_name, StringIO(text))
     child_transport = _mod_transport.get_transport(location,
         possible_transports=possible_transports)
     recipe_transport = child_transport.clone('..')
