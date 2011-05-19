@@ -21,6 +21,7 @@ from bzrlib import (
     branch,
     bzrdir,
     errors,
+    lazy_regex,
     merge,
     revision,
     revisionspec,
@@ -138,6 +139,19 @@ class DebUpstreamVariable(SimpleSubstitutionVariable):
                 "No previous changelog to take the upstream version from")
         # Should we include the epoch?
         return self._version.upstream_version
+
+
+class DebUpstreamBaseVariable(DebUpstreamVariable):
+
+    name = "{debupstreambase}"
+    version_regex = lazy_regex.lazy_compile(r'([~+])(svn[0-9]+|bzr[0-9]+|git[0-9a-f]+)')
+
+    def get(self):
+        version = super(DebUpstreamBaseVariable, self).get()
+        version = self.version_regex.sub("\\1", version)
+        if version[-1] not in ("~", "+"):
+            version += "+"
+        return version
 
 
 class BranchSubstitutionVariable(SimpleSubstitutionVariable):
@@ -280,11 +294,12 @@ class LatestTagVariable(BranchSubstitutionVariable):
                 self.branch_name)
 
 
-ok_to_preserve = [DebUpstreamVariable.name]
+ok_to_preserve = [DebUpstreamVariable.name, DebUpstreamBaseVariable.name]
 # The variables that don't require substitution in their name
 simple_vars = [TimeVariable.name, DateVariable.name, RevnoVariable.name,
     SubversionRevnumVariable.name, DebUpstreamVariable.name,
-    GitCommitVariable.name, LatestTagVariable.name]
+    DebUpstreamBaseVariable.name, GitCommitVariable.name,
+    LatestTagVariable.name]
 
 
 def check_expanded_deb_version(base_branch):
@@ -927,6 +942,8 @@ class BaseRecipeBranch(RecipeBranch):
         """
         debupstream_var = DebUpstreamVariable.from_changelog(changelog)
         self.deb_version = debupstream_var.replace(self.deb_version)
+        debupstreambase_var = DebUpstreamBaseVariable.from_changelog(changelog)
+        self.deb_version = debupstreambase_var.replace(self.deb_version)
 
     def _add_child_branches_to_manifest(self, child_branches, indent_level):
         manifest = ""
