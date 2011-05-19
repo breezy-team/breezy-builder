@@ -15,6 +15,7 @@
 
 import datetime
 import os
+import textwrap
 
 from bzrlib import (
         errors,
@@ -22,12 +23,15 @@ from bzrlib import (
         workingtree,
         )
 from bzrlib.tests import (
+        TestCase,
         TestCaseInTempDir,
         TestCaseWithTransport,
         )
 from bzrlib.plugins.builder.recipe import (
         BaseRecipeBranch,
         build_tree,
+        DebUpstreamBaseVariable,
+        DebUpstreamVariable,
         ensure_basedir,
         InstructionParseError,
         ForbiddenInstructionError,
@@ -41,8 +45,16 @@ from bzrlib.plugins.builder.recipe import (
         resolve_revisions,
         RUN_INSTRUCTION,
         SAFE_INSTRUCTIONS,
+        SubstitutionUnavailable,
         USAGE,
         )
+
+try:
+    from debian import changelog
+except ImportError:
+    # In older versions of python-debian the main package was named 
+    # debian_bundle
+    from debian_bundle import changelog
 
 
 class RecipeParserTests(TestCaseInTempDir):
@@ -1320,3 +1332,46 @@ class RecipeBranchTests(TestCaseInTempDir):
         self.assertEqual(
             ["merged", "nested", "merged_into_nested", "another_nested"],
             base_branch.list_branch_names())
+
+
+class DebUpstreamVariableTests(TestCase):
+
+    def write_changelog(self, version):
+        contents = textwrap.dedent("""
+            package (%s) experimental; urgency=low
+
+              * Initial release. (Closes: #XXXXXX)
+
+             -- Jelmer Vernooij <jelmer@debian.org>  Thu, 19 May 2011 10:07:41 +0100
+            """ % version)[1:]
+        return changelog.Changelog(file=contents)
+
+    def test_empty_changelog(self):
+        var = DebUpstreamVariable.from_changelog(changelog.Changelog())
+        self.assertRaises(SubstitutionUnavailable, var.get)
+
+    def test_version(self):
+        var = DebUpstreamVariable.from_changelog(
+            self.write_changelog("2.3"))
+        self.assertEquals("2.3", var.get())
+
+    def test_epoch(self):
+        # The epoch is (currently) ignored by {debupstream}.
+        var = DebUpstreamVariable.from_changelog(
+            self.write_changelog("2:2.3"))
+        self.assertEquals("2.3", var.get())
+
+    def test_base_without_snapshot(self):
+        var = DebUpstreamBaseVariable.from_changelog(
+            self.write_changelog("2.4"))
+        self.assertEquals("2.4+", var.get())
+
+    def test_base_with_svn_snapshot(self):
+        var = DebUpstreamBaseVariable.from_changelog(
+            self.write_changelog("2.4~svn4"))
+        self.assertEquals("2.4~", var.get())
+
+    def test_base_with_bzr_snapshot(self):
+        var = DebUpstreamBaseVariable.from_changelog(
+            self.write_changelog("2.4+bzr343"))
+        self.assertEquals("2.4+", var.get())
