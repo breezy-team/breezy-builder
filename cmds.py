@@ -475,10 +475,12 @@ class cmd_build(Command):
             Option('if-changed-from', type=str, argname="path",
                    help="Only build if the outcome would be different "
                         "to that specified in the specified manifest."),
+            'revision',
                     ]
 
     def _get_prepared_branch_from_location(self, location,
-            if_changed_from=None, safe=False, possible_transports=None):
+            if_changed_from=None, safe=False, possible_transports=None,
+            revspec=None):
         """Common code to prepare a branch and do substitutions.
 
         :param location: a path to a recipe file or branch to work from.
@@ -496,6 +498,10 @@ class cmd_build(Command):
             # Presume unable to read means location is a directory rather than a file
             base_branch = get_branch_from_branch_location(location,
                 possible_transports=possible_transports)
+        else:
+            if revspec is not None:
+                raise errors.BzrCommandError("--revision only supported when "
+                    "building from branch")
         time = datetime.datetime.utcnow()
         base_branch.substitute_time(time)
         old_recipe = None
@@ -510,10 +516,18 @@ class cmd_build(Command):
         return None, base_branch
 
     def run(self, location, working_directory, manifest=None,
-            if_changed_from=None):
+            if_changed_from=None, revision=None):
+        if revision is not None and len(revision) > 0:
+            if len(revision) != 1:
+                raise errors.BzrCommandError("only a single revision can be"
+                    "specified")
+            revspec = revision[0]
+        else:
+            revspec = None
         possible_transports = []
         result, base_branch = self._get_prepared_branch_from_location(location,
-            if_changed_from=if_changed_from, possible_transports=possible_transports)
+            if_changed_from=if_changed_from, possible_transports=possible_transports,
+            revspec=revspec)
         if result is not None:
             return result
         manifest_path = manifest or os.path.join(working_directory,
