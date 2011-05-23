@@ -143,7 +143,7 @@ class DebUpstreamVariable(SimpleSubstitutionVariable):
 
 class DebVersionVariable(SimpleSubstitutionVariable):
 
-    name = "{pkgversion}"
+    name = "{debversion}"
 
     def __init__(self, version):
         self._version = version
