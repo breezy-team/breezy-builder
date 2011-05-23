@@ -1015,7 +1015,7 @@ class RecipeParser(object):
     eol_char = "\n"
     digit_chars = ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")
 
-    NEWEST_VERSION = 0.3
+    NEWEST_VERSION = 0.4
 
     def __init__(self, f, filename=None):
         """Create a RecipeParser.
