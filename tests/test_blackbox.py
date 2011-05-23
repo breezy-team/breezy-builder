@@ -80,7 +80,23 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertEqual(revid, tree.last_revision())
         self.failUnlessExists("working/bzr-builder.manifest")
         self.check_file_contents("working/bzr-builder.manifest",
-                "# bzr-builder format 0.3 deb-version {debversion}\nsource revid:%s\n"
+                "# bzr-builder format 0.3\nsource revid:%s\n"
+                % revid)
+
+    def test_cmd_builder_simple_recipe_no_debversion(self):
+        self.build_tree_contents([("recipe", "# bzr-builder format 0.1\n"
+            "source\n")])
+        source = self.make_branch_and_tree("source")
+        self.build_tree(["source/a"])
+        source.add(["a"])
+        revid = source.commit("one")
+        self.run_bzr("build -q recipe working")
+        self.failUnlessExists("working/a")
+        tree = workingtree.WorkingTree.open("working")
+        self.assertEqual(revid, tree.last_revision())
+        self.failUnlessExists("working/bzr-builder.manifest")
+        self.check_file_contents("working/bzr-builder.manifest",
+                "# bzr-builder format 0.1\nsource revid:%s\n"
                 % revid)
 
     def test_cmd_builder_manifest(self):

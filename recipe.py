@@ -326,6 +326,8 @@ simple_vars = [TimeVariable.name, DateVariable.name, RevnoVariable.name,
 
 def check_expanded_deb_version(base_branch):
     checked_version = base_branch.deb_version
+    if checked_version is None:
+        return
     for token in ok_to_preserve:
         checked_version = checked_version.replace(token, "")
     if "{" in checked_version:
@@ -940,6 +942,8 @@ class BaseRecipeBranch(RecipeBranch):
         :param branch: Branch object for the branch
         :param revid: Revision id in the branch for which to return the revno
         """
+        if self.deb_version is None:
+            return
         revno_var = RevnoVariable(branch_name, branch, revid)
         self.deb_version = revno_var.replace(self.deb_version)
         svn_revno_var = SubversionRevnumVariable(branch_name, branch, revid)
@@ -954,6 +958,8 @@ class BaseRecipeBranch(RecipeBranch):
 
         :param time: a datetime.datetime with the desired time.
         """
+        if self.deb_version is None:
+            return
         self.deb_version = TimeVariable(time).replace(self.deb_version)
         self.deb_version = DateVariable(time).replace(self.deb_version)
 
@@ -962,6 +968,8 @@ class BaseRecipeBranch(RecipeBranch):
 
         :param changelog: Changelog to take the upstream version from
         """
+        if self.deb_version is None:
+            return
         debupstream_var = DebUpstreamVariable.from_changelog(changelog)
         self.deb_version = debupstream_var.replace(self.deb_version)
         debupstreambase_var = DebUpstreamBaseVariable.from_changelog(changelog)
@@ -987,9 +995,11 @@ class BaseRecipeBranch(RecipeBranch):
         return self._list_child_names()
 
     def get_recipe_text(self, validate=False):
-        manifest = "# bzr-builder format %s deb-version " % str(self.format)
-        # TODO: should we store the expanded version that was used?
-        manifest += "%s\n" % (self.deb_version,)
+        manifest = "# bzr-builder format %s" % str(self.format)
+        if self.deb_version is not None:
+            # TODO: should we store the expanded version that was used?
+            manifest += " deb-version %s" % (self.deb_version,)
+        manifest += "\n"
         if self.revid is not None:
             manifest += "%s revid:%s\n" % (self.url, self.revid)
         elif self.revspec is not None:
@@ -1039,7 +1049,7 @@ class RecipeParser(object):
     eol_char = "\n"
     digit_chars = ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")
 
-    NEWEST_VERSION = 0.3
+    NEWEST_VERSION = 0.4
 
     def __init__(self, f, filename=None):
         """Create a RecipeParser.
@@ -1150,9 +1160,7 @@ class RecipeParser(object):
         if version > self.NEWEST_VERSION:
             self.throw_parse_error("Unknown format: '%s'" % str(version))
         self.take_chars(len(version_str))
-        self.parse_word("deb-version")
-        self.parse_whitespace("a value for 'deb-version'")
-        deb_version = self.take_to_whitespace("a value for 'deb-version'")
+        deb_version = self.parse_optional_deb_version()
         self.new_line()
         return version, deb_version
 
@@ -1236,6 +1244,18 @@ class RecipeParser(object):
         self.parse_whitespace("the revspec")
         revspec = self.take_to_whitespace("the revspec")
         return revspec
+
+    def parse_optional_deb_version(self):
+        self.parse_whitespace("'deb-version'", require=False)
+        actual = self.peek_to_whitespace()
+        if actual is None:
+            # End of line, no version
+            return None
+        if actual != "deb-version":
+            self.throw_expecting_error("deb-version", actual)
+        self.take_chars(len("deb-version"))
+        self.parse_whitespace("a value for 'deb-version'")
+        return self.take_to_whitespace("a value for 'deb-version'")
 
     def parse_optional_revspec(self):
         self.parse_whitespace(None, require=False)

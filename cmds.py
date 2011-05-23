@@ -56,7 +56,7 @@ from bzrlib.plugins.builder.recipe import (
         )
 
 
-# The default distribution used by add_changelog_entry()
+# The default distribution used by add_autobuild_changelog_entry()
 DEFAULT_UBUNTU_DISTRIBUTION = "lucid"
 
 
@@ -111,7 +111,7 @@ def get_branch_from_branch_location(branch_location, possible_transports=None,
     """
     # Make sure it's actually a branch
     Branch.open(branch_location)
-    return BaseRecipeBranch(branch_location, "{debversion}",
+    return BaseRecipeBranch(branch_location, None,
         RecipeParser.NEWEST_VERSION, revspec=revspec)
 
 
@@ -193,7 +193,7 @@ def get_maintainer():
     return (maintainer, email)
 
 
-def add_changelog_entry(base_branch, basedir, distribution=None,
+def add_autobuild_changelog_entry(base_branch, basedir, distribution=None,
         package=None, author_name=None, author_email=None,
         append_version=None):
     """Add a new changelog entry for an autobuild.
@@ -636,10 +636,17 @@ class cmd_dailydeb(cmd_build):
                 package = debian_source_package_name(control_path)
             write_manifest_to_transport(manifest_path, base_branch,
                 possible_transports)
-            # Add changelog also substitutes {debupstream}.
-            add_changelog_entry(base_branch, working_directory,
-                distribution=distribution, package=package,
-                append_version=append_version)
+            autobuild = (base_branch.deb_version is not None)
+            if autobuild:
+                # Add changelog also substitutes {debupstream}.
+                add_autobuild_changelog_entry(base_branch, working_directory,
+                    distribution=distribution, package=package,
+                    append_version=append_version)
+            else:
+                if append_version:
+                    raise errors.BzrCommandError("--append-version only "
+                        "supported for autobuild recipes (with a 'deb-version' "
+                        "header)")
             force_native_format(working_directory)
             package_dir = calculate_package_dir(base_branch,
                     package_name, working_basedir)
