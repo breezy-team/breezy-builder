@@ -533,7 +533,7 @@ def debian_source_package_name(control_path):
 
 
 class cmd_dailydeb(cmd_build):
-    """Build a deb based on a 'recipe'.
+    """Build a deb based on a 'recipe' or from a branch.
 
     See "bzr help builder" for more information on what a recipe is.
 
@@ -571,9 +571,9 @@ class cmd_dailydeb(cmd_build):
                        " arbitrary code execution."),
             ]
 
-    takes_args = ["recipe_location", "working_basedir?"]
+    takes_args = ["location", "working_basedir?"]
 
-    def run(self, recipe_location, working_basedir=None, manifest=None,
+    def run(self, location, working_basedir=None, manifest=None,
             if_changed_from=None, package=None, distribution=None,
             dput=None, key_id=None, no_build=None, watch_ppa=False,
             append_version=None, safe=False):
@@ -590,7 +590,7 @@ class cmd_dailydeb(cmd_build):
                 target_from_dput(dput)
 
         possible_transports = []
-        result, base_branch = self._get_prepared_branch_from_recipe(recipe_location,
+        result, base_branch = self._get_prepared_branch_from_location(location,
             if_changed_from=if_changed_from, safe=safe,
             possible_transports=possible_transports)
         if result is not None:
@@ -602,7 +602,7 @@ class cmd_dailydeb(cmd_build):
             temp_dir = None
             if not os.path.exists(working_basedir):
                 os.makedirs(working_basedir)
-        package_name = self._calculate_package_name(recipe_location, package)
+        package_name = self._calculate_package_name(location, package)
         working_directory = os.path.join(working_basedir,
             "%s-%s" % (package_name, self._template_version))
         try:
