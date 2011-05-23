@@ -141,6 +141,27 @@ class DebUpstreamVariable(SimpleSubstitutionVariable):
         return self._version.upstream_version
 
 
+class DebVersionVariable(SimpleSubstitutionVariable):
+
+    name = "{pkgversion}"
+
+    def __init__(self, version):
+        self._version = version
+
+    @classmethod
+    def from_changelog(cls, changelog):
+        if len(changelog._blocks) > 0:
+            return cls(changelog._blocks[0].version)
+        else:
+            return cls(None)
+
+    def get(self):
+        if self._version is None:
+            raise SubstitutionUnavailable(self.name,
+                "No previous changelog to take the version from")
+        return str(self._version)
+
+
 class DebUpstreamBaseVariable(DebUpstreamVariable):
 
     name = "{debupstream-base}"
@@ -294,12 +315,13 @@ class LatestTagVariable(BranchSubstitutionVariable):
                 self.branch_name)
 
 
-ok_to_preserve = [DebUpstreamVariable.name, DebUpstreamBaseVariable.name]
+ok_to_preserve = [DebUpstreamVariable.name, DebUpstreamBaseVariable.name,
+    DebVersionVariable.name]
 # The variables that don't require substitution in their name
 simple_vars = [TimeVariable.name, DateVariable.name, RevnoVariable.name,
     SubversionRevnumVariable.name, DebUpstreamVariable.name,
     DebUpstreamBaseVariable.name, GitCommitVariable.name,
-    LatestTagVariable.name]
+    LatestTagVariable.name, DebVersionVariable.name]
 
 
 def check_expanded_deb_version(base_branch):
@@ -944,6 +966,8 @@ class BaseRecipeBranch(RecipeBranch):
         self.deb_version = debupstream_var.replace(self.deb_version)
         debupstreambase_var = DebUpstreamBaseVariable.from_changelog(changelog)
         self.deb_version = debupstreambase_var.replace(self.deb_version)
+        pkgversion_var = DebVersionVariable.from_changelog(changelog)
+        self.deb_version = pkgversion_var.replace(self.deb_version)
 
     def _add_child_branches_to_manifest(self, child_branches, indent_level):
         manifest = ""

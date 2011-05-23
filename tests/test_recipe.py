@@ -38,6 +38,7 @@ from bzrlib.plugins.builder.recipe import (
         MERGE_INSTRUCTION,
         NEST_INSTRUCTION,
         NEST_PART_INSTRUCTION,
+        DebVersionVariable,
         pull_or_branch,
         RecipeParser,
         RecipeBranch,
@@ -1375,3 +1376,30 @@ class DebUpstreamVariableTests(TestCase):
         var = DebUpstreamBaseVariable.from_changelog(
             self.write_changelog("2.4+bzr343"))
         self.assertEquals("2.4+", var.get())
+
+
+class DebVersionVariableTests(TestCase):
+
+    def write_changelog(self, version):
+        contents = textwrap.dedent("""
+            package (%s) experimental; urgency=low
+
+              * Initial release. (Closes: #XXXXXX)
+
+             -- Jelmer Vernooij <jelmer@debian.org>  Thu, 19 May 2011 10:07:41 +0100
+            """ % version)[1:]
+        return changelog.Changelog(file=contents)
+
+    def test_empty_changelog(self):
+        var = DebVersionVariable.from_changelog(changelog.Changelog())
+        self.assertRaises(SubstitutionUnavailable, var.get)
+
+    def test_simple(self):
+        var = DebVersionVariable.from_changelog(
+            self.write_changelog("2.3-1"))
+        self.assertEquals("2.3-1", var.get())
+
+    def test_epoch(self):
+        var = DebVersionVariable.from_changelog(
+            self.write_changelog("4:2.3-1"))
+        self.assertEquals("4:2.3-1", var.get())
