@@ -304,6 +304,8 @@ simple_vars = [TimeVariable.name, DateVariable.name, RevnoVariable.name,
 
 def check_expanded_deb_version(base_branch):
     checked_version = base_branch.deb_version
+    if checked_version is None:
+        return
     for token in ok_to_preserve:
         checked_version = checked_version.replace(token, "")
     if "{" in checked_version:
@@ -918,6 +920,8 @@ class BaseRecipeBranch(RecipeBranch):
         :param branch: Branch object for the branch
         :param revid: Revision id in the branch for which to return the revno
         """
+        if self.deb_version is None:
+            return
         revno_var = RevnoVariable(branch_name, branch, revid)
         self.deb_version = revno_var.replace(self.deb_version)
         svn_revno_var = SubversionRevnumVariable(branch_name, branch, revid)
@@ -932,6 +936,8 @@ class BaseRecipeBranch(RecipeBranch):
 
         :param time: a datetime.datetime with the desired time.
         """
+        if self.deb_version is None:
+            return
         self.deb_version = TimeVariable(time).replace(self.deb_version)
         self.deb_version = DateVariable(time).replace(self.deb_version)
 
@@ -940,6 +946,8 @@ class BaseRecipeBranch(RecipeBranch):
 
         :param changelog: Changelog to take the upstream version from
         """
+        if self.deb_version is None:
+            return
         debupstream_var = DebUpstreamVariable.from_changelog(changelog)
         self.deb_version = debupstream_var.replace(self.deb_version)
         debupstreambase_var = DebUpstreamBaseVariable.from_changelog(changelog)
