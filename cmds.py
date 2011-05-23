@@ -41,10 +41,12 @@ from bzrlib import (
         transport as _mod_transport,
         urlutils,
         )
+from bzrlib.branch import Branch
 from bzrlib.commands import Command
 from bzrlib.option import Option
 
 from bzrlib.plugins.builder.recipe import (
+        BaseRecipeBranch,
         build_tree,
         DebUpstreamVariable,
         RecipeParser,
@@ -99,6 +101,18 @@ def get_branch_from_recipe_location(recipe_location, safe=False,
     finally:
         f.close()
     return parser.parse(permitted_instructions=permitted_instructions)
+
+
+def get_branch_from_branch_location(branch_location, possible_transports=None,
+        revspec=None):
+    """Return the base branch for the branch location.
+
+    :param branch_location: The URL of the branch to retrieve.
+    """
+    # Make sure it's actually a branch
+    Branch.open(branch_location)
+    return BaseRecipeBranch(branch_location, "{debversion}",
+        RecipeParser.NEWEST_VERSION, revspec=revspec)
 
 
 def get_old_recipe(if_changed_from, possible_transports=None):
@@ -447,13 +461,14 @@ def get_recipe_from_location(location, possible_transports=None):
 
 
 class cmd_build(Command):
-    """Build a tree based on a 'recipe'.
+    """Build a tree based on a branch or a recipe.
 
-    Pass the name of the recipe file and the directory to work in.
+    Pass the path of a recipe file or a branch to build and the directory to
+    work in.
 
     See "bzr help builder" for more information on what a recipe is.
     """
-    takes_args = ["recipe_location", "working_directory"]
+    takes_args = ["location", "working_directory"]
     takes_options = [
             Option('manifest', type=str, argname="path",
                    help="Path to write the manifest to."),
@@ -462,11 +477,11 @@ class cmd_build(Command):
                         "to that specified in the specified manifest."),
                     ]
 
-    def _get_prepared_branch_from_recipe(self, recipe_location,
+    def _get_prepared_branch_from_location(self, location,
             if_changed_from=None, safe=False, possible_transports=None):
         """Common code to prepare a branch and do substitutions.
 
-        :param recipe_location: a path to a recipe file to work from.
+        :param location: a path to a recipe file or branch to work from.
         :param if_changed_from: an optional location of a manifest to
             compare the recipe against.
         :param safe: if True, reject recipes that would cause arbitrary code
@@ -474,8 +489,13 @@ class cmd_build(Command):
         :return: A tuple with (retcode, base_branch). If retcode is None
             then the command execution should continue.
         """
-        base_branch = get_branch_from_recipe_location(recipe_location, safe=safe,
-            possible_transports=possible_transports)
+        try:
+            base_branch = get_branch_from_recipe_location(location, safe=safe,
+                possible_transports=possible_transports)
+        except (_mod_transport.LateReadError, errors.ReadError):
+            # Presume unable to read means location is a directory rather than a file
+            base_branch = get_branch_from_branch_location(location,
+                possible_transports=possible_transports)
         time = datetime.datetime.utcnow()
         base_branch.substitute_time(time)
         old_recipe = None
@@ -489,10 +509,10 @@ class cmd_build(Command):
             return 0, base_branch
         return None, base_branch
 
-    def run(self, recipe_location, working_directory, manifest=None,
+    def run(self, location, working_directory, manifest=None,
             if_changed_from=None):
         possible_transports = []
-        result, base_branch = self._get_prepared_branch_from_recipe(recipe_location,
+        result, base_branch = self._get_prepared_branch_from_location(location,
             if_changed_from=if_changed_from, possible_transports=possible_transports)
         if result is not None:
             return result
