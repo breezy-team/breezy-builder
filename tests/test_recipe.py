@@ -101,6 +101,11 @@ class RecipeParserTests(TestCaseInTempDir):
     def test_parses_most_basic(self):
         self.get_recipe(self.basic_header_and_branch)
 
+    def test_parses_missing_deb_version(self):
+        header = "# bzr-builder format 0.3\n"
+        branch = "http://foo.org/\n"
+        self.get_recipe(header + branch)
+
     def tests_rejects_non_comment_to_start(self):
         self.assertParseError(1, 1, "Expecting '#', got 'b'",
                 self.get_recipe, "bzr-builder")
@@ -1112,6 +1117,13 @@ class ResolveRevisionsTests(TestCaseWithTransport):
 
 
 class StringifyTests(TestCaseInTempDir):
+
+    def test_missing_debversion(self):
+        base_branch = BaseRecipeBranch("base_url", None, 0.1)
+        base_branch.revid = "base_revid"
+        manifest = str(base_branch)
+        self.assertEqual("# bzr-builder format 0.1\n"
+                "base_url revid:base_revid\n", manifest)
 
     def test_simple_manifest(self):
         base_branch = BaseRecipeBranch("base_url", "1", 0.1)
