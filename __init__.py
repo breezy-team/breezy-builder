@@ -140,6 +140,7 @@ Format versions:
   0.1 - original format.
   0.2 - added "run" instruction.
   0.3 - added "nest-part" instruction.
+  0.4 - made "deb-version" optional, added several new substitution variables
 """
 
 if __name__ == '__main__':
