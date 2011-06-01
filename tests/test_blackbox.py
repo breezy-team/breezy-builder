@@ -41,7 +41,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
     def test_cmd_builder_requires_recipe_file_argument(self):
         err = self.run_bzr("build", retcode=3)[1]
         self.assertEqual("bzr: ERROR: command 'build' requires argument "
-                "RECIPE_LOCATION\n", err)
+                "LOCATION\n", err)
 
     def test_cmd_builder_requires_working_dir_argument(self):
         err = self.run_bzr("build recipe", retcode=3)[1]
@@ -67,6 +67,20 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.failUnlessExists("working/bzr-builder.manifest")
         self.check_file_contents("working/bzr-builder.manifest",
                 "# bzr-builder format 0.1 deb-version 1\nsource revid:%s\n"
+                % revid)
+
+    def test_cmd_builder_simple_branch(self):
+        source = self.make_branch_and_tree("source")
+        self.build_tree(["source/a"])
+        source.add(["a"])
+        revid = source.commit("one")
+        self.run_bzr("build -q source working")
+        self.failUnlessExists("working/a")
+        tree = workingtree.WorkingTree.open("working")
+        self.assertEqual(revid, tree.last_revision())
+        self.failUnlessExists("working/bzr-builder.manifest")
+        self.check_file_contents("working/bzr-builder.manifest",
+                "# bzr-builder format 0.4\nsource revid:%s\n"
                 % revid)
 
     def test_cmd_builder_simple_recipe_no_debversion(self):
