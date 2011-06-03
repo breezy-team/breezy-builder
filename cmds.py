@@ -329,9 +329,10 @@ def _run_command(command, basedir, msg, error_msg,
             raise errors.BzrCommandError(error_msg)
 
 
-def build_source_package(basedir):
-    command = ["/usr/bin/debuild", "--no-tgz-check", "-i", "-I", "-S",
-                    "-uc", "-us"]
+def build_source_package(basedir, no_tgz_check=False):
+    command = ["/usr/bin/debuild", "-i", "-I", "-S", "-uc", "-us"]
+    if no_tgz_check:
+        command.append("--no-tgz-check")
     _run_command(command, basedir,
         "Building the source package",
         "Failed to build the source package",
@@ -583,6 +584,7 @@ class cmd_dailydeb(cmd_build):
                         "in debian/changelog."),
                 Option("safe", help="Error if the recipe would cause"
                        " arbitrary code execution."),
+                Option("force-native", help="Force a native package."),
             ]
 
     takes_args = ["location", "working_basedir?"]
@@ -590,7 +592,7 @@ class cmd_dailydeb(cmd_build):
     def run(self, location, working_basedir=None, manifest=None,
             if_changed_from=None, package=None, distribution=None,
             dput=None, key_id=None, no_build=None, watch_ppa=False,
-            append_version=None, safe=False):
+            append_version=None, safe=False, force_native=False):
 
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
@@ -647,7 +649,8 @@ class cmd_dailydeb(cmd_build):
                     raise errors.BzrCommandError("--append-version only "
                         "supported for autobuild recipes (with a 'deb-version' "
                         "header)")
-            force_native_format(working_directory)
+            if force_native:
+                force_native_format(working_directory)
             package_dir = calculate_package_dir(base_branch,
                     package_name, working_basedir)
             # working_directory -> package_dir: after this debian stuff works.
@@ -658,7 +661,7 @@ class cmd_dailydeb(cmd_build):
                         possible_transports)
                 return 0
             try:
-                build_source_package(package_dir)
+                build_source_package(package_dir, no_tgz_check=force_native)
                 if key_id is not None:
                     sign_source_package(package_dir, key_id)
                 if dput is not None:
