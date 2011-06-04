@@ -274,17 +274,15 @@ def add_autobuild_changelog_entry(base_branch, basedir, distribution=None,
         cl_f.close()
 
 
-def calculate_package_dir(base_branch, package_name, working_basedir):
+def calculate_package_dir(package_name, package_version, working_basedir):
     """Calculate the directory name that should be used while debuilding.
 
     :param base_branch: Recipe base branch
+    :param package_version: Version of the package
     :param package_name: Package name
     :param working_basedir: Base directory
     """
-    version = base_branch.deb_version
-    if "-" in version:
-        version = version[:version.rindex("-")]
-    package_basedir = "%s-%s" % (package_name, version)
+    package_basedir = "%s-%s" % (package_name, package_version.upstream_version)
     package_dir = os.path.join(working_basedir, package_basedir)
     return package_dir
 
@@ -547,6 +545,21 @@ def debian_source_package_name(control_path):
         return control["Source"]
 
 
+def extract_upstream_tarball(branch, package, version, dest_dir):
+    """Extract the upstream tarball from a branch.
+
+    :param branch: Branch with the upstream pristine tar data
+    :param package: Package name
+    :param version: Package version
+    :param dest_dir: Destination directory
+    """
+    from bzrlib.plugins.builder.pristinetar import reconstruct_revision_tarball
+    tag_name = "upstream-%s" % version
+    revid = branch.tags.lookup_tag(tag_name)
+    reconstruct_revision_tarball(branch.repository, revid, package, version,
+        dest_dir)
+
+
 class cmd_dailydeb(cmd_build):
     """Build a deb based on a 'recipe' or from a branch.
 
@@ -584,7 +597,9 @@ class cmd_dailydeb(cmd_build):
                         "in debian/changelog."),
                 Option("safe", help="Error if the recipe would cause"
                        " arbitrary code execution."),
-                Option("force-native", help="Force a native package."),
+                Option("allow-fallback-to-native",
+                    help="Allow falling back to a native package if the upstream "
+                         "tarball can not be found."),
             ]
 
     takes_args = ["location", "working_basedir?"]
@@ -592,7 +607,7 @@ class cmd_dailydeb(cmd_build):
     def run(self, location, working_basedir=None, manifest=None,
             if_changed_from=None, package=None, distribution=None,
             dput=None, key_id=None, no_build=None, watch_ppa=False,
-            append_version=None, safe=False, force_native=False):
+            append_version=None, safe=False, allow_fallback_to_native=False):
 
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
@@ -630,9 +645,9 @@ class cmd_dailydeb(cmd_build):
             manifest_path = os.path.join(working_directory, "debian",
                 "bzr-builder.manifest")
             build_tree(base_branch, working_directory)
-            if package is None:
-                control_path = os.path.join(working_directory, "debian", "control")
-                if not os.path.exists(control_path):
+            control_path = os.path.join(working_directory, "debian", "control")
+            if not os.path.exists(control_path):
+                if package is None:
                     raise errors.BzrCommandError("Missing debian/control file to "
                         "read package name from.")
                 package = debian_source_package_name(control_path)
@@ -649,10 +664,12 @@ class cmd_dailydeb(cmd_build):
                     raise errors.BzrCommandError("--append-version only "
                         "supported for autobuild recipes (with a 'deb-version' "
                         "header)")
-            if force_native:
-                force_native_format(working_directory)
-            package_dir = calculate_package_dir(base_branch,
-                    package_name, working_basedir)
+            with open(os.path.join(working_directory, "debian", "changelog")) as cl_f:
+                contents = cl_f.read()
+            cl = changelog.Changelog(file=contents)
+            package_version = cl.version
+            package_dir = calculate_package_dir(package_name, package_version,
+                working_basedir)
             # working_directory -> package_dir: after this debian stuff works.
             os.rename(working_directory, package_dir)
             if no_build:
@@ -660,8 +677,19 @@ class cmd_dailydeb(cmd_build):
                     write_manifest_to_transport(manifest, base_branch,
                         possible_transports)
                 return 0
+            if package_version.debian_revision is not None:
+                # Non-native package
+                try:
+                    extract_upstream_tarball(base_branch.branch, package_name,
+                        package_version.upstream_version, working_basedir)
+                except errors.NoSuchTag:
+                    if not allow_fallback_to_native:
+                        raise
+                    else:
+                        force_native_format(working_directory)
             try:
-                build_source_package(package_dir, no_tgz_check=force_native)
+                build_source_package(package_dir,
+                        no_tgz_check=allow_fallback_to_native)
                 if key_id is not None:
                     sign_source_package(package_dir, key_id)
                 if dput is not None:
