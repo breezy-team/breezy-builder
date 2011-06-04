@@ -634,8 +634,12 @@ class cmd_dailydeb(cmd_build):
             if not os.path.exists(working_basedir):
                 os.makedirs(working_basedir)
         package_name = self._calculate_package_name(location, package)
-        working_directory = os.path.join(working_basedir,
-            "%s-%s" % (package_name, self._template_version))
+        if self._template_version is None:
+            working_directory = os.path.join(working_basedir,
+                "%s-direct" % (package_name,))
+        else:
+            working_directory = os.path.join(working_basedir,
+                "%s-%s" % (package_name, self._template_version))
         try:
             # we want to use a consistent package_dir always to support
             # updates in place, but debuild etc want PACKAGE-UPSTREAMVERSION
@@ -667,6 +671,7 @@ class cmd_dailydeb(cmd_build):
             with open(os.path.join(working_directory, "debian", "changelog")) as cl_f:
                 contents = cl_f.read()
             cl = changelog.Changelog(file=contents)
+            package_name = cl.package
             package_version = cl.version
             package_dir = calculate_package_dir(package_name, package_version,
                 working_basedir)
