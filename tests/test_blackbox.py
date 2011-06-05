@@ -13,14 +13,47 @@
 # You should have received a copy of the GNU General Public License along 
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from base64 import standard_b64encode
 import os
+import signal
+import subprocess
 from textwrap import dedent
 
+from bzrlib import (
+    export as _mod_export,
+    osutils,
+    workingtree,
+    )
 from bzrlib.branch import Branch
-from bzrlib import workingtree
 from bzrlib.tests import (
         TestCaseWithTransport,
         )
+
+
+from bzrlib.plugins.builder.tests import PristineTarFeature
+
+
+def make_pristine_tar_delta(dest, tarball_path):
+    """Create a pristine-tar delta for a tarball.
+
+    :param dest: Directory to generate pristine tar delta for
+    :param tarball_path: Path to the tarball
+    :return: pristine-tarball
+    """
+    def subprocess_setup():
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    # If tarball_path is relative, the cwd=dest parameter to Popen will make
+    # pristine-tar faaaail. pristine-tar doesn't use the VFS either, so we
+    # assume local paths.
+    tarball_path = osutils.abspath(tarball_path)
+    command = ["pristine-tar", "gendelta", tarball_path, "-"]
+    proc = subprocess.Popen(command, stdout=subprocess.PIPE,
+            cwd=dest, preexec_fn=subprocess_setup,
+            stderr=subprocess.PIPE)
+    (stdout, stderr) = proc.communicate()
+    if proc.returncode != 0:
+        raise Exception("Generating delta from tar failed: %s" % stderr)
+    return stdout
 
 
 class BlackboxBuilderTests(TestCaseWithTransport):
@@ -231,16 +264,39 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         out, err = self.run_bzr("dailydeb -q test.recipe "
                 "--manifest manifest --if-changed-from bar")
 
-    def make_upstream_version(self, version):
-        bb = self.make_branch_builder("upstream")
-        revid = "upstream-rev-%s" % version
-        bb.build_snapshot(revid, [], [
-            ('add', ('', 'root-id', 'directory', '')),
-            ('add', ('filename', 'f-id', 'file', 'content\n'))])
-        branch = bb.get_branch()
+    def make_upstream_version(self, version, contents,
+            pristine_tar_format=None):
+        upstream = self.make_branch_and_tree("upstream")
+        self.build_tree_contents(contents)
+        upstream.smart_add([upstream.basedir])
+        revprops = {}
+        if pristine_tar_format is not None:
+            _mod_export.export(upstream, "export")
+            if pristine_tar_format == "gz":
+                tarfile_path = "export.tar.gz"
+                _mod_export.export(upstream, tarfile_path, "tgz")
+                revprops["deb-pristine-delta"] = standard_b64encode(
+                    make_pristine_tar_delta(
+                        "export", "export.tar.gz"))
+            elif pristine_tar_format == "bz2":
+                tarfile_path = "export.tar.bz2"
+                _mod_export.export(upstream, tarfile_path, "tbz2")
+                revprops["deb-pristine-delta-bz2"] = standard_b64encode(
+                    make_pristine_tar_delta(
+                        "export", "export.tar.bz2"))
+            else:
+                raise AssertionError("unknown pristine tar format %s" %
+                    pristine_tar_format)
+        else:
+            tarfile_path = "export.tar.gz"
+            _mod_export.export(upstream, tarfile_path, "tgz")
+        tarfile_sha1 = osutils.sha_file_by_name(tarfile_path)
+        revid = upstream.commit("import upstream %s" % version,
+            revprops=revprops)
         source = Branch.open("source")
-        source.repository.fetch(branch.repository)
+        source.repository.fetch(upstream.branch.repository)
         source.tags.set_tag("upstream-%s" % version, revid)
+        return tarfile_sha1
 
     def make_simple_package(self):
         source = self.make_branch_and_tree("source")
@@ -367,7 +423,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
 
     def test_cmd_dailydeb_with_orig_tarball(self):
         self.make_simple_package()
-        self.make_upstream_version("0.1")
+        self.make_upstream_version("0.1", [("upstream/file", "content\n")])
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version 0.1-1\nsource\n")])
         out, err = self.run_bzr(
@@ -375,6 +431,36 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             retcode=0)
         self.assertPathExists("working/package_0.1.orig.tar.gz")
         self.assertPathExists("working/package_0.1-1.diff.gz")
+
+    def test_cmd_dailydeb_with_pristine_orig_gz_tarball(self):
+        self.requireFeature(PristineTarFeature)
+        self.make_simple_package()
+        pristine_tar_sha1 = self.make_upstream_version("0.1",
+            [("upstream/file", "content\n")], pristine_tar_format="gz")
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
+                    "deb-version 0.1-1\nsource\n")])
+        out, err = self.run_bzr("dailydeb -q test.recipe working",
+            retcode=0)
+        self.assertPathExists("working/package_0.1.orig.tar.gz")
+        self.assertPathExists("working/package_0.1-1.diff.gz")
+        self.assertEquals(
+            osutils.sha_file_by_name("working/package_0.1.orig.tar.gz"),
+            pristine_tar_sha1)
+
+    def test_cmd_dailydeb_with_pristine_orig_bz2_tarball(self):
+        self.requireFeature(PristineTarFeature)
+        self.make_simple_quilt_package()
+        pristine_tar_sha1 = self.make_upstream_version("0.1",
+            [("upstream/file", "content\n")], pristine_tar_format="bz2")
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
+                    "deb-version 0.1-1\nsource\n")])
+        out, err = self.run_bzr("dailydeb -q test.recipe working",
+            retcode=0)
+        self.assertPathExists("working/package_0.1.orig.tar.bz2")
+        self.assertPathExists("working/package_0.1-1.debian.tar.gz")
+        self.assertEquals(
+            osutils.sha_file_by_name("working/package_0.1.orig.tar.bz2"),
+            pristine_tar_sha1)
 
     def test_cmd_dailydeb_force_native(self):
         self.make_simple_quilt_package()

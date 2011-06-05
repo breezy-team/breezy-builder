@@ -589,8 +589,7 @@ def extract_upstream_tarball(branch, package, version, dest_dir):
         delta = standard_b64decode(uuencoded)
         dest = os.path.join(dest_dir, "orig")
         try:
-            _mod_export.export(tree, dest, format='dir',
-                per_file_timestamps=True)
+            _mod_export.export(tree, dest, format='dir')
             reconstruct_pristine_tar(dest, delta,
                 os.path.join(dest_dir, dest_filename))
         finally:
