@@ -308,6 +308,7 @@ def _run_command(command, basedir, msg, error_msg,
         kwargs = {}
     if env is not None:
         kwargs["env"] = env
+    trace.mutter("running: %r", command)
     try:
         proc = subprocess.Popen(command, cwd=basedir,
                 stdin=subprocess.PIPE, preexec_fn=subprocess_setup, **kwargs)
@@ -734,8 +735,8 @@ class cmd_dailydeb(cmd_build):
                 except errors.NoSuchTag:
                     if not allow_fallback_to_native:
                         raise
-                    else:
-                        force_native_format(working_directory)
+            if allow_fallback_to_native:
+                force_native_format(package_dir)
             try:
                 build_source_package(package_dir,
                         tgz_check=not allow_fallback_to_native)

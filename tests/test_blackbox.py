@@ -254,7 +254,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                 "--manifest manifest --no-build working")
         new_cl_contents = ("package (1) unstable; urgency=low\n\n"
                 "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
-        f = open("working/test-1/debian/changelog")
+        f = open("working/package-1/debian/changelog")
         try:
             actual_cl_contents = f.read()
         finally:
@@ -283,7 +283,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.make_simple_package()
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version {debupstream}-2\nsource 1\n")])
-        out, err = self.run_bzr("dailydeb -q test.recipe working")
+        out, err = self.run_bzr(
+            "dailydeb --allow-fallback-to-native -q test.recipe working")
         new_cl_contents = ("package (0.1-2) unstable; urgency=low\n\n"
                 "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
         f = open("working/test-{debupstream}-2/debian/changelog")
@@ -347,7 +348,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version 1\nsource 2\n")])
         out, err = self.run_bzr(
-            "dailydeb --allow-fallback-to-native -q test.recipe working", retcode=0)
+            "dailydeb --allow-fallback-to-native -q test.recipe working",
+            retcode=0)
         self.assertFileEqual("3.0 (native)\n",
             "working/test-1/debian/source/format")
 
@@ -361,7 +363,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.add(["debian/patches", "debian/patches/series"])
         source.commit("add patches")
         out, err = self.run_bzr(
-            "dailydeb -q test.recipe working", retcode=0)
+            "dailydeb --allow-fallback-to-native -q test.recipe working",
+            retcode=0)
         self.assertFileEqual("3.0 (native)\n",
             "working/test-1/debian/source/format")
         self.assertPathDoesNotExist("working/test-1/debian/patches")
@@ -388,7 +391,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version 1\nsource\n")])
         out, err = self.run_bzr(
-            "dailydeb -q test.recipe working", retcode=0)
+            "dailydeb --allow-fallback-to-native -q test.recipe working",
+            retcode=0)
         self.assertFileEqual("3.0 (native)\n",
             "working/test-1/debian/source/format")
         self.assertFileEqual("new-contents\n",
@@ -415,8 +419,10 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.commit("add patch")
 
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
-                    "deb-version 1\nsource 3\n")])
-        out, err = self.run_bzr("dailydeb -q test.recipe working", retcode=3)
+                    "deb-version 1-1\nsource 3\n")])
+        out, err = self.run_bzr(
+            "dailydeb --allow-fallback-to-native -q test.recipe working",
+            retcode=3)
         self.assertContainsRe(err, "bzr: ERROR: Failed to apply quilt patches")
 
     def test_unknown_source_format(self):
@@ -430,5 +436,5 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version 1\nsource\n")])
         out, err = self.run_bzr(
-            "dailydeb -q test.recipe working", retcode=3)
+            "dailydeb --allow-fallback-to-native -q test.recipe working", retcode=3)
         self.assertEquals(err, "bzr: ERROR: Unknown source format 2.0\n")
