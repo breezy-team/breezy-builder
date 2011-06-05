@@ -16,6 +16,7 @@
 import os
 from textwrap import dedent
 
+from bzrlib.branch import Branch
 from bzrlib import workingtree
 from bzrlib.tests import (
         TestCaseWithTransport,
@@ -230,6 +231,17 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         out, err = self.run_bzr("dailydeb -q test.recipe "
                 "--manifest manifest --if-changed-from bar")
 
+    def make_upstream_version(self, version):
+        bb = self.make_branch_builder("upstream")
+        revid = "upstream-rev-%s" % version
+        bb.build_snapshot(revid, [], [
+            ('add', ('', 'root-id', 'directory', '')),
+            ('add', ('filename', 'f-id', 'file', 'content\n'))])
+        branch = bb.get_branch()
+        source = Branch.open("source")
+        source.repository.fetch(branch.repository)
+        source.tags.set_tag("upstream-%s" % version, revid)
+
     def make_simple_package(self):
         source = self.make_branch_and_tree("source")
         self.build_tree(["source/a", "source/debian/"])
@@ -342,6 +354,27 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.add(["debian/source", "debian/source/format"])
         source.commit("set source format")
         return source
+
+    def test_cmd_dailydeb_missing_orig_tarball(self):
+        self.make_simple_quilt_package()
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
+                    "deb-version 1-1\nsource 1\n")])
+        out, err = self.run_bzr(
+            "dailydeb -q test.recipe working",
+            retcode=3)
+        self.assertEquals("", out)
+        self.assertEquals('bzr: ERROR: No such tag: upstream-1\n', err)
+
+    def test_cmd_dailydeb_with_orig_tarball(self):
+        self.make_simple_package()
+        self.make_upstream_version("0.1")
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
+                    "deb-version 0.1-1\nsource\n")])
+        out, err = self.run_bzr(
+            "dailydeb -q test.recipe working",
+            retcode=0)
+        self.assertPathExists("working/package_0.1.orig.tar.gz")
+        self.assertPathExists("working/package_0.1-1.diff.gz")
 
     def test_cmd_dailydeb_force_native(self):
         self.make_simple_quilt_package()
