@@ -285,7 +285,7 @@ def calculate_package_dir(package_name, package_version, working_basedir):
 
 
 def _run_command(command, basedir, msg, error_msg,
-        not_installed_msg=None, env=None, success_exit_codes=None):
+        not_installed_msg=None, env=None, success_exit_codes=None, indata=None):
     """ Run a command in a subprocess.
 
     :param command: list with command and parameters
@@ -295,7 +295,10 @@ def _run_command(command, basedir, msg, error_msg,
         isn't available.
     :param env: Optional environment to use rather than os.environ.
     :param success_exit_codes: Exit codes to consider succesfull, defaults to [0].
+    :param indata: Data to write to standard input
     """
+    def subprocess_setup():
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     trace.note(msg)
     # Hide output if -q is in use.
     quiet = trace.is_quiet()
@@ -307,14 +310,14 @@ def _run_command(command, basedir, msg, error_msg,
         kwargs["env"] = env
     try:
         proc = subprocess.Popen(command, cwd=basedir,
-                stdin=subprocess.PIPE, **kwargs)
+                stdin=subprocess.PIPE, preexec_fn=subprocess_setup, **kwargs)
     except OSError, e:
         if e.errno != errno.ENOENT:
             raise
         if not_installed_msg is None:
             raise
         raise MissingDependency(msg=not_installed_msg)
-    output = proc.communicate()
+    output = proc.communicate(indata)
     if success_exit_codes is None:
         success_exit_codes = [0]
     if proc.returncode not in success_exit_codes:
@@ -324,10 +327,13 @@ def _run_command(command, basedir, msg, error_msg,
             raise errors.BzrCommandError(error_msg)
 
 
-def build_source_package(basedir, no_tgz_check=False):
-    command = ["/usr/bin/debuild", "-i", "-I", "-S", "-uc", "-us"]
-    if no_tgz_check:
+def build_source_package(basedir, tgz_check=True):
+    command = ["/usr/bin/debuild"]
+    if tgz_check:
+        command.append("--tgz-check")
+    else:
         command.append("--no-tgz-check")
+    command.extend(["-i", "-I", "-S", "-uc", "-us"])
     _run_command(command, basedir,
         "Building the source package",
         "Failed to build the source package",
@@ -542,13 +548,6 @@ def debian_source_package_name(control_path):
         return control["Source"]
 
 
-class PristineTarError(errors.BzrError):
-    _fmt = 'There was an error using pristine-tar: %(error)s.'
-
-    def __init__(self, error):
-        errors.BzrError.__init__(self, error=error)
-
-
 def reconstruct_pristine_tar(dest, delta, dest_filename):
     """Reconstruct a pristine tarball from a directory and a delta.
 
@@ -556,22 +555,13 @@ def reconstruct_pristine_tar(dest, delta, dest_filename):
     :param delta: pristine-tar delta
     :param dest_filename: Destination filename
     """
-    def subprocess_setup():
-        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     command = ["pristine-tar", "gentar", "-",
                os.path.abspath(dest_filename)]
-    try:
-        proc = subprocess.Popen(command, stdin=subprocess.PIPE,
-                cwd=dest, preexec_fn=subprocess_setup,
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    except OSError, e:
-        if e.errno == errno.ENOENT:
-            raise PristineTarError("pristine-tar is not installed")
-        else:
-            raise
-    (stdout, stderr) = proc.communicate(delta)
-    if proc.returncode != 0:
-        raise PristineTarError("Generating tar from delta failed: %s" % stdout)
+    _run_command(command, dest,
+        "Reconstructing pristine tarball",
+        "Generating tar from delta failed",
+        not_installed_msg="pristine-tar is not installed",
+        indata=delta)
 
 
 def extract_upstream_tarball(branch, package, version, dest_dir):
@@ -585,29 +575,31 @@ def extract_upstream_tarball(branch, package, version, dest_dir):
     tag_name = "upstream-%s" % version
     revid = branch.tags.lookup_tag(tag_name)
     tree = branch.repository.revision_tree(revid)
-    dest = os.path.join(dest_dir, "orig")
-    try:
-        rev = branch.repository.get_revision(revid)
-        if 'deb-pristine-delta' in rev.properties:
-            uuencoded = rev.properties['deb-pristine-delta']
-            dest_filename = "%s_%s.orig.tar.gz" % (package, version)
-        elif 'deb-pristine-delta-bz2' in rev.properties:
-            uuencoded = rev.properties['deb-pristine-delta-bz2']
-            dest_filename = "%s_%s.orig.tar.bz2" % (package, version)
-        else:
-            uuencoded = None
-        if uuencoded is not None:
-            delta = standard_b64decode(uuencoded)
-            _mod_export.export(tree, dest, format='dir')
+    rev = branch.repository.get_revision(revid)
+    if 'deb-pristine-delta' in rev.properties:
+        uuencoded = rev.properties['deb-pristine-delta']
+        dest_filename = "%s_%s.orig.tar.gz" % (package, version)
+    elif 'deb-pristine-delta-bz2' in rev.properties:
+        uuencoded = rev.properties['deb-pristine-delta-bz2']
+        dest_filename = "%s_%s.orig.tar.bz2" % (package, version)
+    else:
+        uuencoded = None
+    if uuencoded is not None:
+        delta = standard_b64decode(uuencoded)
+        dest = os.path.join(dest_dir, "orig")
+        try:
+            _mod_export.export(tree, dest, format='dir',
+                per_file_timestamps=True)
             reconstruct_pristine_tar(dest, delta,
                 os.path.join(dest_dir, dest_filename))
-        else:
-            # Default to .tar.gz
-            dest_filename = "%s_%s.orig.tar.gz" % (package, version)
-            _mod_export.export(tree, os.path.join(dest_dir, dest_filename),
-                    require_per_file_timestamps=True)
-    finally:
-        shutil.rmtree(dest)
+        finally:
+            if os.path.exists(dest):
+                shutil.rmtree(dest)
+    else:
+        # Default to .tar.gz
+        dest_filename = "%s_%s.orig.tar.gz" % (package, version)
+        _mod_export.export(tree, os.path.join(dest_dir, dest_filename),
+                per_file_timestamps=True)
 
 
 class cmd_dailydeb(cmd_build):
@@ -746,7 +738,7 @@ class cmd_dailydeb(cmd_build):
                         force_native_format(working_directory)
             try:
                 build_source_package(package_dir,
-                        no_tgz_check=allow_fallback_to_native)
+                        tgz_check=not allow_fallback_to_native)
                 if key_id is not None:
                     sign_source_package(package_dir, key_id)
                 if dput is not None:

@@ -339,7 +339,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version 1\nsource 2\n")])
         out, err = self.run_bzr(
-            "dailydeb -q test.recipe working", retcode=0)
+            "dailydeb --allow-fallback-to-native -q test.recipe working", retcode=0)
         self.assertFileEqual("3.0 (native)\n",
             "working/test-1/debian/source/format")
 
