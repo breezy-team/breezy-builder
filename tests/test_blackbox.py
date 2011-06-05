@@ -24,6 +24,14 @@ from bzrlib.tests import (
 
 class BlackboxBuilderTests(TestCaseWithTransport):
 
+    if not getattr(TestCaseWithTransport, "assertPathDoesNotExist", None):
+        # Compatibility with bzr < 2.4
+        def assertPathDoesNotExist(self, path):
+            self.failIfExists(path)
+
+        def assertPathExists(self, path):
+            self.failUnlessExists(path)
+
     def setUp(self):
         super(BlackboxBuilderTests, self).setUp()
         # Replace DEBEMAIL and DEBFULLNAME so that they are known values
@@ -61,10 +69,10 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.add(["a"])
         revid = source.commit("one")
         self.run_bzr("build -q recipe working")
-        self.failUnlessExists("working/a")
+        self.assertPathExists("working/a")
         tree = workingtree.WorkingTree.open("working")
         self.assertEqual(revid, tree.last_revision())
-        self.failUnlessExists("working/bzr-builder.manifest")
+        self.assertPathExists("working/bzr-builder.manifest")
         self.check_file_contents("working/bzr-builder.manifest",
                 "# bzr-builder format 0.1 deb-version 1\nsource revid:%s\n"
                 % revid)
@@ -75,10 +83,10 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.add(["a"])
         revid = source.commit("one")
         self.run_bzr("build -q source working")
-        self.failUnlessExists("working/a")
+        self.assertPathExists("working/a")
         tree = workingtree.WorkingTree.open("working")
         self.assertEqual(revid, tree.last_revision())
-        self.failUnlessExists("working/bzr-builder.manifest")
+        self.assertPathExists("working/bzr-builder.manifest")
         self.check_file_contents("working/bzr-builder.manifest",
                 "# bzr-builder format 0.4\nsource revid:%s\n"
                 % revid)
@@ -91,10 +99,10 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.add(["a"])
         revid = source.commit("one")
         self.run_bzr("build -q recipe working")
-        self.failUnlessExists("working/a")
+        self.assertPathExists("working/a")
         tree = workingtree.WorkingTree.open("working")
         self.assertEqual(revid, tree.last_revision())
-        self.failUnlessExists("working/bzr-builder.manifest")
+        self.assertPathExists("working/bzr-builder.manifest")
         self.check_file_contents("working/bzr-builder.manifest",
                 "# bzr-builder format 0.1\nsource revid:%s\n"
                 % revid)
@@ -107,8 +115,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.add(["a"])
         revid = source.commit("one")
         self.run_bzr("build -q recipe working --manifest manifest")
-        self.failUnlessExists("working/a")
-        self.failUnlessExists("manifest")
+        self.assertPathExists("working/a")
+        self.assertPathExists("manifest")
         self.check_file_contents("manifest", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource revid:%s\n" % revid)
 
@@ -133,8 +141,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "deb-version 1\nsource revid:%s\n" % revid)])
         out, err = self.run_bzr("build recipe working --manifest manifest "
                 "--if-changed-from old-manifest")
-        self.failIfExists("working")
-        self.failIfExists("manifest")
+        self.assertPathDoesNotExist("working")
+        self.assertPathDoesNotExist("manifest")
         self.assertEqual("Unchanged\n", err)
 
     def test_cmd_builder_if_changed_changed(self):
@@ -148,8 +156,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "deb-version 1\nsource revid:foo\n")])
         out, err = self.run_bzr("build -q recipe working --manifest manifest "
                 "--if-changed-from old-manifest")
-        self.failUnlessExists("working/a")
-        self.failUnlessExists("manifest")
+        self.assertPathExists("working/a")
+        self.assertPathExists("manifest")
         self.check_file_contents("manifest", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource revid:%s\n" % revid)
 
@@ -167,12 +175,12 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "deb-version 1\nsource 1\n")])
         out, err = self.run_bzr("dailydeb -q test.recipe working "
                 "--manifest manifest")
-        self.failIfExists("working/a")
+        self.assertPathDoesNotExist("working/a")
         package_root = "working/test-1/"
-        self.failUnlessExists(os.path.join(package_root, "a"))
-        self.failUnlessExists(os.path.join(package_root,
+        self.assertPathExists(os.path.join(package_root, "a"))
+        self.assertPathExists(os.path.join(package_root,
                     "debian/bzr-builder.manifest"))
-        self.failUnlessExists("manifest")
+        self.assertPathExists("manifest")
         self.check_file_contents("manifest", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource revid:%s\n" % revid)
         self.check_file_contents(os.path.join(package_root,
@@ -180,7 +188,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "# bzr-builder format 0.1 deb-version 1\nsource revid:%s\n"
                     % revid)
         cl_path = os.path.join(package_root, "debian/changelog")
-        self.failUnlessExists(cl_path)
+        self.assertPathExists(cl_path)
         cl_f = open(cl_path)
         try:
             line = cl_f.readline()
@@ -356,7 +364,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             "dailydeb -q test.recipe working", retcode=0)
         self.assertFileEqual("3.0 (native)\n",
             "working/test-1/debian/source/format")
-        self.failIfExists("working/test-1/debian/patches")
+        self.assertPathDoesNotExist("working/test-1/debian/patches")
 
     def test_cmd_dailydeb_force_native_apply_quilt(self):
         source = self.make_simple_quilt_package()
@@ -385,7 +393,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             "working/test-1/debian/source/format")
         self.assertFileEqual("new-contents\n",
             "working/test-1/thefile")
-        self.failIfExists("working/test-1/debian/patches")
+        self.assertPathDoesNotExist("working/test-1/debian/patches")
 
     def test_cmd_dailydeb_force_native_apply_quilt_failure(self):
         source = self.make_simple_quilt_package()
