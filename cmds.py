@@ -15,6 +15,7 @@
 
 """Subcommands provided by bzr-builder."""
 
+from base64 import standard_b64decode
 from StringIO import StringIO
 import datetime
 from email import utils
@@ -22,6 +23,7 @@ import errno
 import os
 import pwd
 import re
+import signal
 import socket
 import shutil
 import subprocess
@@ -36,6 +38,7 @@ except ImportError:
 
 from bzrlib import (
         errors,
+        export as _mod_export,
         lazy_regex,
         trace,
         transport as _mod_transport,
@@ -193,16 +196,16 @@ def get_maintainer():
     return (maintainer, email)
 
 
-def add_autobuild_changelog_entry(base_branch, basedir, distribution=None,
-        package=None, author_name=None, author_email=None,
+def add_autobuild_changelog_entry(base_branch, basedir, package,
+        distribution=None, author_name=None, author_email=None,
         append_version=None):
     """Add a new changelog entry for an autobuild.
 
     :param base_branch: Recipe base branch
     :param basedir: Base working directory
+    :param package: package name
     :param distribution: Optional distribution (defaults to last entry
         distribution)
-    :param package: Optional package name (defaults to last entry package name)
     :param author_name: Name of the build requester
     :param author_email: Email of the build requester
     :param append_version: Optional version suffix to add
@@ -225,8 +228,6 @@ def add_autobuild_changelog_entry(base_branch, basedir, distribution=None,
     if len(cl._blocks) > 0:
         if distribution is None:
             distribution = cl._blocks[0].distributions.split()[0]
-        if package is None:
-            package = cl._blocks[0].package
     else:
         if file_found:
             if len(contents.strip()) > 0:
@@ -236,10 +237,6 @@ def add_autobuild_changelog_entry(base_branch, basedir, distribution=None,
                 reason = "debian/changelog was empty"
         else:
             reason = "debian/changelog was not present"
-        if package is None:
-            raise errors.BzrCommandError("No previous changelog to "
-                    "take the package name from, and --package not "
-                    "specified: %s." % reason)
         if distribution is None:
             distribution = DEFAULT_UBUNTU_DISTRIBUTION
     try:
@@ -545,6 +542,38 @@ def debian_source_package_name(control_path):
         return control["Source"]
 
 
+class PristineTarError(errors.BzrError):
+    _fmt = 'There was an error using pristine-tar: %(error)s.'
+
+    def __init__(self, error):
+        errors.BzrError.__init__(self, error=error)
+
+
+def reconstruct_pristine_tar(dest, delta, dest_filename):
+    """Reconstruct a pristine tarball from a directory and a delta.
+
+    :param dest: Directory to pack
+    :param delta: pristine-tar delta
+    :param dest_filename: Destination filename
+    """
+    def subprocess_setup():
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    command = ["pristine-tar", "gentar", "-",
+               os.path.abspath(dest_filename)]
+    try:
+        proc = subprocess.Popen(command, stdin=subprocess.PIPE,
+                cwd=dest, preexec_fn=subprocess_setup,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    except OSError, e:
+        if e.errno == errno.ENOENT:
+            raise PristineTarError("pristine-tar is not installed")
+        else:
+            raise
+    (stdout, stderr) = proc.communicate(delta)
+    if proc.returncode != 0:
+        raise PristineTarError("Generating tar from delta failed: %s" % stdout)
+
+
 def extract_upstream_tarball(branch, package, version, dest_dir):
     """Extract the upstream tarball from a branch.
 
@@ -553,11 +582,32 @@ def extract_upstream_tarball(branch, package, version, dest_dir):
     :param version: Package version
     :param dest_dir: Destination directory
     """
-    from bzrlib.plugins.builder.pristinetar import reconstruct_revision_tarball
     tag_name = "upstream-%s" % version
     revid = branch.tags.lookup_tag(tag_name)
-    reconstruct_revision_tarball(branch.repository, revid, package, version,
-        dest_dir)
+    tree = branch.repository.revision_tree(revid)
+    dest = os.path.join(dest_dir, "orig")
+    try:
+        rev = branch.repository.get_revision(revid)
+        if 'deb-pristine-delta' in rev.properties:
+            uuencoded = rev.properties['deb-pristine-delta']
+            dest_filename = "%s_%s.orig.tar.gz" % (package, version)
+        elif 'deb-pristine-delta-bz2' in rev.properties:
+            uuencoded = rev.properties['deb-pristine-delta-bz2']
+            dest_filename = "%s_%s.orig.tar.bz2" % (package, version)
+        else:
+            uuencoded = None
+        if uuencoded is not None:
+            delta = standard_b64decode(uuencoded)
+            _mod_export.export(tree, dest, format='dir')
+            reconstruct_pristine_tar(dest, delta,
+                os.path.join(dest_dir, dest_filename))
+        else:
+            # Default to .tar.gz
+            dest_filename = "%s_%s.orig.tar.gz" % (package, version)
+            _mod_export.export(tree, os.path.join(dest_dir, dest_filename),
+                    require_per_file_timestamps=True)
+    finally:
+        shutil.rmtree(dest)
 
 
 class cmd_dailydeb(cmd_build):
@@ -652,8 +702,10 @@ class cmd_dailydeb(cmd_build):
             control_path = os.path.join(working_directory, "debian", "control")
             if not os.path.exists(control_path):
                 if package is None:
-                    raise errors.BzrCommandError("Missing debian/control file to "
-                        "read package name from.")
+                    raise errors.BzrCommandError("No control file to "
+                            "take the package name from, and --package not "
+                            "specified.")
+            else:
                 package = debian_source_package_name(control_path)
             write_manifest_to_transport(manifest_path, base_branch,
                 possible_transports)
@@ -661,7 +713,7 @@ class cmd_dailydeb(cmd_build):
             if autobuild:
                 # Add changelog also substitutes {debupstream}.
                 add_autobuild_changelog_entry(base_branch, working_directory,
-                    distribution=distribution, package=package,
+                    package, distribution=distribution, 
                     append_version=append_version)
             else:
                 if append_version:
