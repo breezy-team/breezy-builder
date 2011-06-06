@@ -535,12 +535,17 @@ class RecipeParserTests(TestCaseInTempDir):
 
 class BuildTreeTests(TestCaseWithTransport):
 
+    if not getattr(TestCaseWithTransport, "assertPathExists", None):
+        # Compatibility with bzr < 2.4
+        def assertPathExists(self, path):
+            self.failUnlessExists(path)
+
     def test_ensure_basedir(self):
         to_transport = transport.get_transport("a")
         ensure_basedir(to_transport)
-        self.failUnlessExists("a")
+        self.assertPathExists("a")
         ensure_basedir(to_transport)
-        self.failUnlessExists("a")
+        self.assertPathExists("a")
         e = self.assertRaises(errors.BzrCommandError, ensure_basedir,
                 transport.get_transport("b/c"))
         self.assertTrue('Parent of "' in str(e))
@@ -551,7 +556,7 @@ class BuildTreeTests(TestCaseWithTransport):
         revid = source.commit("one")
         base_branch = BaseRecipeBranch("source", "1", 0.2)
         build_tree(base_branch, "target")
-        self.failUnlessExists("target")
+        self.assertPathExists("target")
         tree = workingtree.WorkingTree.open("target")
         self.assertEqual(revid, tree.last_revision())
         self.assertEqual(revid, base_branch.revid)
@@ -563,7 +568,7 @@ class BuildTreeTests(TestCaseWithTransport):
         os.mkdir("target")
         base_branch = BaseRecipeBranch("source", "1", 0.2)
         build_tree(base_branch, "target")
-        self.failUnlessExists("target")
+        self.assertPathExists("target")
         tree = workingtree.WorkingTree.open("target")
         self.assertEqual(revid, tree.last_revision())
         self.assertEqual(revid, base_branch.revid)
@@ -574,7 +579,7 @@ class BuildTreeTests(TestCaseWithTransport):
         self.make_branch_and_tree("target")
         base_branch = BaseRecipeBranch("source", "1", 0.2)
         build_tree(base_branch, "target")
-        self.failUnlessExists("target")
+        self.assertPathExists("target")
         tree = workingtree.WorkingTree.open("target")
         self.assertEqual(revid, tree.last_revision())
         self.assertEqual(revid, base_branch.revid)
@@ -594,7 +599,7 @@ class BuildTreeTests(TestCaseWithTransport):
         nested_branch = RecipeBranch("nested", "source2")
         base_branch.nest_branch("sub", nested_branch)
         build_tree(base_branch, "target")
-        self.failUnlessExists("target")
+        self.assertPathExists("target")
         tree = workingtree.WorkingTree.open("target")
         self.assertEqual([source1_rev_id], tree.get_parent_ids())
         tree = workingtree.WorkingTree.open("target/sub")
@@ -612,7 +617,7 @@ class BuildTreeTests(TestCaseWithTransport):
         merged_branch = RecipeBranch("merged", "source2")
         base_branch.merge_branch(merged_branch)
         build_tree(base_branch, "target")
-        self.failUnlessExists("target")
+        self.assertPathExists("target")
         tree = workingtree.WorkingTree.open("target")
         last_revid = tree.last_revision()
         last_revtree = tree.branch.repository.revision_tree(last_revid)
@@ -638,7 +643,7 @@ class BuildTreeTests(TestCaseWithTransport):
         merged_branch = RecipeBranch("merged", "source2")
         base_branch.merge_branch(merged_branch)
         build_tree(base_branch, "target")
-        self.failUnlessExists("target")
+        self.assertPathExists("target")
         tree = workingtree.WorkingTree.open("target")
         last_revid = tree.last_revision()
         last_revtree = tree.branch.repository.revision_tree(last_revid)
@@ -715,7 +720,7 @@ class BuildTreeTests(TestCaseWithTransport):
         merged_branch2 = RecipeBranch("merged2", "source3")
         base_branch.merge_branch(merged_branch2)
         build_tree(base_branch, "target")
-        self.failUnlessExists("target")
+        self.assertPathExists("target")
         tree = workingtree.WorkingTree.open("target")
         last_revid = tree.last_revision()
         previous_revid = tree.branch.revision_history()[-2]
@@ -742,7 +747,7 @@ class BuildTreeTests(TestCaseWithTransport):
         base_branch.merge_branch(merged_branch)
         self.assertRaises(errors.BzrCommandError, build_tree,
                 base_branch, "target")
-        self.failUnlessExists("target")
+        self.assertPathExists("target")
         tree = workingtree.WorkingTree.open("target")
         self.assertEqual(source1_rev_id, tree.last_revision())
         self.assertEqual([source1_rev_id, source2_rev_id],
@@ -770,7 +775,7 @@ class BuildTreeTests(TestCaseWithTransport):
         merged_branch = RecipeBranch("merged", "source2", revspec="2")
         base_branch.merge_branch(merged_branch)
         build_tree(base_branch, "target")
-        self.failUnlessExists("target")
+        self.assertPathExists("target")
         tree = workingtree.WorkingTree.open("target")
         last_revid = tree.last_revision()
         last_revtree = tree.branch.repository.revision_tree(last_revid)
@@ -906,8 +911,8 @@ class BuildTreeTests(TestCaseWithTransport):
         base_branch = BaseRecipeBranch("source", "1", 0.2)
         base_branch.run_command("touch test")
         build_tree(base_branch, "target")
-        self.failUnlessExists("target")
-        self.failUnlessExists("target/test")
+        self.assertPathExists("target")
+        self.assertPathExists("target/test")
         tree = workingtree.WorkingTree.open("target")
         self.assertEqual(revid, tree.last_revision())
         self.assertEqual(revid, base_branch.revid)
