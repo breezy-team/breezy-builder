@@ -522,31 +522,25 @@ def nest_part_branch(child_branch, tree_to, br_to, subpath, target_subdir=None):
     :param target_subdir: (optional) directory in target to merge that
         subpath into.  Defaults to basename of subpath.
     """
-    merge_from = branch.Branch.open(child_branch.url)
-    merge_from.lock_read()
+    child_branch.branch = branch.Branch.open(child_branch.url)
+    child_branch.branch.lock_read()
     try:
-        if child_branch.revspec is not None:
-            merge_revspec = revisionspec.RevisionSpec.from_string(
-                    child_branch.revspec)
-            merge_revid = merge_revspec.as_revision_id(merge_from)
-        else:
-            merge_revid = merge_from.last_revision()
-        child_branch.revid = merge_revid
-        other_tree = merge_from.basis_tree()
+        child_branch.resolve_revision_id()
+        other_tree = child_branch.branch.basis_tree()
         other_tree.lock_read()
         try:
             if target_subdir is None:
                 target_subdir = os.path.basename(subpath)
             merger = MergeIntoMerger(this_tree=tree_to, other_tree=other_tree,
-                other_branch=merge_from, target_subdir=target_subdir,
-                source_subpath=subpath, other_rev_id=merge_revid)
-            merger.set_base_revision(revision.NULL_REVISION, merge_from)
+                other_branch=child_branch.branch, target_subdir=target_subdir,
+                source_subpath=subpath, other_rev_id=child_branch.revid)
+            merger.set_base_revision(revision.NULL_REVISION, child_branch.branch)
             conflict_count = merger.do_merge()
             merger.set_pending()
         finally:
             other_tree.unlock()
     finally:
-        merge_from.unlock()
+        child_branch.branch.unlock()
 
     if conflict_count:
         # FIXME: better reporting
@@ -562,15 +556,9 @@ def update_branch(base_branch, tree_to, br_to, to_transport,
                 possible_transports=possible_transports)
     base_branch.branch.lock_read()
     try:
-        if base_branch.revspec is not None:
-            revspec = revisionspec.RevisionSpec.from_string(
-                    base_branch.revspec)
-            revision_id = revspec.as_revision_id(base_branch.branch)
-        else:
-            revision_id = base_branch.branch.last_revision()
-        base_branch.revid = revision_id
+        base_branch.resolve_revision_id()
         tree_to, br_to = pull_or_branch(tree_to, br_to, base_branch.branch,
-                to_transport, revision_id,
+                to_transport, base_branch.revid,
                 possible_transports=possible_transports)
     finally:
         base_branch.branch.unlock()
@@ -583,13 +571,7 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
     new_branch.branch = branch.Branch.open(new_branch.url)
     new_branch.branch.lock_read()
     try:
-        if new_branch.revspec is not None:
-            revspec = revisionspec.RevisionSpec.from_string(
-                    new_branch.revspec)
-            revision_id = revspec.as_revision_id(new_branch.branch)
-        else:
-            revision_id = new_branch.branch.last_revision()
-        new_branch.revid = revision_id
+        new_branch.resolve_revision_id()
         substitute_revno(new_branch.name, new_branch.branch, new_branch.revid)
         if (if_changed_from is not None
                 and (new_branch.revspec is not None
@@ -601,7 +583,7 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
                         new_branch.branch)
             else:
                 changed_revision_id = new_branch.branch.last_revision()
-            if revision_id != changed_revision_id:
+            if new_branch.revid != changed_revision_id:
                 changed = True
         for index, instruction in enumerate(new_branch.child_branches):
             child_branch = instruction.recipe_branch
@@ -836,6 +818,16 @@ class RecipeBranch(object):
         self.child_branches = []
         self.revid = None
         self.branch = None
+
+    def resolve_revision_id(self):
+        """Resolve the revision id for this branch.
+        """
+        if self.revspec is not None:
+            revspec = revisionspec.RevisionSpec.from_string(self.revspec)
+            revision_id = revspec.as_revision_id(self.branch)
+        else:
+            revision_id = self.branch.last_revision()
+        self.revid = revision_id
 
     def merge_branch(self, branch):
         """Merge a child branch in to this one.
