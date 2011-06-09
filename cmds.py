@@ -15,6 +15,7 @@
 
 """Subcommands provided by bzr-builder."""
 
+from base64 import standard_b64decode
 from StringIO import StringIO
 import datetime
 from email import utils
@@ -22,6 +23,7 @@ import errno
 import os
 import pwd
 import re
+import signal
 import socket
 import shutil
 import subprocess
@@ -36,6 +38,7 @@ except ImportError:
 
 from bzrlib import (
         errors,
+        export as _mod_export,
         lazy_regex,
         trace,
         transport as _mod_transport,
@@ -193,16 +196,16 @@ def get_maintainer():
     return (maintainer, email)
 
 
-def add_autobuild_changelog_entry(base_branch, basedir, distribution=None,
-        package=None, author_name=None, author_email=None,
+def add_autobuild_changelog_entry(base_branch, basedir, package,
+        distribution=None, author_name=None, author_email=None,
         append_version=None):
     """Add a new changelog entry for an autobuild.
 
     :param base_branch: Recipe base branch
     :param basedir: Base working directory
+    :param package: package name
     :param distribution: Optional distribution (defaults to last entry
         distribution)
-    :param package: Optional package name (defaults to last entry package name)
     :param author_name: Name of the build requester
     :param author_email: Email of the build requester
     :param append_version: Optional version suffix to add
@@ -225,8 +228,6 @@ def add_autobuild_changelog_entry(base_branch, basedir, distribution=None,
     if len(cl._blocks) > 0:
         if distribution is None:
             distribution = cl._blocks[0].distributions.split()[0]
-        if package is None:
-            package = cl._blocks[0].package
     else:
         if file_found:
             if len(contents.strip()) > 0:
@@ -236,10 +237,6 @@ def add_autobuild_changelog_entry(base_branch, basedir, distribution=None,
                 reason = "debian/changelog was empty"
         else:
             reason = "debian/changelog was not present"
-        if package is None:
-            raise errors.BzrCommandError("No previous changelog to "
-                    "take the package name from, and --package not "
-                    "specified: %s." % reason)
         if distribution is None:
             distribution = DEFAULT_UBUNTU_DISTRIBUTION
     try:
@@ -274,23 +271,21 @@ def add_autobuild_changelog_entry(base_branch, basedir, distribution=None,
         cl_f.close()
 
 
-def calculate_package_dir(base_branch, package_name, working_basedir):
+def calculate_package_dir(package_name, package_version, working_basedir):
     """Calculate the directory name that should be used while debuilding.
 
     :param base_branch: Recipe base branch
+    :param package_version: Version of the package
     :param package_name: Package name
     :param working_basedir: Base directory
     """
-    version = base_branch.deb_version
-    if "-" in version:
-        version = version[:version.rindex("-")]
-    package_basedir = "%s-%s" % (package_name, version)
+    package_basedir = "%s-%s" % (package_name, package_version.upstream_version)
     package_dir = os.path.join(working_basedir, package_basedir)
     return package_dir
 
 
 def _run_command(command, basedir, msg, error_msg,
-        not_installed_msg=None, env=None, success_exit_codes=None):
+        not_installed_msg=None, env=None, success_exit_codes=None, indata=None):
     """ Run a command in a subprocess.
 
     :param command: list with command and parameters
@@ -300,7 +295,10 @@ def _run_command(command, basedir, msg, error_msg,
         isn't available.
     :param env: Optional environment to use rather than os.environ.
     :param success_exit_codes: Exit codes to consider succesfull, defaults to [0].
+    :param indata: Data to write to standard input
     """
+    def subprocess_setup():
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     trace.note(msg)
     # Hide output if -q is in use.
     quiet = trace.is_quiet()
@@ -310,16 +308,17 @@ def _run_command(command, basedir, msg, error_msg,
         kwargs = {}
     if env is not None:
         kwargs["env"] = env
+    trace.mutter("running: %r", command)
     try:
         proc = subprocess.Popen(command, cwd=basedir,
-                stdin=subprocess.PIPE, **kwargs)
+                stdin=subprocess.PIPE, preexec_fn=subprocess_setup, **kwargs)
     except OSError, e:
         if e.errno != errno.ENOENT:
             raise
         if not_installed_msg is None:
             raise
         raise MissingDependency(msg=not_installed_msg)
-    output = proc.communicate()
+    output = proc.communicate(indata)
     if success_exit_codes is None:
         success_exit_codes = [0]
     if proc.returncode not in success_exit_codes:
@@ -329,9 +328,13 @@ def _run_command(command, basedir, msg, error_msg,
             raise errors.BzrCommandError(error_msg)
 
 
-def build_source_package(basedir):
-    command = ["/usr/bin/debuild", "--no-tgz-check", "-i", "-I", "-S",
-                    "-uc", "-us"]
+def build_source_package(basedir, tgz_check=True):
+    command = ["/usr/bin/debuild"]
+    if tgz_check:
+        command.append("--tgz-check")
+    else:
+        command.append("--no-tgz-check")
+    command.extend(["-i", "-I", "-S", "-uc", "-us"])
     _run_command(command, basedir,
         "Building the source package",
         "Failed to build the source package",
@@ -546,6 +549,59 @@ def debian_source_package_name(control_path):
         return control["Source"]
 
 
+def reconstruct_pristine_tar(dest, delta, dest_filename):
+    """Reconstruct a pristine tarball from a directory and a delta.
+
+    :param dest: Directory to pack
+    :param delta: pristine-tar delta
+    :param dest_filename: Destination filename
+    """
+    command = ["pristine-tar", "gentar", "-",
+               os.path.abspath(dest_filename)]
+    _run_command(command, dest,
+        "Reconstructing pristine tarball",
+        "Generating tar from delta failed",
+        not_installed_msg="pristine-tar is not installed",
+        indata=delta)
+
+
+def extract_upstream_tarball(branch, package, version, dest_dir):
+    """Extract the upstream tarball from a branch.
+
+    :param branch: Branch with the upstream pristine tar data
+    :param package: Package name
+    :param version: Package version
+    :param dest_dir: Destination directory
+    """
+    tag_name = "upstream-%s" % version
+    revid = branch.tags.lookup_tag(tag_name)
+    tree = branch.repository.revision_tree(revid)
+    rev = branch.repository.get_revision(revid)
+    if 'deb-pristine-delta' in rev.properties:
+        uuencoded = rev.properties['deb-pristine-delta']
+        dest_filename = "%s_%s.orig.tar.gz" % (package, version)
+    elif 'deb-pristine-delta-bz2' in rev.properties:
+        uuencoded = rev.properties['deb-pristine-delta-bz2']
+        dest_filename = "%s_%s.orig.tar.bz2" % (package, version)
+    else:
+        uuencoded = None
+    if uuencoded is not None:
+        delta = standard_b64decode(uuencoded)
+        dest = os.path.join(dest_dir, "orig")
+        try:
+            _mod_export.export(tree, dest, format='dir')
+            reconstruct_pristine_tar(dest, delta,
+                os.path.join(dest_dir, dest_filename))
+        finally:
+            if os.path.exists(dest):
+                shutil.rmtree(dest)
+    else:
+        # Default to .tar.gz
+        dest_filename = "%s_%s.orig.tar.gz" % (package, version)
+        _mod_export.export(tree, os.path.join(dest_dir, dest_filename),
+                per_file_timestamps=True)
+
+
 class cmd_dailydeb(cmd_build):
     """Build a deb based on a 'recipe' or from a branch.
 
@@ -583,6 +639,9 @@ class cmd_dailydeb(cmd_build):
                         "in debian/changelog."),
                 Option("safe", help="Error if the recipe would cause"
                        " arbitrary code execution."),
+                Option("allow-fallback-to-native",
+                    help="Allow falling back to a native package if the upstream "
+                         "tarball can not be found."),
             ]
 
     takes_args = ["location", "working_basedir?"]
@@ -590,7 +649,7 @@ class cmd_dailydeb(cmd_build):
     def run(self, location, working_basedir=None, manifest=None,
             if_changed_from=None, package=None, distribution=None,
             dput=None, key_id=None, no_build=None, watch_ppa=False,
-            append_version=None, safe=False):
+            append_version=None, safe=False, allow_fallback_to_native=False):
 
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
@@ -617,8 +676,12 @@ class cmd_dailydeb(cmd_build):
             if not os.path.exists(working_basedir):
                 os.makedirs(working_basedir)
         package_name = self._calculate_package_name(location, package)
-        working_directory = os.path.join(working_basedir,
-            "%s-%s" % (package_name, self._template_version))
+        if self._template_version is None:
+            working_directory = os.path.join(working_basedir,
+                "%s-direct" % (package_name,))
+        else:
+            working_directory = os.path.join(working_basedir,
+                "%s-%s" % (package_name, self._template_version))
         try:
             # we want to use a consistent package_dir always to support
             # updates in place, but debuild etc want PACKAGE-UPSTREAMVERSION
@@ -628,11 +691,13 @@ class cmd_dailydeb(cmd_build):
             manifest_path = os.path.join(working_directory, "debian",
                 "bzr-builder.manifest")
             build_tree(base_branch, working_directory)
-            if package is None:
-                control_path = os.path.join(working_directory, "debian", "control")
-                if not os.path.exists(control_path):
-                    raise errors.BzrCommandError("Missing debian/control file to "
-                        "read package name from.")
+            control_path = os.path.join(working_directory, "debian", "control")
+            if not os.path.exists(control_path):
+                if package is None:
+                    raise errors.BzrCommandError("No control file to "
+                            "take the package name from, and --package not "
+                            "specified.")
+            else:
                 package = debian_source_package_name(control_path)
             write_manifest_to_transport(manifest_path, base_branch,
                 possible_transports)
@@ -640,16 +705,20 @@ class cmd_dailydeb(cmd_build):
             if autobuild:
                 # Add changelog also substitutes {debupstream}.
                 add_autobuild_changelog_entry(base_branch, working_directory,
-                    distribution=distribution, package=package,
+                    package, distribution=distribution, 
                     append_version=append_version)
             else:
                 if append_version:
                     raise errors.BzrCommandError("--append-version only "
                         "supported for autobuild recipes (with a 'deb-version' "
                         "header)")
-            force_native_format(working_directory)
-            package_dir = calculate_package_dir(base_branch,
-                    package_name, working_basedir)
+            with open(os.path.join(working_directory, "debian", "changelog")) as cl_f:
+                contents = cl_f.read()
+            cl = changelog.Changelog(file=contents)
+            package_name = cl.package
+            package_version = cl.version
+            package_dir = calculate_package_dir(package_name, package_version,
+                working_basedir)
             # working_directory -> package_dir: after this debian stuff works.
             os.rename(working_directory, package_dir)
             if no_build:
@@ -657,8 +726,19 @@ class cmd_dailydeb(cmd_build):
                     write_manifest_to_transport(manifest, base_branch,
                         possible_transports)
                 return 0
+            if package_version.debian_revision is not None:
+                # Non-native package
+                try:
+                    extract_upstream_tarball(base_branch.branch, package_name,
+                        package_version.upstream_version, working_basedir)
+                except errors.NoSuchTag:
+                    if not allow_fallback_to_native:
+                        raise
+            if allow_fallback_to_native:
+                force_native_format(package_dir)
             try:
-                build_source_package(package_dir)
+                build_source_package(package_dir,
+                        tgz_check=not allow_fallback_to_native)
                 if key_id is not None:
                     sign_source_package(package_dir, key_id)
                 if dput is not None:

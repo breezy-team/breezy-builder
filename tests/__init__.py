@@ -13,8 +13,25 @@
 # You should have received a copy of the GNU General Public License along 
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 from unittest import TestSuite
-from bzrlib.tests import TestUtil
+from bzrlib.tests import (
+    Feature,
+    TestUtil,
+    )
+
+
+class _PristineTarFeature(Feature):
+
+    def feature_name(self):
+        return '/usr/bin/pristine-tar'
+
+    def _probe(self):
+        return os.path.exists("/usr/bin/pristine-tar")
+
+
+PristineTarFeature = _PristineTarFeature()
+
 
 def test_suite():
     loader = TestUtil.TestLoader()
