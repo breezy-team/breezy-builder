@@ -708,6 +708,9 @@ class ChildBranch(object):
             revid_part = ""
         return revid_part
 
+    def __repr__(self):
+        return "<%s %r>" % (self.__class__.__name__, self.nest_path)
+
 
 class CommandInstruction(ChildBranch):
 
@@ -740,6 +743,9 @@ class MergeInstruction(ChildBranch):
         return "%s %s %s%s" % (
             MERGE_INSTRUCTION, self.recipe_branch.name,
             self.recipe_branch.url, revid_part)
+
+    def __repr__(self):
+        return "<%s %r>" % (self.__class__.__name__, self.recipe_branch.name)
 
 
 class NestPartInstruction(ChildBranch):
@@ -784,6 +790,10 @@ class NestInstruction(ChildBranch):
         return "%s %s %s %s%s" % (
             NEST_INSTRUCTION, self.recipe_branch.name,
             self.recipe_branch.url, self.nest_path, revid_part)
+
+    def __repr__(self):
+        return "<%s %r>" % (self.__class__.__name__,
+            self.recipe_branch.name)
 
 
 class RecipeBranch(object):
