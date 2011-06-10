@@ -1351,6 +1351,22 @@ class RecipeBranchTests(TestCaseInTempDir):
             ["merged", "nested", "merged_into_nested", "another_nested"],
             base_branch.list_branch_names())
 
+    def test_iter_all_branches(self):
+        base_branch = BaseRecipeBranch("base_url", "1", 0.2)
+        merged_branch = RecipeBranch("merged", "merged_url")
+        base_branch.merge_branch(merged_branch)
+        nested_branch = RecipeBranch("nested", "nested_url")
+        merge_into_nested_branch = RecipeBranch("merged_into_nested", "another_url")
+        nested_branch.merge_branch(merge_into_nested_branch)
+        base_branch.nest_branch("subdir", nested_branch)
+        another_nested_branch = RecipeBranch("another_nested", "yet_another_url")
+        base_branch.merge_branch(another_nested_branch)
+        base_branch.run_command("a command")
+        self.assertEqual([
+            base_branch, merged_branch, nested_branch, merge_into_nested_branch,
+            another_nested_branch],
+            list(base_branch.iter_all_branches()))
+
 
 class DebUpstreamVariableTests(TestCase):
 

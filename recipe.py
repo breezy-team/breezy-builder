@@ -927,6 +927,9 @@ class RecipeBranch(object):
         return [branch.name for branch in self.iter_all_branches()
                 if branch.name is not None]
 
+    def __repr__(self):
+        return "<%s %r>" % (self.__class__.__name__, self.name)
+
 
 class BaseRecipeBranch(RecipeBranch):
     """The RecipeBranch that is at the root of a recipe."""
