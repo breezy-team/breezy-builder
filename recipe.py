@@ -315,28 +315,25 @@ class LatestTagVariable(BranchSubstitutionVariable):
                 self.branch_name)
 
 
-ok_to_preserve = [DebUpstreamVariable.name, DebUpstreamBaseVariable.name,
-    DebVersionVariable.name]
+ok_to_preserve = [DebUpstreamVariable, DebUpstreamBaseVariable,
+    DebVersionVariable]
 # The variables that don't require substitution in their name
-simple_vars = [TimeVariable.name, DateVariable.name, RevnoVariable.name,
-    SubversionRevnumVariable.name, DebUpstreamVariable.name,
-    DebUpstreamBaseVariable.name, GitCommitVariable.name,
-    LatestTagVariable.name, DebVersionVariable.name]
-
+simple_vars = [TimeVariable, DateVariable, DebUpstreamVariable,
+    DebUpstreamBaseVariable, DebVersionVariable]
+branch_vars = [RevnoVariable, SubversionRevnumVariable,
+    GitCommitVariable, LatestTagVariable]
 
 def check_expanded_deb_version(base_branch):
     checked_version = base_branch.deb_version
     if checked_version is None:
         return
     for token in ok_to_preserve:
-        checked_version = checked_version.replace(token, "")
+        checked_version = checked_version.replace(token.name, "")
     if "{" in checked_version:
-        available_tokens = simple_vars
+        available_tokens = [var.name for var in simple_vars + branch_vars]
         for name in base_branch.list_branch_names():
-            available_tokens.append(RevnoVariable(name, None).name)
-            available_tokens.append(SubversionRevnumVariable(name, None).name)
-            available_tokens.append(GitCommitVariable(name, None).name)
-            available_tokens.append(LatestTagVariable(name, None).name)
+            for var_kls in branch_vars:
+                available_tokens.append(var_kls(name, None).name)
         raise errors.BzrCommandError("deb-version not fully "
                 "expanded: %s. Valid substitutions are: %s"
                 % (base_branch.deb_version, available_tokens))
