@@ -16,6 +16,7 @@
 import os
 import signal
 import subprocess
+import time
 
 from bzrlib import (
     branch,
@@ -220,6 +221,34 @@ class RevnoVariable(BranchSubstitutionVariable):
         return revno
 
 
+class RevtimeVariable(BranchSubstitutionVariable):
+
+    basename = "revtime"
+
+    def __init__(self, branch_name, branch, revid):
+        super(RevtimeVariable, self).__init__(branch_name)
+        self.branch = branch
+        self.revid = revid
+
+    def get(self):
+        rev = self.branch.repository.get_revision(self.revid)
+        return time.strftime("%Y%m%d%H%M", time.gmtime(rev.timestamp))
+
+
+class RevdateVariable(BranchSubstitutionVariable):
+
+    basename = "revdate"
+
+    def __init__(self, branch_name, branch, revid):
+        super(RevdateVariable, self).__init__(branch_name)
+        self.branch = branch
+        self.revid = revid
+
+    def get(self):
+        rev = self.branch.repository.get_revision(self.revid)
+        return time.strftime("%Y%m%d", time.gmtime(rev.timestamp))
+
+
 def extract_svn_revnum(rev):
     try:
         foreign_revid = rev.foreign_revid
@@ -321,7 +350,8 @@ ok_to_preserve = [DebUpstreamVariable.name, DebUpstreamBaseVariable.name,
 simple_vars = [TimeVariable.name, DateVariable.name, RevnoVariable.name,
     SubversionRevnumVariable.name, DebUpstreamVariable.name,
     DebUpstreamBaseVariable.name, GitCommitVariable.name,
-    LatestTagVariable.name, DebVersionVariable.name]
+    LatestTagVariable.name, DebVersionVariable.name, RevdateVariable.name,
+    RevtimeVariable.name]
 
 
 def check_expanded_deb_version(base_branch):
@@ -944,6 +974,10 @@ class BaseRecipeBranch(RecipeBranch):
         self.deb_version = git_commit_var.replace(self.deb_version)
         latest_tag_var = LatestTagVariable(branch_name, branch, revid)
         self.deb_version = latest_tag_var.replace(self.deb_version)
+        revdate_var = RevdateVariable(branch_name, branch, revid)
+        self.deb_version = revdate_var.replace(self.deb_version)
+        revtime_var = RevtimeVariable(branch_name, branch, revid)
+        self.deb_version = revtime_var.replace(self.deb_version)
 
     def substitute_time(self, time):
         """Substitute the time in to deb_version if needed.
