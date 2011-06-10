@@ -18,7 +18,7 @@ import signal
 import subprocess
 
 from bzrlib import (
-    branch,
+    branch as _mod_branch,
     bzrdir,
     errors,
     lazy_regex,
@@ -459,7 +459,7 @@ def merge_branch(child_branch, tree_to, br_to, possible_transports=None):
     :param br_to: the Branch to merge in to.
     """
     if child_branch.branch is None:
-        child_branch.branch = branch.Branch.open(child_branch.url,
+        child_branch.branch = _mod_branch.Branch.open(child_branch.url,
                 possible_transports=possible_transports)
     child_branch.branch.lock_read()
     try:
@@ -522,7 +522,7 @@ def nest_part_branch(child_branch, tree_to, br_to, subpath, target_subdir=None):
     :param target_subdir: (optional) directory in target to merge that
         subpath into.  Defaults to basename of subpath.
     """
-    child_branch.branch = branch.Branch.open(child_branch.url)
+    child_branch.branch = _mod_branch.Branch.open(child_branch.url)
     child_branch.branch.lock_read()
     try:
         child_branch.resolve_revision_id()
@@ -552,7 +552,7 @@ def nest_part_branch(child_branch, tree_to, br_to, subpath, target_subdir=None):
 def update_branch(base_branch, tree_to, br_to, to_transport,
         possible_transports=None):
     if base_branch.branch is None:
-        base_branch.branch = branch.Branch.open(base_branch.url,
+        base_branch.branch = _mod_branch.Branch.open(base_branch.url,
                 possible_transports=possible_transports)
     base_branch.branch.lock_read()
     try:
@@ -568,7 +568,7 @@ def update_branch(base_branch, tree_to, br_to, to_transport,
 def _resolve_revisions_recurse(new_branch, substitute_revno,
         if_changed_from=None):
     changed = False
-    new_branch.branch = branch.Branch.open(new_branch.url)
+    new_branch.branch = _mod_branch.Branch.open(new_branch.url)
     new_branch.branch.lock_read()
     try:
         new_branch.resolve_revision_id()
@@ -893,14 +893,33 @@ class RecipeBranch(object):
                 return True
         return False
 
-    def _list_child_names(self):
-        child_names = []
+    def iter_all_instructions(self):
+        """Iter over all instructions under this branch."""
+        for instruction in self.child_branches:
+            yield instruction
+            child_branch = instruction.recipe_branch
+            if child_branch is None:
+                continue
+            for instruction in child_branch.iter_all_instructions():
+                yield instruction
+
+    def iter_all_branches(self):
+        """Iterate over all branches."""
+        yield self
         for instruction in self.child_branches:
             child_branch = instruction.recipe_branch
             if child_branch is None:
                 continue
-            child_names += child_branch.list_branch_names()
-        return child_names
+            for subbranch in child_branch.iter_all_branches():
+                yield subbranch
+
+    def lookup_branch(self, name):
+        """Lookup a branch by its name."""
+        for branch in self.iter_all_branches():
+            if branch.name == name:
+                return branch
+        else:
+            raise KeyError(name)
 
     def list_branch_names(self):
         """List all of the branch names under this one.
@@ -908,7 +927,8 @@ class RecipeBranch(object):
         :return: a list of the branch names.
         :rtype: list(str)
         """
-        return [self.name] + self._list_child_names()
+        return [branch.name for branch in self.iter_all_branches()
+                if branch.name is not None]
 
 
 class BaseRecipeBranch(RecipeBranch):
@@ -982,9 +1002,6 @@ class BaseRecipeBranch(RecipeBranch):
 
     def __str__(self):
         return self.get_recipe_text(validate=True)
-
-    def list_branch_names(self):
-        return self._list_child_names()
 
     def get_recipe_text(self, validate=False):
         manifest = "# bzr-builder format %s" % str(self.format)
