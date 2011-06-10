@@ -318,16 +318,21 @@ class LatestTagVariable(BranchSubstitutionVariable):
 ok_to_preserve = [DebUpstreamVariable, DebUpstreamBaseVariable,
     DebVersionVariable]
 # The variables that don't require substitution in their name
-simple_vars = [TimeVariable, DateVariable, DebUpstreamVariable,
-    DebUpstreamBaseVariable, DebVersionVariable]
+simple_vars = [TimeVariable, DateVariable]
 branch_vars = [RevnoVariable, SubversionRevnumVariable,
-    GitCommitVariable, LatestTagVariable]
+    GitCommitVariable, LatestTagVariable, DebVersionVariable,
+    DebUpstreamBaseVariable, DebUpstreamVariable]
+
 
 def check_expanded_deb_version(base_branch):
     checked_version = base_branch.deb_version
     if checked_version is None:
         return
     for token in ok_to_preserve:
+        if isinstance(token, BranchSubstitutionVariable):
+            for name in base_branch.list_branch_names():
+                subst = token(name, None)
+                checked_version = checked_version.replace(token.name, "")
         checked_version = checked_version.replace(token.name, "")
     if "{" in checked_version:
         available_tokens = [var.name for var in simple_vars + branch_vars]
