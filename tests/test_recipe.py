@@ -1315,26 +1315,26 @@ class RecipeBranchTests(TestCaseInTempDir):
         base_branch.substitute_time(time)
         self.assertEqual("1-19700101", base_branch.deb_version)
 
-    def test_substitute_revno(self):
+    def test_substitute_branch_vars(self):
         base_branch = BaseRecipeBranch("base_url", "1", 0.2)
-        base_branch.substitute_revno(None, None)
+        base_branch.substitute_branch_vars(None, None, None)
         self.assertEqual("1", base_branch.deb_version)
-        base_branch.substitute_revno(None, None)
+        base_branch.substitute_branch_vars(None, None, None)
         self.assertEqual("1", base_branch.deb_version)
         base_branch = BaseRecipeBranch("base_url", "{revno}", 0.2)
-        base_branch.substitute_revno(None, lambda: "2")
+        base_branch.substitute_branch_vars(None, lambda: "2")
         self.assertEqual("2", base_branch.deb_version)
-        base_branch.substitute_revno(None, lambda: "2")
+        base_branch.substitute_branch_vars(None, lambda: "2")
         self.assertEqual("2", base_branch.deb_version)
         base_branch = BaseRecipeBranch("base_url", "{revno}", 0.2)
-        base_branch.substitute_revno("foo", None)
+        base_branch.substitute_branch_vars("foo", None)
         self.assertEqual("{revno}", base_branch.deb_version)
-        base_branch.substitute_revno("foo", None)
+        base_branch.substitute_branch_vars("foo", None)
         self.assertEqual("{revno}", base_branch.deb_version)
         base_branch = BaseRecipeBranch("base_url", "{revno:foo}", 0.2)
-        base_branch.substitute_revno("foo", lambda: "3")
+        base_branch.substitute_branch_vars("foo", lambda: "3")
         self.assertEqual("3", base_branch.deb_version)
-        base_branch.substitute_revno("foo", lambda: "3")
+        base_branch.substitute_branch_vars("foo", lambda: "3")
         self.assertEqual("3", base_branch.deb_version)
 
     def test_list_branch_names(self):
@@ -1395,32 +1395,32 @@ class DebUpstreamVariableTests(TestCase):
         return changelog.Changelog(file=contents)
 
     def test_empty_changelog(self):
-        var = DebUpstreamVariable.from_changelog(changelog.Changelog())
+        var = DebUpstreamVariable.from_changelog(None, changelog.Changelog())
         self.assertRaises(SubstitutionUnavailable, var.get)
 
     def test_version(self):
-        var = DebUpstreamVariable.from_changelog(
+        var = DebUpstreamVariable.from_changelog(None,
             self.write_changelog("2.3"))
         self.assertEquals("2.3", var.get())
 
     def test_epoch(self):
         # The epoch is (currently) ignored by {debupstream}.
-        var = DebUpstreamVariable.from_changelog(
+        var = DebUpstreamVariable.from_changelog(None,
             self.write_changelog("2:2.3"))
         self.assertEquals("2.3", var.get())
 
     def test_base_without_snapshot(self):
-        var = DebUpstreamBaseVariable.from_changelog(
+        var = DebUpstreamBaseVariable.from_changelog(None,
             self.write_changelog("2.4"))
         self.assertEquals("2.4+", var.get())
 
     def test_base_with_svn_snapshot(self):
-        var = DebUpstreamBaseVariable.from_changelog(
+        var = DebUpstreamBaseVariable.from_changelog(None,
             self.write_changelog("2.4~svn4"))
         self.assertEquals("2.4~", var.get())
 
     def test_base_with_bzr_snapshot(self):
-        var = DebUpstreamBaseVariable.from_changelog(
+        var = DebUpstreamBaseVariable.from_changelog(None,
             self.write_changelog("2.4+bzr343"))
         self.assertEquals("2.4+", var.get())
 
@@ -1438,15 +1438,15 @@ class DebVersionVariableTests(TestCase):
         return changelog.Changelog(file=contents)
 
     def test_empty_changelog(self):
-        var = DebVersionVariable.from_changelog(changelog.Changelog())
+        var = DebVersionVariable.from_changelog(None, changelog.Changelog())
         self.assertRaises(SubstitutionUnavailable, var.get)
 
     def test_simple(self):
         var = DebVersionVariable.from_changelog(
-            self.write_changelog("2.3-1"))
+            None, self.write_changelog("2.3-1"))
         self.assertEquals("2.3-1", var.get())
 
     def test_epoch(self):
         var = DebVersionVariable.from_changelog(
-            self.write_changelog("4:2.3-1"))
+            None, self.write_changelog("4:2.3-1"))
         self.assertEquals("4:2.3-1", var.get())

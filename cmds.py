@@ -239,12 +239,6 @@ def add_autobuild_changelog_entry(base_branch, basedir, package,
             reason = "debian/changelog was not present"
         if distribution is None:
             distribution = DEFAULT_UBUNTU_DISTRIBUTION
-    try:
-        base_branch.substitute_debupstream(cl)
-    except SubstitutionUnavailable:
-        raise errors.BzrCommandError("No previous changelog to "
-                "take the upstream version from as %s was "
-                "used: %s." % (DebUpstreamVariable.name, reason))
     # Use debian packaging environment variables
     # or default values if they don't exist
     if author_name is None or author_email is None:
