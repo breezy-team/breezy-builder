@@ -303,24 +303,28 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.tags.set_tag("upstream-%s" % version, revid)
         return tarfile_sha1
 
-    def make_simple_package(self):
-        source = self.make_branch_and_tree("source")
-        self.build_tree(["source/a", "source/debian/"])
+    def make_simple_package(self, path):
+        source = self.make_branch_and_tree(path)
+        self.build_tree([os.path.join(path, "a"),
+            os.path.join(path, "debian/")])
         cl_contents = ("package (0.1-1) unstable; urgency=low\n  * foo\n"
                     " -- maint <maint@maint.org>  Tue, 04 Aug 2009 "
                     "10:03:10 +0100\n")
-        self.build_tree_contents([("source/debian/rules",
-                    "#!/usr/bin/make -f\nclean:\n"),
-                ("source/debian/control",
-                    "Source: package\nMaintainer: maint maint@maint.org\n"),
-                ("source/debian/changelog", cl_contents)])
+        self.build_tree_contents([
+            (os.path.join(path, "debian/rules"),
+                "#!/usr/bin/make -f\nclean:\n"),
+            (os.path.join(path, "debian/control"),
+                "Source: package\nMaintainer: maint maint@maint.org\n"),
+            (os.path.join(path, "debian/changelog"),
+                cl_contents)
+            ])
         source.add(["a", "debian/", "debian/rules", "debian/control",
                 "debian/changelog"])
         source.commit("one")
         return source
 
     def test_cmd_dailydeb_no_build(self):
-        self.make_simple_package()
+        self.make_simple_package("source")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
         out, err = self.run_bzr("dailydeb -q test.recipe "
@@ -338,7 +342,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
 
     def test_cmd_dailydeb_with_package_from_changelog(self):
         #TODO: define a test feature for debuild and require it here.
-        self.make_simple_package()
+        self.make_simple_package("source")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
         out, err = self.run_bzr("dailydeb -q test.recipe "
@@ -353,7 +357,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
 
     def test_cmd_dailydeb_with_version_from_changelog(self):
-        self.make_simple_package()
+        self.make_simple_package("source")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version {debversion}-2\nsource 1\n")])
         out, err = self.run_bzr(
@@ -369,7 +373,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertEquals("0.1-1-2", str(cl._blocks[0].version))
 
     def test_cmd_dailydeb_with_upstream_version_from_changelog(self):
-        self.make_simple_package()
+        self.make_simple_package("source")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version {debupstream}-2\nsource 1\n")])
         out, err = self.run_bzr(
@@ -384,7 +388,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
 
     def test_cmd_dailydeb_with_append_version(self):
-        self.make_simple_package()
+        self.make_simple_package("source")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
         out, err = self.run_bzr("dailydeb -q test.recipe working "
@@ -416,7 +420,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             "(Could not parse version: \\$|Invalid version string '\\$')\n")
 
     def test_cmd_dailydeb_with_safe(self):
-        self.make_simple_package()
+        self.make_simple_package("source")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version 1\nsource 1\nrun something bad")])
         out, err = self.run_bzr("dailydeb -q test.recipe working --safe",
@@ -424,7 +428,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertContainsRe(err, "The 'run' instruction is forbidden.$")
 
     def make_simple_quilt_package(self):
-        source = self.make_simple_package()
+        source = self.make_simple_package("source")
         self.build_tree(["source/debian/source/"])
         self.build_tree_contents([
             ("source/debian/source/format", "3.0 (quilt)\n")])
@@ -443,7 +447,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertEquals('bzr: ERROR: No such tag: upstream-1\n', err)
 
     def test_cmd_dailydeb_with_orig_tarball(self):
-        self.make_simple_package()
+        self.make_simple_package("source")
         self.make_upstream_version("0.1", [("upstream/file", "content\n")])
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version 0.1-1\nsource\n")])
@@ -455,7 +459,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
 
     def test_cmd_dailydeb_with_pristine_orig_gz_tarball(self):
         self.requireFeature(PristineTarFeature)
-        self.make_simple_package()
+        self.make_simple_package("source")
         pristine_tar_sha1 = self.make_upstream_version("0.1",
             [("upstream/file", "content\n")], pristine_tar_format="gz")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
@@ -566,7 +570,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertContainsRe(err, "bzr: ERROR: Failed to apply quilt patches")
 
     def test_unknown_source_format(self):
-        source = self.make_simple_package()
+        source = self.make_simple_package("source")
         self.build_tree(["source/debian/source/"])
         self.build_tree_contents([
             ("source/debian/source/format", "2.0\n")])
