@@ -32,6 +32,11 @@ from bzrlib.tests import (
 
 from bzrlib.plugins.builder.tests import PristineTarFeature
 
+try:
+    from debian import changelog
+except ImportError:
+    from debian_bundle import changelog
+
 
 def make_pristine_tar_delta(dest, tarball_path):
     """Create a pristine-tar delta for a tarball.
@@ -346,6 +351,22 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         finally:
             f.close()
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
+
+    def test_cmd_dailydeb_with_version_from_changelog(self):
+        self.make_simple_package()
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
+                    "deb-version {debversion}-2\nsource 1\n")])
+        out, err = self.run_bzr(
+            "dailydeb --allow-fallback-to-native -q test.recipe working")
+        new_cl_contents = ("package (0.1-2) unstable; urgency=low\n\n"
+                "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
+        f = open("working/test-{debversion}-2/debian/changelog")
+        try:
+            actual_cl_contents = f.read()
+        finally:
+            f.close()
+        cl = changelog.Changelog(actual_cl_contents)
+        self.assertEquals("0.1-1-2", str(cl._blocks[0].version))
 
     def test_cmd_dailydeb_with_upstream_version_from_changelog(self):
         self.make_simple_package()
