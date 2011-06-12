@@ -372,6 +372,30 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         cl = changelog.Changelog(actual_cl_contents)
         self.assertEquals("0.1-1-2", str(cl._blocks[0].version))
 
+    def test_cmd_dailydeb_with_version_from_other_branch_changelog(self):
+        source = self.make_simple_package("source")
+        other = self.make_simple_package("other")
+        cl_contents = ("package (0.4-1) unstable; urgency=low\n  * foo\n"
+                    " -- maint <maint@maint.org>  Tue, 04 Aug 2009 "
+                    "10:03:10 +0100\n")
+        self.build_tree_contents([
+            (os.path.join("other", "debian", "changelog"), cl_contents)
+            ])
+        other.commit("new changelog entry")
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
+            "deb-version {debversion:other}.2\n"
+            "source 1\n"
+            "nest other other other\n")])
+        out, err = self.run_bzr(
+            "dailydeb --allow-fallback-to-native -q test.recipe working")
+        f = open("working/test-{debversion:other}.2/debian/changelog")
+        try:
+            actual_cl_contents = f.read()
+        finally:
+            f.close()
+        cl = changelog.Changelog(actual_cl_contents)
+        self.assertEquals("0.4-1.2", str(cl._blocks[0].version))
+
     def test_cmd_dailydeb_with_upstream_version_from_changelog(self):
         self.make_simple_package("source")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
