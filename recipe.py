@@ -104,12 +104,16 @@ class BranchSubstitutionVariable(SimpleSubstitutionVariable):
     def __init__(self, branch_name=None):
         self.branch_name = branch_name
 
+    @classmethod
+    def determine_name(cls, branch_name):
+        if branch_name is None:
+            return "{%s}" % cls.basename
+        else:
+            return "{%s:%s}" % (cls.basename, branch_name)
+
     @property
     def name(self):
-        if self.branch_name is None:
-            return "{%s}" % self.basename
-        else:
-            return "{%s:%s}" % (self.basename, self.branch_name)
+        return self.determine_name(self.branch_name)
 
 
 class TimeVariable(SimpleSubstitutionVariable):
@@ -181,7 +185,7 @@ class DebVersionVariable(BranchSubstitutionVariable):
 
 class DebUpstreamBaseVariable(DebUpstreamVariable):
 
-    name = "{debupstream-base}"
+    basename = "{debupstream-base}"
     version_regex = lazy_regex.lazy_compile(r'([~+])(svn[0-9]+|bzr[0-9]+|git[0-9a-f]+)')
 
     def get(self):
@@ -331,16 +335,21 @@ def check_expanded_deb_version(base_branch):
     if checked_version is None:
         return
     for token in ok_to_preserve:
-        if isinstance(token, BranchSubstitutionVariable):
+        if issubclass(token, BranchSubstitutionVariable):
             for name in base_branch.list_branch_names():
-                subst = token(name, None)
-                checked_version = checked_version.replace(token.name, "")
-        checked_version = checked_version.replace(token.name, "")
+                checked_version = checked_version.replace(
+                    token.determine_name(name), "")
+            checked_version = checked_version.replace(
+                    token.determine_name(None), "")
+        else:
+            checked_version = checked_version.replace(
+                token.name, "")
     if "{" in checked_version:
-        available_tokens = [var.name for var in simple_vars + branch_vars]
-        for name in base_branch.list_branch_names():
-            for var_kls in branch_vars:
-                available_tokens.append(var_kls(name, None).name)
+        available_tokens = [var.name for var in simple_vars]
+        for var_kls in branch_vars:
+            for name in base_branch.list_branch_names():
+                available_tokens.append(var_kls.determin_name(name))
+            available_tokens.append(var_kls.determine_name(None))
         raise errors.BzrCommandError("deb-version not fully "
                 "expanded: %s. Valid substitutions are: %s"
                 % (base_branch.deb_version, available_tokens))
