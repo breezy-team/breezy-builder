@@ -18,7 +18,7 @@ import signal
 import subprocess
 
 from bzrlib import (
-    branch,
+    branch as _mod_branch,
     bzrdir,
     errors,
     lazy_regex,
@@ -315,28 +315,25 @@ class LatestTagVariable(BranchSubstitutionVariable):
                 self.branch_name)
 
 
-ok_to_preserve = [DebUpstreamVariable.name, DebUpstreamBaseVariable.name,
-    DebVersionVariable.name]
+ok_to_preserve = [DebUpstreamVariable, DebUpstreamBaseVariable,
+    DebVersionVariable]
 # The variables that don't require substitution in their name
-simple_vars = [TimeVariable.name, DateVariable.name, RevnoVariable.name,
-    SubversionRevnumVariable.name, DebUpstreamVariable.name,
-    DebUpstreamBaseVariable.name, GitCommitVariable.name,
-    LatestTagVariable.name, DebVersionVariable.name]
-
+simple_vars = [TimeVariable, DateVariable, DebUpstreamVariable,
+    DebUpstreamBaseVariable, DebVersionVariable]
+branch_vars = [RevnoVariable, SubversionRevnumVariable,
+    GitCommitVariable, LatestTagVariable]
 
 def check_expanded_deb_version(base_branch):
     checked_version = base_branch.deb_version
     if checked_version is None:
         return
     for token in ok_to_preserve:
-        checked_version = checked_version.replace(token, "")
+        checked_version = checked_version.replace(token.name, "")
     if "{" in checked_version:
-        available_tokens = simple_vars
+        available_tokens = [var.name for var in simple_vars + branch_vars]
         for name in base_branch.list_branch_names():
-            available_tokens.append(RevnoVariable(name, None).name)
-            available_tokens.append(SubversionRevnumVariable(name, None).name)
-            available_tokens.append(GitCommitVariable(name, None).name)
-            available_tokens.append(LatestTagVariable(name, None).name)
+            for var_kls in branch_vars:
+                available_tokens.append(var_kls(name, None).name)
         raise errors.BzrCommandError("deb-version not fully "
                 "expanded: %s. Valid substitutions are: %s"
                 % (base_branch.deb_version, available_tokens))
@@ -459,7 +456,7 @@ def merge_branch(child_branch, tree_to, br_to, possible_transports=None):
     :param br_to: the Branch to merge in to.
     """
     if child_branch.branch is None:
-        child_branch.branch = branch.Branch.open(child_branch.url,
+        child_branch.branch = _mod_branch.Branch.open(child_branch.url,
                 possible_transports=possible_transports)
     child_branch.branch.lock_read()
     try:
@@ -522,7 +519,7 @@ def nest_part_branch(child_branch, tree_to, br_to, subpath, target_subdir=None):
     :param target_subdir: (optional) directory in target to merge that
         subpath into.  Defaults to basename of subpath.
     """
-    child_branch.branch = branch.Branch.open(child_branch.url)
+    child_branch.branch = _mod_branch.Branch.open(child_branch.url)
     child_branch.branch.lock_read()
     try:
         child_branch.resolve_revision_id()
@@ -552,7 +549,7 @@ def nest_part_branch(child_branch, tree_to, br_to, subpath, target_subdir=None):
 def update_branch(base_branch, tree_to, br_to, to_transport,
         possible_transports=None):
     if base_branch.branch is None:
-        base_branch.branch = branch.Branch.open(base_branch.url,
+        base_branch.branch = _mod_branch.Branch.open(base_branch.url,
                 possible_transports=possible_transports)
     base_branch.branch.lock_read()
     try:
@@ -568,7 +565,7 @@ def update_branch(base_branch, tree_to, br_to, to_transport,
 def _resolve_revisions_recurse(new_branch, substitute_revno,
         if_changed_from=None):
     changed = False
-    new_branch.branch = branch.Branch.open(new_branch.url)
+    new_branch.branch = _mod_branch.Branch.open(new_branch.url)
     new_branch.branch.lock_read()
     try:
         new_branch.resolve_revision_id()
@@ -711,6 +708,9 @@ class ChildBranch(object):
             revid_part = ""
         return revid_part
 
+    def __repr__(self):
+        return "<%s %r>" % (self.__class__.__name__, self.nest_path)
+
 
 class CommandInstruction(ChildBranch):
 
@@ -743,6 +743,9 @@ class MergeInstruction(ChildBranch):
         return "%s %s %s%s" % (
             MERGE_INSTRUCTION, self.recipe_branch.name,
             self.recipe_branch.url, revid_part)
+
+    def __repr__(self):
+        return "<%s %r>" % (self.__class__.__name__, self.recipe_branch.name)
 
 
 class NestPartInstruction(ChildBranch):
@@ -787,6 +790,10 @@ class NestInstruction(ChildBranch):
         return "%s %s %s %s%s" % (
             NEST_INSTRUCTION, self.recipe_branch.name,
             self.recipe_branch.url, self.nest_path, revid_part)
+
+    def __repr__(self):
+        return "<%s %r>" % (self.__class__.__name__,
+            self.recipe_branch.name)
 
 
 class RecipeBranch(object):
@@ -893,14 +900,33 @@ class RecipeBranch(object):
                 return True
         return False
 
-    def _list_child_names(self):
-        child_names = []
+    def iter_all_instructions(self):
+        """Iter over all instructions under this branch."""
+        for instruction in self.child_branches:
+            yield instruction
+            child_branch = instruction.recipe_branch
+            if child_branch is None:
+                continue
+            for instruction in child_branch.iter_all_instructions():
+                yield instruction
+
+    def iter_all_branches(self):
+        """Iterate over all branches."""
+        yield self
         for instruction in self.child_branches:
             child_branch = instruction.recipe_branch
             if child_branch is None:
                 continue
-            child_names += child_branch.list_branch_names()
-        return child_names
+            for subbranch in child_branch.iter_all_branches():
+                yield subbranch
+
+    def lookup_branch(self, name):
+        """Lookup a branch by its name."""
+        for branch in self.iter_all_branches():
+            if branch.name == name:
+                return branch
+        else:
+            raise KeyError(name)
 
     def list_branch_names(self):
         """List all of the branch names under this one.
@@ -908,7 +934,11 @@ class RecipeBranch(object):
         :return: a list of the branch names.
         :rtype: list(str)
         """
-        return [self.name] + self._list_child_names()
+        return [branch.name for branch in self.iter_all_branches()
+                if branch.name is not None]
+
+    def __repr__(self):
+        return "<%s %r>" % (self.__class__.__name__, self.name)
 
 
 class BaseRecipeBranch(RecipeBranch):
@@ -982,9 +1012,6 @@ class BaseRecipeBranch(RecipeBranch):
 
     def __str__(self):
         return self.get_recipe_text(validate=True)
-
-    def list_branch_names(self):
-        return self._list_child_names()
 
     def get_recipe_text(self, validate=False):
         manifest = "# bzr-builder format %s" % str(self.format)
