@@ -136,7 +136,7 @@ class DateVariable(SimpleSubstitutionVariable):
 
 class DebUpstreamVariable(BranchSubstitutionVariable):
 
-    name = "{debupstream}"
+    basename = "debupstream"
 
     def __init__(self, branch_name, version):
         super(DebUpstreamVariable, self).__init__(branch_name)
@@ -159,7 +159,7 @@ class DebUpstreamVariable(BranchSubstitutionVariable):
 
 class DebVersionVariable(BranchSubstitutionVariable):
 
-    name = "{debversion}"
+    basename = "debversion"
 
     def __init__(self, branch_name, version):
         super(DebVersionVariable, self).__init__(branch_name)
