@@ -51,11 +51,9 @@ from bzrlib.option import Option
 from bzrlib.plugins.builder.recipe import (
         BaseRecipeBranch,
         build_tree,
-        DebUpstreamVariable,
         RecipeParser,
         resolve_revisions,
         SAFE_INSTRUCTIONS,
-        SubstitutionUnavailable,
         )
 
 
