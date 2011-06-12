@@ -16,6 +16,7 @@
 import os
 import signal
 import subprocess
+import time
 
 from bzrlib import (
     branch as _mod_branch,
@@ -190,14 +191,17 @@ class BranchSubstitutionVariable(SimpleSubstitutionVariable):
             return "{%s:%s}" % (self.basename, self.branch_name)
 
 
-class RevnoVariable(BranchSubstitutionVariable):
-
-    basename = "revno"
+class RevisionVariable(BranchSubstitutionVariable):
 
     def __init__(self, branch_name, branch, revid):
-        super(RevnoVariable, self).__init__(branch_name)
+        super(RevisionVariable, self).__init__(branch_name)
         self.branch = branch
         self.revid = revid
+
+
+class RevnoVariable(RevisionVariable):
+
+    basename = "revno"
 
     def get_revno(self):
         try:
@@ -220,6 +224,24 @@ class RevnoVariable(BranchSubstitutionVariable):
         return revno
 
 
+class RevtimeVariable(RevisionVariable):
+
+    basename = "revtime"
+
+    def get(self):
+        rev = self.branch.repository.get_revision(self.revid)
+        return time.strftime("%Y%m%d%H%M", time.gmtime(rev.timestamp))
+
+
+class RevdateVariable(RevisionVariable):
+
+    basename = "revdate"
+
+    def get(self):
+        rev = self.branch.repository.get_revision(self.revid)
+        return time.strftime("%Y%m%d", time.gmtime(rev.timestamp))
+
+
 def extract_svn_revnum(rev):
     try:
         foreign_revid = rev.foreign_revid
@@ -238,14 +260,9 @@ def extract_svn_revnum(rev):
             raise errors.InvalidRevisionId(rev.revision_id, None)
 
 
-class SubversionRevnumVariable(BranchSubstitutionVariable):
+class SubversionRevnumVariable(RevisionVariable):
 
     basename = "svn-revno"
-
-    def __init__(self, branch_name, branch, revid):
-        super(SubversionRevnumVariable, self).__init__(branch_name)
-        self.branch = branch
-        self.revid = revid
 
     def get(self):
         rev = self.branch.repository.get_revision(self.revid)
@@ -276,14 +293,9 @@ def extract_git_foreign_revid(rev):
             raise errors.InvalidRevisionId(rev.revision_id, None)
 
 
-class GitCommitVariable(BranchSubstitutionVariable):
+class GitCommitVariable(RevisionVariable):
 
     basename = "git-commit"
-
-    def __init__(self, branch_name, branch, revid):
-        super(GitCommitVariable, self).__init__(branch_name)
-        self.branch = branch
-        self.revid = revid
 
     def get(self):
         rev = self.branch.repository.get_revision(self.revid)
@@ -296,14 +308,9 @@ class GitCommitVariable(BranchSubstitutionVariable):
         return commit_sha[:7]
 
 
-class LatestTagVariable(BranchSubstitutionVariable):
+class LatestTagVariable(RevisionVariable):
 
     basename = "latest-tag"
-
-    def __init__(self, branch_name, branch, revid):
-        super(LatestTagVariable, self).__init__(branch_name)
-        self.branch = branch
-        self.revid = revid
 
     def get(self):
         reverse_tag_dict = self.branch.tags.get_reverse_tag_dict()
@@ -321,7 +328,9 @@ ok_to_preserve = [DebUpstreamVariable, DebUpstreamBaseVariable,
 simple_vars = [TimeVariable, DateVariable, DebUpstreamVariable,
     DebUpstreamBaseVariable, DebVersionVariable]
 branch_vars = [RevnoVariable, SubversionRevnumVariable,
-    GitCommitVariable, LatestTagVariable]
+    GitCommitVariable, LatestTagVariable, RevdateVariable,
+    RevtimeVariable]
+
 
 def check_expanded_deb_version(base_branch):
     checked_version = base_branch.deb_version
@@ -974,6 +983,10 @@ class BaseRecipeBranch(RecipeBranch):
         self.deb_version = git_commit_var.replace(self.deb_version)
         latest_tag_var = LatestTagVariable(branch_name, branch, revid)
         self.deb_version = latest_tag_var.replace(self.deb_version)
+        revdate_var = RevdateVariable(branch_name, branch, revid)
+        self.deb_version = revdate_var.replace(self.deb_version)
+        revtime_var = RevtimeVariable(branch_name, branch, revid)
+        self.deb_version = revtime_var.replace(self.deb_version)
 
     def substitute_time(self, time):
         """Substitute the time in to deb_version if needed.

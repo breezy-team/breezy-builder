@@ -1121,6 +1121,24 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         self.assertTrue(str(e).startswith("No tags set on branch None mainline"),
             e)
 
+    def test_substitute_revdate(self):
+        br = self.make_branch("source")
+        source = br.create_checkout("checkout")
+        source.commit("one")
+        source.commit("two", timestamp=1307708628, timezone=0)
+        branch1 = BaseRecipeBranch("source", "foo-{revdate}", 0.2)
+        resolve_revisions(branch1)
+        self.assertEqual("foo-20110610", branch1.deb_version)
+
+    def test_substitute_revtime(self):
+        br = self.make_branch("source")
+        source = br.create_checkout("checkout")
+        source.commit("one")
+        source.commit("two", timestamp=1307708628, timezone=0)
+        branch1 = BaseRecipeBranch("source", "foo-{revtime}", 0.2)
+        resolve_revisions(branch1)
+        self.assertEqual("foo-201106101223", branch1.deb_version)
+
 
 class StringifyTests(TestCaseInTempDir):
 
