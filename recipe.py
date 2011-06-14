@@ -85,7 +85,7 @@ class SubstitutionVariable(object):
         raise NotImplementedError(self.replace)
 
 
-class SimpleSubstitutionVariable(object):
+class SimpleSubstitutionVariable(SubstitutionVariable):
 
     name = None
 
@@ -96,6 +96,26 @@ class SimpleSubstitutionVariable(object):
 
     def get(self):
         raise NotImplementedError(self.value)
+
+
+class BranchSubstitutionVariable(SimpleSubstitutionVariable):
+
+    basename = None
+
+    def __init__(self, branch_name=None):
+        super(BranchSubstitutionVariable, self).__init__()
+        self.branch_name = branch_name
+
+    @classmethod
+    def determine_name(cls, branch_name):
+        if branch_name is None:
+            return "{%s}" % cls.basename
+        else:
+            return "{%s:%s}" % (cls.basename, branch_name)
+
+    @property
+    def name(self):
+        return self.determine_name(self.branch_name)
 
 
 class TimeVariable(SimpleSubstitutionVariable):
@@ -120,19 +140,20 @@ class DateVariable(SimpleSubstitutionVariable):
         return self._time.strftime("%Y%m%d")
 
 
-class DebUpstreamVariable(SimpleSubstitutionVariable):
+class DebUpstreamVariable(BranchSubstitutionVariable):
 
-    name = "{debupstream}"
+    basename = "debupstream"
 
-    def __init__(self, version):
+    def __init__(self, branch_name, version):
+        super(DebUpstreamVariable, self).__init__(branch_name)
         self._version = version
 
     @classmethod
-    def from_changelog(cls, changelog):
+    def from_changelog(cls, branch_name, changelog):
         if len(changelog._blocks) > 0:
-            return cls(changelog._blocks[0].version)
+            return cls(branch_name, changelog._blocks[0].version)
         else:
-            return cls(None)
+            return cls(branch_name, None)
 
     def get(self):
         if self._version is None:
@@ -142,19 +163,20 @@ class DebUpstreamVariable(SimpleSubstitutionVariable):
         return self._version.upstream_version
 
 
-class DebVersionVariable(SimpleSubstitutionVariable):
+class DebVersionVariable(BranchSubstitutionVariable):
 
-    name = "{debversion}"
+    basename = "debversion"
 
-    def __init__(self, version):
+    def __init__(self, branch_name, version):
+        super(DebVersionVariable, self).__init__(branch_name)
         self._version = version
 
     @classmethod
-    def from_changelog(cls, changelog):
+    def from_changelog(cls, branch_name, changelog):
         if len(changelog._blocks) > 0:
-            return cls(changelog._blocks[0].version)
+            return cls(branch_name, changelog._blocks[0].version)
         else:
-            return cls(None)
+            return cls(branch_name, None)
 
     def get(self):
         if self._version is None:
@@ -165,7 +187,7 @@ class DebVersionVariable(SimpleSubstitutionVariable):
 
 class DebUpstreamBaseVariable(DebUpstreamVariable):
 
-    name = "{debupstream-base}"
+    basename = "{debupstream-base}"
     version_regex = lazy_regex.lazy_compile(r'([~+])(svn[0-9]+|bzr[0-9]+|git[0-9a-f]+)')
 
     def get(self):
@@ -174,21 +196,6 @@ class DebUpstreamBaseVariable(DebUpstreamVariable):
         if version[-1] not in ("~", "+"):
             version += "+"
         return version
-
-
-class BranchSubstitutionVariable(SimpleSubstitutionVariable):
-
-    basename = None
-
-    def __init__(self, branch_name=None):
-        self.branch_name = branch_name
-
-    @property
-    def name(self):
-        if self.branch_name is None:
-            return "{%s}" % self.basename
-        else:
-            return "{%s:%s}" % (self.basename, self.branch_name)
 
 
 class RevisionVariable(BranchSubstitutionVariable):
@@ -325,10 +332,10 @@ class LatestTagVariable(RevisionVariable):
 ok_to_preserve = [DebUpstreamVariable, DebUpstreamBaseVariable,
     DebVersionVariable]
 # The variables that don't require substitution in their name
-simple_vars = [TimeVariable, DateVariable, DebUpstreamVariable,
-    DebUpstreamBaseVariable, DebVersionVariable]
+simple_vars = [TimeVariable, DateVariable]
 branch_vars = [RevnoVariable, SubversionRevnumVariable,
-    GitCommitVariable, LatestTagVariable, RevdateVariable,
+    GitCommitVariable, LatestTagVariable, DebVersionVariable,
+    DebUpstreamBaseVariable, DebUpstreamVariable, RevdateVariable,
     RevtimeVariable]
 
 
@@ -337,12 +344,21 @@ def check_expanded_deb_version(base_branch):
     if checked_version is None:
         return
     for token in ok_to_preserve:
-        checked_version = checked_version.replace(token.name, "")
+        if issubclass(token, BranchSubstitutionVariable):
+            for name in base_branch.list_branch_names():
+                checked_version = checked_version.replace(
+                    token.determine_name(name), "")
+            checked_version = checked_version.replace(
+                    token.determine_name(None), "")
+        else:
+            checked_version = checked_version.replace(
+                token.name, "")
     if "{" in checked_version:
-        available_tokens = [var.name for var in simple_vars + branch_vars]
-        for name in base_branch.list_branch_names():
-            for var_kls in branch_vars:
-                available_tokens.append(var_kls(name, None).name)
+        available_tokens = [var.name for var in simple_vars]
+        for var_kls in branch_vars:
+            for name in base_branch.list_branch_names():
+                available_tokens.append(var_kls.determine_name(name))
+            available_tokens.append(var_kls.determine_name(None))
         raise errors.BzrCommandError("deb-version not fully "
                 "expanded: %s. Valid substitutions are: %s"
                 % (base_branch.deb_version, available_tokens))
@@ -571,14 +587,14 @@ def update_branch(base_branch, tree_to, br_to, to_transport,
     return tree_to, br_to
 
 
-def _resolve_revisions_recurse(new_branch, substitute_revno,
+def _resolve_revisions_recurse(new_branch, substitute_branch_vars,
         if_changed_from=None):
     changed = False
     new_branch.branch = _mod_branch.Branch.open(new_branch.url)
     new_branch.branch.lock_read()
     try:
         new_branch.resolve_revision_id()
-        substitute_revno(new_branch.name, new_branch.branch, new_branch.revid)
+        substitute_branch_vars(new_branch.name, new_branch.branch, new_branch.revid)
         if (if_changed_from is not None
                 and (new_branch.revspec is not None
                         or if_changed_from.revspec is not None)):
@@ -598,7 +614,7 @@ def _resolve_revisions_recurse(new_branch, substitute_revno,
                 if_changed_child = if_changed_from.child_branches[index].recipe_branch
             if child_branch is not None:
                 child_changed = _resolve_revisions_recurse(child_branch,
-                        substitute_revno,
+                        substitute_branch_vars,
                         if_changed_from=if_changed_child)
                 if child_changed:
                     changed = child_changed
@@ -628,7 +644,7 @@ def resolve_revisions(base_branch, if_changed_from=None):
     if changed:
         if_changed_from_revisions = None
     changed_revisions = _resolve_revisions_recurse(base_branch,
-            base_branch.substitute_revno,
+            base_branch.substitute_branch_vars,
             if_changed_from=if_changed_from_revisions)
     if not changed:
         changed = changed_revisions
@@ -963,8 +979,8 @@ class BaseRecipeBranch(RecipeBranch):
         self.deb_version = deb_version
         self.format = format
 
-    def substitute_revno(self, branch_name, branch, revid):
-        """Substitute the revno for the given branch name in deb_version.
+    def substitute_branch_vars(self, branch_name, branch, revid):
+        """Substitute the branch variables for the given branch name in deb_version.
 
         Where deb_version has a place to substitute the revno for a branch
         this will substitute it for the given branch name.
@@ -987,6 +1003,17 @@ class BaseRecipeBranch(RecipeBranch):
         self.deb_version = revdate_var.replace(self.deb_version)
         revtime_var = RevtimeVariable(branch_name, branch, revid)
         self.deb_version = revtime_var.replace(self.deb_version)
+        tree = branch.repository.revision_tree(revid)
+        cl_file_id = tree.path2id("debian/changelog")
+        if cl_file_id is not None:
+            cl = changelog.Changelog(tree.get_file(cl_file_id))
+            debupstream_var = DebUpstreamVariable.from_changelog(branch_name, cl)
+            self.deb_version = debupstream_var.replace(self.deb_version)
+            debupstreambase_var = DebUpstreamBaseVariable.from_changelog(
+                branch_name, cl)
+            self.deb_version = debupstreambase_var.replace(self.deb_version)
+            pkgversion_var = DebVersionVariable.from_changelog(branch_name, cl)
+            self.deb_version = pkgversion_var.replace(self.deb_version)
 
     def substitute_time(self, time):
         """Substitute the time in to deb_version if needed.
@@ -997,20 +1024,6 @@ class BaseRecipeBranch(RecipeBranch):
             return
         self.deb_version = TimeVariable(time).replace(self.deb_version)
         self.deb_version = DateVariable(time).replace(self.deb_version)
-
-    def substitute_debupstream(self, changelog):
-        """Substitute {debupstream} in to deb_version if needed.
-
-        :param changelog: Changelog to take the upstream version from
-        """
-        if self.deb_version is None:
-            return
-        debupstream_var = DebUpstreamVariable.from_changelog(changelog)
-        self.deb_version = debupstream_var.replace(self.deb_version)
-        debupstreambase_var = DebUpstreamBaseVariable.from_changelog(changelog)
-        self.deb_version = debupstreambase_var.replace(self.deb_version)
-        pkgversion_var = DebVersionVariable.from_changelog(changelog)
-        self.deb_version = pkgversion_var.replace(self.deb_version)
 
     def _add_child_branches_to_manifest(self, child_branches, indent_level):
         manifest = ""
