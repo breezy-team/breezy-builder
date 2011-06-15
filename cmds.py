@@ -718,7 +718,7 @@ class cmd_dailydeb(cmd_build):
                     write_manifest_to_transport(manifest, base_branch,
                         possible_transports)
                 return 0
-            if package_version.debian_revision is not None:
+            if package_version.debian_version is not None:
                 # Non-native package
                 try:
                     extract_upstream_tarball(base_branch.branch, package_name,
