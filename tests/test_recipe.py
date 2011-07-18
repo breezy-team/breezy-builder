@@ -1284,7 +1284,7 @@ class StringifyTests(TestCaseInTempDir):
                 manifest)
 
 
-class RecipeBranchTests(TestCaseInTempDir):
+class RecipeBranchTests(TestCaseWithTransport):
 
     def test_base_recipe_branch(self):
         base_branch = BaseRecipeBranch("base_url", "1", 0.2, revspec="2")
@@ -1335,25 +1335,23 @@ class RecipeBranchTests(TestCaseInTempDir):
 
     def test_substitute_branch_vars(self):
         base_branch = BaseRecipeBranch("base_url", "1", 0.2)
-        base_branch.substitute_branch_vars(None, None, None)
+        wt = self.make_branch_and_tree("br")
+        revid = wt.commit("acommit")
+        base_branch.substitute_branch_vars(None, wt.branch, revid)
         self.assertEqual("1", base_branch.deb_version)
-        base_branch.substitute_branch_vars(None, None, None)
+        base_branch.substitute_branch_vars(None, wt.branch, revid)
         self.assertEqual("1", base_branch.deb_version)
         base_branch = BaseRecipeBranch("base_url", "{revno}", 0.2)
-        base_branch.substitute_branch_vars(None, lambda: "2")
-        self.assertEqual("2", base_branch.deb_version)
-        base_branch.substitute_branch_vars(None, lambda: "2")
-        self.assertEqual("2", base_branch.deb_version)
+        base_branch.substitute_branch_vars(None, wt.branch, revid)
+        self.assertEqual("1", base_branch.deb_version)
         base_branch = BaseRecipeBranch("base_url", "{revno}", 0.2)
-        base_branch.substitute_branch_vars("foo", None)
+        base_branch.substitute_branch_vars("foo", wt.branch, revid)
         self.assertEqual("{revno}", base_branch.deb_version)
-        base_branch.substitute_branch_vars("foo", None)
+        base_branch.substitute_branch_vars("foo", wt.branch, revid)
         self.assertEqual("{revno}", base_branch.deb_version)
         base_branch = BaseRecipeBranch("base_url", "{revno:foo}", 0.2)
-        base_branch.substitute_branch_vars("foo", lambda: "3")
-        self.assertEqual("3", base_branch.deb_version)
-        base_branch.substitute_branch_vars("foo", lambda: "3")
-        self.assertEqual("3", base_branch.deb_version)
+        base_branch.substitute_branch_vars("foo", wt.branch, revid)
+        self.assertEqual("1", base_branch.deb_version)
 
     def test_list_branch_names(self):
         base_branch = BaseRecipeBranch("base_url", "1", 0.2)
