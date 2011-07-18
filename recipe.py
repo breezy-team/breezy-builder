@@ -321,12 +321,17 @@ class LatestTagVariable(RevisionVariable):
 
     def get(self):
         reverse_tag_dict = self.branch.tags.get_reverse_tag_dict()
-        for revid in self.branch.repository.iter_reverse_revision_history(self.revid):
-            if revid in reverse_tag_dict:
-                return reverse_tag_dict[revid][0]
-        else:
-            raise errors.BzrCommandError("No tags set on branch %s mainline" %
-                self.branch_name)
+        self.branch.lock_read()
+        try:
+            graph = self.branch.repository.get_graph()
+            for revid in graph.iter_lefthand_ancestry(self.revid):
+                if revid in reverse_tag_dict:
+                    return reverse_tag_dict[revid][0]
+            else:
+                raise errors.BzrCommandError("No tags set on branch %s mainline" %
+                    self.branch_name)
+        finally:
+            self.branch.unlock()
 
 
 ok_to_preserve = [DebUpstreamVariable, DebUpstreamBaseVariable,
