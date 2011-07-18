@@ -1369,6 +1369,9 @@ class RecipeBranchTests(TestCaseWithTransport):
         self.assertEqual("{debupstream}", base_branch.deb_version)
         base_branch.substitute_branch_vars(None, wt.branch, revid2)
         self.assertEqual("0.1", base_branch.deb_version)
+        base_branch = BaseRecipeBranch("base_url", "{debupstream:tehname}", 0.2)
+        base_branch.substitute_branch_vars("tehname", wt.branch, revid2)
+        self.assertEqual("0.1", base_branch.deb_version)
 
     def test_list_branch_names(self):
         base_branch = BaseRecipeBranch("base_url", "1", 0.2)
