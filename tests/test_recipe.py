@@ -1353,6 +1353,23 @@ class RecipeBranchTests(TestCaseWithTransport):
         base_branch.substitute_branch_vars("foo", wt.branch, revid)
         self.assertEqual("1", base_branch.deb_version)
 
+    def test_substitute_branch_vars_debupstream(self):
+        wt = self.make_branch_and_tree("br")
+        revid1 = wt.commit("acommit")
+        cl_contents = ("package (0.1-1) unstable; urgency=low\n  * foo\n"
+                    " -- maint <maint@maint.org>  Tue, 04 Aug 2009 "
+                    "10:03:10 +0100\n")
+        self.build_tree_contents(
+            [("br/debian/", ), ('br/debian/changelog', cl_contents)])
+        wt.add(['debian', 'debian/changelog'])
+        revid2 = wt.commit("with changelog")
+        base_branch = BaseRecipeBranch("base_url", "{debupstream}", 0.2)
+        # No changelog file, so no substitution
+        base_branch.substitute_branch_vars(None, wt.branch, revid1)
+        self.assertEqual("{debupstream}", base_branch.deb_version)
+        base_branch.substitute_branch_vars(None, wt.branch, revid2)
+        self.assertEqual("0.1", base_branch.deb_version)
+
     def test_list_branch_names(self):
         base_branch = BaseRecipeBranch("base_url", "1", 0.2)
         base_branch.merge_branch(RecipeBranch("merged", "merged_url"))

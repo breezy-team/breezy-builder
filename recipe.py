@@ -1006,14 +1006,18 @@ class BaseRecipeBranch(RecipeBranch):
         tree = branch.repository.revision_tree(revid)
         cl_file_id = tree.path2id("debian/changelog")
         if cl_file_id is not None:
-            cl = changelog.Changelog(tree.get_file(cl_file_id))
-            debupstream_var = DebUpstreamVariable.from_changelog(branch_name, cl)
-            self.deb_version = debupstream_var.replace(self.deb_version)
-            debupstreambase_var = DebUpstreamBaseVariable.from_changelog(
-                branch_name, cl)
-            self.deb_version = debupstreambase_var.replace(self.deb_version)
-            pkgversion_var = DebVersionVariable.from_changelog(branch_name, cl)
-            self.deb_version = pkgversion_var.replace(self.deb_version)
+            tree.lock_read()
+            try:
+                cl = changelog.Changelog(tree.get_file(cl_file_id))
+                debupstream_var = DebUpstreamVariable.from_changelog(branch_name, cl)
+                self.deb_version = debupstream_var.replace(self.deb_version)
+                debupstreambase_var = DebUpstreamBaseVariable.from_changelog(
+                    branch_name, cl)
+                self.deb_version = debupstreambase_var.replace(self.deb_version)
+                pkgversion_var = DebVersionVariable.from_changelog(branch_name, cl)
+                self.deb_version = pkgversion_var.replace(self.deb_version)
+            finally:
+                tree.unlock()
 
     def substitute_time(self, time):
         """Substitute the time in to deb_version if needed.
