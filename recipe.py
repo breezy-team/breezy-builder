@@ -993,6 +993,8 @@ class BaseRecipeBranch(RecipeBranch):
             return
         revno_var = RevnoVariable(branch_name, branch, revid)
         self.deb_version = revno_var.replace(self.deb_version)
+        if self.format in (0.1, 0.2, 0.3):
+            return
         svn_revno_var = SubversionRevnumVariable(branch_name, branch, revid)
         self.deb_version = svn_revno_var.replace(self.deb_version)
         git_commit_var = GitCommitVariable(branch_name, branch, revid)
