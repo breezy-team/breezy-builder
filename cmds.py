@@ -50,10 +50,12 @@ from bzrlib.option import Option
 
 from bzrlib.plugins.builder.recipe import (
         BaseRecipeBranch,
+        DebUpstreamVariable,
         build_tree,
         RecipeParser,
         resolve_revisions,
         SAFE_INSTRUCTIONS,
+        SubstitutionUnavailable,
         )
 
 
@@ -237,6 +239,13 @@ def add_autobuild_changelog_entry(base_branch, basedir, package,
             reason = "debian/changelog was not present"
         if distribution is None:
             distribution = DEFAULT_UBUNTU_DISTRIBUTION
+    if base_branch.format in (0.1, 0.2, 0.3):
+        try:
+            base_branch.substitute_changelog_vars(None, cl)
+        except SubstitutionUnavailable:
+            raise errors.BzrCommandError("No previous changelog to "
+                    "take the upstream version from as %s was "
+                    "used: %s." % (DebUpstreamVariable.name, reason))
     # Use debian packaging environment variables
     # or default values if they don't exist
     if author_name is None or author_email is None:

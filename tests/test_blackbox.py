@@ -382,7 +382,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             (os.path.join("other", "debian", "changelog"), cl_contents)
             ])
         other.commit("new changelog entry")
-        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.4 "
             "deb-version {debversion:other}.2\n"
             "source 1\n"
             "nest other other other\n")])

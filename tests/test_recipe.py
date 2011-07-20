@@ -1069,7 +1069,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source = br.create_checkout("checkout")
         source.commit("one")
         source.commit("two")
-        branch1 = BaseRecipeBranch("source", "foo-{svn-revno}", 0.2)
+        branch1 = BaseRecipeBranch("source", "foo-{svn-revno}", 0.4)
         e = self.assertRaises(errors.BzrCommandError, resolve_revisions,
             branch1)
         self.assertTrue(str(e).startswith("unable to expand {svn-revno} "),
@@ -1081,7 +1081,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source.commit("one")
         source.commit("two",
             rev_id="svn-v4:be7e6eca-30d4-0310-a8e5-ac0d63af7070:trunk:5344")
-        branch1 = BaseRecipeBranch("source", "foo-{svn-revno}", 0.2)
+        branch1 = BaseRecipeBranch("source", "foo-{svn-revno}", 0.4)
         resolve_revisions(branch1)
         self.assertEqual("foo-5344", branch1.deb_version)
 
@@ -1089,7 +1089,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source = self.make_branch_and_tree("source")
         source.commit("one")
         source.commit("two")
-        branch1 = BaseRecipeBranch("source", "foo-{git-commit}", 0.2)
+        branch1 = BaseRecipeBranch("source", "foo-{git-commit}", 0.4)
         e = self.assertRaises(errors.BzrCommandError, resolve_revisions,
             branch1)
         self.assertTrue(str(e).startswith("unable to expand {git-commit} "),
@@ -1099,7 +1099,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source = self.make_branch_and_tree("source")
         source.commit("one", 
             rev_id="git-v1:a029d7b2cc83c26a53d8b2a24fa12c340fcfac58")
-        branch1 = BaseRecipeBranch("source", "foo-{git-commit}", 0.2)
+        branch1 = BaseRecipeBranch("source", "foo-{git-commit}", 0.4)
         resolve_revisions(branch1)
         self.assertEqual("foo-a029d7b", branch1.deb_version)
 
@@ -1108,7 +1108,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         revid = source.commit("one")
         source.branch.tags.set_tag("millbank", revid)
         source.commit("two")
-        branch1 = BaseRecipeBranch("source", "foo-{latest-tag}", 0.2)
+        branch1 = BaseRecipeBranch("source", "foo-{latest-tag}", 0.4)
         resolve_revisions(branch1)
         self.assertEqual("foo-millbank", branch1.deb_version)
 
@@ -1116,7 +1116,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source = self.make_branch_and_tree("source")
         revid = source.commit("one")
         source.commit("two")
-        branch1 = BaseRecipeBranch("source", "foo-{latest-tag}", 0.2)
+        branch1 = BaseRecipeBranch("source", "foo-{latest-tag}", 0.4)
         e = self.assertRaises(errors.BzrCommandError, resolve_revisions, branch1)
         self.assertTrue(str(e).startswith("No tags set on branch None mainline"),
             e)
@@ -1126,7 +1126,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source = br.create_checkout("checkout")
         source.commit("one")
         source.commit("two", timestamp=1307708628, timezone=0)
-        branch1 = BaseRecipeBranch("source", "foo-{revdate}", 0.2)
+        branch1 = BaseRecipeBranch("source", "foo-{revdate}", 0.4)
         resolve_revisions(branch1)
         self.assertEqual("foo-20110610", branch1.deb_version)
 
@@ -1135,7 +1135,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source = br.create_checkout("checkout")
         source.commit("one")
         source.commit("two", timestamp=1307708628, timezone=0)
-        branch1 = BaseRecipeBranch("source", "foo-{revtime}", 0.2)
+        branch1 = BaseRecipeBranch("source", "foo-{revtime}", 0.4)
         resolve_revisions(branch1)
         self.assertEqual("foo-201106101223", branch1.deb_version)
 
