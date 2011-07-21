@@ -998,6 +998,8 @@ class BaseRecipeBranch(RecipeBranch):
             return
         revno_var = RevnoVariable(branch_name, branch, revid)
         self.deb_version = revno_var.replace(self.deb_version)
+        if self.format in (0.1, 0.2, 0.3):
+            return
         svn_revno_var = SubversionRevnumVariable(branch_name, branch, revid)
         self.deb_version = svn_revno_var.replace(self.deb_version)
         git_commit_var = GitCommitVariable(branch_name, branch, revid)
@@ -1011,14 +1013,26 @@ class BaseRecipeBranch(RecipeBranch):
         tree = branch.repository.revision_tree(revid)
         cl_file_id = tree.path2id("debian/changelog")
         if cl_file_id is not None:
-            cl = changelog.Changelog(tree.get_file(cl_file_id))
-            debupstream_var = DebUpstreamVariable.from_changelog(branch_name, cl)
-            self.deb_version = debupstream_var.replace(self.deb_version)
-            debupstreambase_var = DebUpstreamBaseVariable.from_changelog(
-                branch_name, cl)
-            self.deb_version = debupstreambase_var.replace(self.deb_version)
-            pkgversion_var = DebVersionVariable.from_changelog(branch_name, cl)
-            self.deb_version = pkgversion_var.replace(self.deb_version)
+            tree.lock_read()
+            try:
+                cl = changelog.Changelog(tree.get_file(cl_file_id))
+                self.substitute_changelog_vars(branch_name, cl)
+            finally:
+                tree.unlock()
+
+    def substitute_changelog_vars(self, branch_name, changelog):
+        """Substitute variables related from a changelog.
+
+        :param branch_name: Branch name (None for root branch)
+        :param changelog: Changelog object to use
+        """
+        debupstream_var = DebUpstreamVariable.from_changelog(branch_name, changelog)
+        self.deb_version = debupstream_var.replace(self.deb_version)
+        debupstreambase_var = DebUpstreamBaseVariable.from_changelog(
+            branch_name, changelog)
+        self.deb_version = debupstreambase_var.replace(self.deb_version)
+        pkgversion_var = DebVersionVariable.from_changelog(branch_name, changelog)
+        self.deb_version = pkgversion_var.replace(self.deb_version)
 
     def substitute_time(self, time):
         """Substitute the time in to deb_version if needed.
