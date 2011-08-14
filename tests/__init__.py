@@ -16,9 +16,16 @@
 import os
 from unittest import TestSuite
 from bzrlib.tests import (
-    Feature,
     TestUtil,
     )
+try:
+    from bzrlib.tests.features import (
+        Feature,
+        )
+except ImportError: # bzr < 2.5
+    from bzrlib.tests import (
+        Feature,
+        )
 
 
 class _PristineTarFeature(Feature):
