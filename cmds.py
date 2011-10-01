@@ -732,9 +732,12 @@ class cmd_dailydeb(cmd_build):
                 try:
                     extract_upstream_tarball(base_branch.branch, package_name,
                         package_version.upstream_version, working_basedir)
-                except errors.NoSuchTag:
+                except errors.NoSuchTag, e:
                     if not allow_fallback_to_native:
-                        raise
+                        raise errors.BzrCommandError(
+                            "Unable to find the upstream source. Import it "
+                            "as tag %s or build with "
+                            "--allow-fallback-to-native." % e.tag_name)
             if allow_fallback_to_native:
                 force_native_format(package_dir)
             try:
