@@ -468,7 +468,10 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             "dailydeb -q test.recipe working",
             retcode=3)
         self.assertEquals("", out)
-        self.assertEquals('bzr: ERROR: No such tag: upstream-1\n', err)
+        self.assertEquals(
+            'bzr: ERROR: Unable to find the upstream source. '
+            'Import it as tag upstream-1 or build with '
+            '--allow-fallback-to-native.\n', err)
 
     def test_cmd_dailydeb_with_orig_tarball(self):
         self.make_simple_package("source")
