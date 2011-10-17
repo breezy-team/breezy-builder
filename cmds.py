@@ -28,6 +28,7 @@ import socket
 import shutil
 import subprocess
 import tempfile
+import locale
 
 try:
     from debian import changelog, deb822
@@ -193,7 +194,8 @@ def get_maintainer():
             # TBD: Use last changelog entry value
             email = "none@example.org"
 
-    return (maintainer, email)
+    return (maintainer.decode(locale.getpreferredencoding()),
+            email.decode(locale.getpreferredencoding()))
 
 
 def add_autobuild_changelog_entry(base_branch, basedir, package,
