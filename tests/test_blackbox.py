@@ -426,6 +426,27 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             f.close()
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
 
+    def test_cmd_dailydeb_with_nonascii_maintainer_in_changelog(self):
+        user_enc = osutils.get_user_encoding()
+        try:
+            os.environ["DEBFULLNAME"] = u"Micha\u25c8 Sawicz".encode(user_enc)
+        except UnicodeEncodeError:
+            self.knownFailure("To set non-ascii name, environment must be "
+                "able to encode it")
+        self.make_simple_package("source")
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
+                    "deb-version 1\nsource 1\n")])
+        out, err = self.run_bzr("dailydeb -q test.recipe working")
+        new_cl_contents = ("package (1) unstable; urgency=low\n\n"
+            "  * Auto build.\n\n"
+            "-- Micha\xe2\x97\x88 Sawicz <maint@maint.org>  ")
+        f = open("working/test-1/debian/changelog")
+        try:
+            actual_cl_contents = f.read()
+        finally:
+            f.close()
+        self.assertStartsWith(actual_cl_contents, new_cl_contents)
+
     def test_cmd_dailydeb_with_invalid_version(self):
         source = self.make_branch_and_tree("source")
         self.build_tree(["source/a"])
