@@ -427,11 +427,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         new_cl_contents = ("package (1) unstable; urgency=low\n\n"
             "  * Auto build.\n\n"
             " -- Micha\xe2\x97\x88 Sawicz <maint@maint.org>  ")
-        f = open("working/test-1/debian/changelog")
-        try:
-            actual_cl_contents = f.read()
-        finally:
-            f.close()
+        actual_cl_contents = self._get_file_contents(
+            "working/test-1/debian/changelog")
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
 
     def test_cmd_dailydeb_with_invalid_version(self):
