@@ -13,16 +13,21 @@
 # You should have received a copy of the GNU General Public License along 
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Copies/backports features from recent bzrlib versions.
+"""Copies/backports features from more recent versions of packages
 
-This allows bzr-builder to continue to work with older bzrlib versions while
-using features from newer versions.
+This allows bzr-builder to continue to work with older bzrlib and python-debian
+versions while using features from newer versions.
 """
 
 # NOTE FOR DEVELOPERS: with each backport please include a comment saying which
-# version of bzr you are backporting from, to make it easier to copy bugfixes
-# made in bzr (and so that we know which things we can drop from this module if
-# bzr-builder ever raises which version of bzr it depends on).
+# version of what you are backporting from, to make it easier to copy bugfixes
+# made in later version (and so that we know which things we can drop from this
+# module if bzr-builder ever raises which package versions it depends on).
+
+import os
+import pwd
+import re
+import socket
 
 from bzrlib.merge import (
     Merger,
@@ -224,4 +229,68 @@ class MergeIntoMergeType(Merge3Merger):
             yield (entry, parent_id)
 
 
+def get_maintainer():
+    """Create maintainer string using the same algorithm as in dch.
 
+    From version 0.1.19 python-debian has this function in debian.changelog 
+    """
+    env = os.environ
+    regex = re.compile(r"^(.*)\s+<(.*)>$")
+
+    # Split email and name
+    if 'DEBEMAIL' in env:
+        match_obj = regex.match(env['DEBEMAIL'])
+        if match_obj:
+            if not 'DEBFULLNAME' in env:
+                env['DEBFULLNAME'] = match_obj.group(1)
+            env['DEBEMAIL'] = match_obj.group(2)
+    if 'DEBEMAIL' not in env or 'DEBFULLNAME' not in env:
+        if 'EMAIL' in env:
+            match_obj = regex.match(env['EMAIL'])
+            if match_obj:
+                if not 'DEBFULLNAME' in env:
+                    env['DEBFULLNAME'] = match_obj.group(1)
+                env['EMAIL'] = match_obj.group(2)
+
+    # Get maintainer's name
+    if 'DEBFULLNAME' in env:
+        maintainer = env['DEBFULLNAME']
+    elif 'NAME' in env:
+        maintainer = env['NAME']
+    else:
+        # Use password database if no data in environment variables
+        try:
+            maintainer = re.sub(r',.*', '', pwd.getpwuid(os.getuid()).pw_gecos)
+        except (KeyError, AttributeError):
+            # TBD: Use last changelog entry value
+            maintainer = "bzr-builder"
+
+    # Get maintainer's mail address
+    if 'DEBEMAIL' in env:
+        email = env['DEBEMAIL']
+    elif 'EMAIL' in env:
+        email = env['EMAIL']
+    else:
+        addr = None
+        if os.path.exists('/etc/mailname'):
+            f = open('/etc/mailname')
+            try:
+                addr = f.readline().strip()
+            finally:
+                f.close()
+        if not addr:
+            addr = socket.getfqdn()
+        if addr:
+            user = pwd.getpwuid(os.getuid()).pw_name
+            if not user:
+                addr = None
+            else:
+                addr = "%s@%s" % (user, addr)
+
+        if addr:
+            email = addr
+        else:
+            # TBD: Use last changelog entry value
+            email = "none@example.org"
+
+    return (maintainer, email)
