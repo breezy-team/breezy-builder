@@ -28,7 +28,6 @@ import socket
 import shutil
 import subprocess
 import tempfile
-import locale
 
 try:
     from debian import changelog, deb822
@@ -41,6 +40,7 @@ from bzrlib import (
         errors,
         export as _mod_export,
         lazy_regex,
+        osutils,
         trace,
         transport as _mod_transport,
         urlutils,
@@ -194,8 +194,7 @@ def get_maintainer():
             # TBD: Use last changelog entry value
             email = "none@example.org"
 
-    return (maintainer.decode(locale.getpreferredencoding()),
-            email.decode(locale.getpreferredencoding()))
+    return (maintainer, email)
 
 
 def add_autobuild_changelog_entry(base_branch, basedir, package,
@@ -252,6 +251,13 @@ def add_autobuild_changelog_entry(base_branch, basedir, package,
     # or default values if they don't exist
     if author_name is None or author_email is None:
         author_name, author_email = get_maintainer()
+        # The python-debian package breaks compatibility at version 0.1.20 by
+        # switching to expecting (but not checking for) unicode rather than
+        # bytestring inputs. Detect this and decode environment if needed.
+        if getattr(changelog.Changelog, "__unicode__", None) is not None:
+            enc = osutils.get_user_encoding()
+            author_name = author_name.decode(enc)
+            author_email = author_email.decode(enc)
     author = "%s <%s>" % (author_name, author_email)
 
     date = utils.formatdate(localtime=True)
