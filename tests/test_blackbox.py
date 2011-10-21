@@ -82,6 +82,17 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         overrideEnv("DEBEMAIL", "maint@maint.org")
         overrideEnv("DEBFULLNAME", "M. Maintainer")
 
+    def _get_file_contents(self, filename, mode="r"):
+        """Helper to read contents of a file
+
+        Use check_file_content instead to just assert the contents match."""
+        self.assertPathExists(filename)
+        f = open(filename, mode)
+        try:
+            return f.read()
+        finally:
+            f.close()
+
     def test_cmd_builder_exists(self):
         self.run_bzr("build --help")
 
@@ -226,14 +237,10 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "debian/bzr-builder.manifest"),
                     "# bzr-builder format 0.1 deb-version 1\nsource revid:%s\n"
                     % revid)
-        cl_path = os.path.join(package_root, "debian/changelog")
-        self.assertPathExists(cl_path)
-        cl_f = open(cl_path)
-        try:
-            line = cl_f.readline()
-            self.assertEqual("foo (1) lucid; urgency=low\n", line)
-        finally:
-            cl_f.close()
+        cl_contents = self._get_file_contents(
+            os.path.join(package_root, "debian/changelog"))
+        self.assertEqual("foo (1) lucid; urgency=low\n",
+            cl_contents.splitlines(True)[0])
 
     def test_cmd_dailydeb_no_work_dir(self):
         #TODO: define a test feature for debuild and require it here.
@@ -331,11 +338,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                 "--manifest manifest --no-build working")
         new_cl_contents = ("package (1) unstable; urgency=low\n\n"
                 "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
-        f = open("working/package-1/debian/changelog")
-        try:
-            actual_cl_contents = f.read()
-        finally:
-            f.close()
+        actual_cl_contents = self._get_file_contents(
+            "working/package-1/debian/changelog")
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
         for fn in os.listdir("working"):
             self.assertFalse(fn.endswith(".changes"))
@@ -349,11 +353,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                 "--manifest manifest --if-changed-from bar working")
         new_cl_contents = ("package (1) unstable; urgency=low\n\n"
                 "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
-        f = open("working/test-1/debian/changelog")
-        try:
-            actual_cl_contents = f.read()
-        finally:
-            f.close()
+        actual_cl_contents = self._get_file_contents(
+            "working/test-1/debian/changelog")
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
 
     def test_cmd_dailydeb_with_version_from_changelog(self):
@@ -364,12 +365,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             "dailydeb --allow-fallback-to-native -q test.recipe working")
         new_cl_contents = ("package (0.1-2) unstable; urgency=low\n\n"
                 "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
-        f = open("working/test-{debversion}-2/debian/changelog")
-        try:
-            actual_cl_contents = f.read()
-        finally:
-            f.close()
-        cl = changelog.Changelog(actual_cl_contents)
+        cl = changelog.Changelog(self._get_file_contents(
+            "working/test-{debversion}-2/debian/changelog"))
         self.assertEquals("0.1-1-2", str(cl._blocks[0].version))
 
     def test_cmd_dailydeb_with_version_from_other_branch_changelog(self):
@@ -388,12 +385,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             "nest other other other\n")])
         out, err = self.run_bzr(
             "dailydeb --allow-fallback-to-native -q test.recipe working")
-        f = open("working/test-{debversion:other}.2/debian/changelog")
-        try:
-            actual_cl_contents = f.read()
-        finally:
-            f.close()
-        cl = changelog.Changelog(actual_cl_contents)
+        cl = changelog.Changelog(self._get_file_contents(
+            "working/test-{debversion:other}.2/debian/changelog"))
         self.assertEquals("0.4-1.2", str(cl._blocks[0].version))
 
     def test_cmd_dailydeb_with_upstream_version_from_changelog(self):
@@ -404,11 +397,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             "dailydeb --allow-fallback-to-native -q test.recipe working")
         new_cl_contents = ("package (0.1-2) unstable; urgency=low\n\n"
                 "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
-        f = open("working/test-{debupstream}-2/debian/changelog")
-        try:
-            actual_cl_contents = f.read()
-        finally:
-            f.close()
+        actual_cl_contents = self._get_file_contents(
+            "working/test-{debupstream}-2/debian/changelog")
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
 
     def test_cmd_dailydeb_with_append_version(self):
@@ -419,11 +409,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                 "--append-version ~ppa1")
         new_cl_contents = ("package (1~ppa1) unstable; urgency=low\n\n"
                 "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
-        f = open("working/test-1/debian/changelog")
-        try:
-            actual_cl_contents = f.read()
-        finally:
-            f.close()
+        actual_cl_contents = self._get_file_contents(
+            "working/test-1/debian/changelog")
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
 
     def test_cmd_dailydeb_with_nonascii_maintainer_in_changelog(self):
