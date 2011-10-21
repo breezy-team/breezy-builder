@@ -439,7 +439,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         out, err = self.run_bzr("dailydeb -q test.recipe working")
         new_cl_contents = ("package (1) unstable; urgency=low\n\n"
             "  * Auto build.\n\n"
-            "-- Micha\xe2\x97\x88 Sawicz <maint@maint.org>  ")
+            " -- Micha\xe2\x97\x88 Sawicz <maint@maint.org>  ")
         f = open("working/test-1/debian/changelog")
         try:
             actual_cl_contents = f.read()
