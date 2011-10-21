@@ -547,7 +547,8 @@ def debian_source_package_name(control_path):
     """
     with open(control_path, 'r') as f:
         control = deb822.Deb822(f)
-        return control["Source"]
+        # Debian policy states package names must be [a-z0-9+-.]+ so ascii
+        return control["Source"].encode("ascii")
 
 
 def reconstruct_pristine_tar(dest, delta, dest_filename):
