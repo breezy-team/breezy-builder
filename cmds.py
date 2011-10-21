@@ -555,7 +555,7 @@ def debian_source_package_name(control_path):
     """
     with open(control_path, 'r') as f:
         control = deb822.Deb822(f)
-        # Debian policy states package names must be [a-z0-9+-.]+ so ascii
+        # Debian policy states package names are [a-z0-9][a-z0-9.+-]+ so ascii
         return control["Source"].encode("ascii")
 
 
