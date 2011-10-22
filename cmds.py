@@ -21,10 +21,7 @@ import datetime
 from email import utils
 import errno
 import os
-import pwd
-import re
 import signal
-import socket
 import shutil
 import subprocess
 import tempfile
@@ -35,6 +32,13 @@ except ImportError:
     # In older versions of python-debian the main package was named 
     # debian_bundle
     from debian_bundle import changelog, deb822
+
+try:
+    get_maintainer = changelog.get_maintainer
+except AttributeError:
+    # Implementation of get_maintainer was added after 0.1.18 so import same
+    # function from backports module if python-debian doesn't have it.
+    from bzrlib.plugins.builder.backports import get_maintainer
 
 from bzrlib import (
         errors,
@@ -129,71 +133,6 @@ def get_old_recipe(if_changed_from, possible_transports=None):
     finally:
         f.close()
     return old_recipe
-
-
-def get_maintainer():
-    """Create maintainer string using the same algorithm as in dch.
-    """
-    env = os.environ
-    regex = re.compile(r"^(.*)\s+<(.*)>$")
-
-    # Split email and name
-    if 'DEBEMAIL' in env:
-        match_obj = regex.match(env['DEBEMAIL'])
-        if match_obj:
-            if not 'DEBFULLNAME' in env:
-                env['DEBFULLNAME'] = match_obj.group(1)
-            env['DEBEMAIL'] = match_obj.group(2)
-    if 'DEBEMAIL' not in env or 'DEBFULLNAME' not in env:
-        if 'EMAIL' in env:
-            match_obj = regex.match(env['EMAIL'])
-            if match_obj:
-                if not 'DEBFULLNAME' in env:
-                    env['DEBFULLNAME'] = match_obj.group(1)
-                env['EMAIL'] = match_obj.group(2)
-
-    # Get maintainer's name
-    if 'DEBFULLNAME' in env:
-        maintainer = env['DEBFULLNAME']
-    elif 'NAME' in env:
-        maintainer = env['NAME']
-    else:
-        # Use password database if no data in environment variables
-        try:
-            maintainer = re.sub(r',.*', '', pwd.getpwuid(os.getuid()).pw_gecos)
-        except (KeyError, AttributeError):
-            # TBD: Use last changelog entry value
-            maintainer = "bzr-builder"
-
-    # Get maintainer's mail address
-    if 'DEBEMAIL' in env:
-        email = env['DEBEMAIL']
-    elif 'EMAIL' in env:
-        email = env['EMAIL']
-    else:
-        addr = None
-        if os.path.exists('/etc/mailname'):
-            f = open('/etc/mailname')
-            try:
-                addr = f.readline().strip()
-            finally:
-                f.close()
-        if not addr:
-            addr = socket.getfqdn()
-        if addr:
-            user = pwd.getpwuid(os.getuid()).pw_name
-            if not user:
-                addr = None
-            else:
-                addr = "%s@%s" % (user, addr)
-
-        if addr:
-            email = addr
-        else:
-            # TBD: Use last changelog entry value
-            email = "none@example.org"
-
-    return (maintainer, email)
 
 
 def add_autobuild_changelog_entry(base_branch, basedir, package,

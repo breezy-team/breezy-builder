@@ -47,7 +47,7 @@ except ImportError:
 try:
     MergeIntoMerger = merge.MergeIntoMerger
 except (AttributeError, NameError):
-    from bzrlib.plugins.builder.bzrlibbackports import MergeIntoMerger
+    from bzrlib.plugins.builder.backports import MergeIntoMerger
 
 
 def subprocess_setup():
