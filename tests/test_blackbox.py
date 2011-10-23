@@ -418,8 +418,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         try:
             os.environ["DEBFULLNAME"] = u"Micha\u25c8 Sawicz".encode(user_enc)
         except UnicodeEncodeError:
-            self.knownFailure("To set non-ascii name, environment must be "
-                "able to encode it")
+            self.skip("Need user encoding other than %r to test maintainer "
+                "name from environment" % (user_enc,))
         self.make_simple_package("source")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
