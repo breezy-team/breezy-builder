@@ -44,6 +44,7 @@ from bzrlib import (
         errors,
         export as _mod_export,
         lazy_regex,
+        osutils,
         trace,
         transport as _mod_transport,
         urlutils,
@@ -189,6 +190,13 @@ def add_autobuild_changelog_entry(base_branch, basedir, package,
     # or default values if they don't exist
     if author_name is None or author_email is None:
         author_name, author_email = get_maintainer()
+        # The python-debian package breaks compatibility at version 0.1.20 by
+        # switching to expecting (but not checking for) unicode rather than
+        # bytestring inputs. Detect this and decode environment if needed.
+        if getattr(changelog.Changelog, "__unicode__", None) is not None:
+            enc = osutils.get_user_encoding()
+            author_name = author_name.decode(enc)
+            author_email = author_email.decode(enc)
     author = "%s <%s>" % (author_name, author_email)
 
     date = utils.formatdate(localtime=True)
@@ -486,7 +494,8 @@ def debian_source_package_name(control_path):
     """
     with open(control_path, 'r') as f:
         control = deb822.Deb822(f)
-        return control["Source"]
+        # Debian policy states package names are [a-z0-9][a-z0-9.+-]+ so ascii
+        return control["Source"].encode("ascii")
 
 
 def reconstruct_pristine_tar(dest, delta, dest_filename):
