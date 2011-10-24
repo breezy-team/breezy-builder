@@ -924,12 +924,9 @@ class BuildTreeTests(TestCaseWithTransport):
         base_branch = BaseRecipeBranch("source", "1", 0.2)
         merged_branch = RecipeBranch("merged", "source", revspec="debian")
         base_branch.merge_branch(merged_branch)
-        e = self.assertRaises(errors.InvalidRevisionSpec,
-                build_tree, base_branch, "target")
-        self.assertTrue(str(e).startswith("Requested revision: 'debian' "
-                    "does not exist in branch: "))
-        self.assertTrue(str(e).endswith(". Did you not mean to specify a "
-                    "revspec at the end of the merge line?"))
+        e = self.assertRaises(
+            (errors.NoSuchRevisionSpec, errors.InvalidRevisionSpec),
+            build_tree, base_branch, "target")
 
 
 class ResolveRevisionsTests(TestCaseWithTransport):

@@ -27,6 +27,7 @@ from bzrlib import (
 from bzrlib.branch import Branch
 from bzrlib.tests import (
         TestCaseWithTransport,
+        TestSkipped,
         )
 
 
@@ -212,6 +213,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "deb-version 1\nsource revid:%s\n" % revid)
 
     def test_cmd_dailydeb(self):
+        if "FAKEROOTKEY" in os.environ:
+            raise TestSkipped("unable to nest fakeroot")
         #TODO: define a test feature for debuild and require it here.
         source = self.make_branch_and_tree("source")
         self.build_tree(["source/a", "source/debian/"])
@@ -243,6 +246,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             cl_contents.splitlines(True)[0])
 
     def test_cmd_dailydeb_no_work_dir(self):
+        if "FAKEROOTKEY" in os.environ:
+            raise TestSkipped("unable to nest fakeroot")
         #TODO: define a test feature for debuild and require it here.
         if getattr(self, "permit_dir", None) is not None:
             self.permit_dir('/') # Allow the made working dir to be accessed.
@@ -260,6 +265,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                 "--manifest manifest")
 
     def test_cmd_dailydeb_if_changed_from_non_existant(self):
+        if "FAKEROOTKEY" in os.environ:
+            raise TestSkipped("unable to nest fakeroot")
         #TODO: define a test feature for debuild and require it here.
         if getattr(self, "permit_dir", None) is not None:
             self.permit_dir('/') # Allow the made working dir to be accessed.
@@ -346,6 +353,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
 
     def test_cmd_dailydeb_with_package_from_changelog(self):
         #TODO: define a test feature for debuild and require it here.
+        if "FAKEROOTKEY" in os.environ:
+            raise TestSkipped("unable to nest fakeroot")
         self.make_simple_package("source")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
@@ -358,6 +367,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
 
     def test_cmd_dailydeb_with_version_from_changelog(self):
+        if "FAKEROOTKEY" in os.environ:
+            raise TestSkipped("unable to nest fakeroot")
         self.make_simple_package("source")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version {debversion}-2\nsource 1\n")])
@@ -370,6 +381,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertEquals("0.1-1-2", str(cl._blocks[0].version))
 
     def test_cmd_dailydeb_with_version_from_other_branch_changelog(self):
+        if "FAKEROOTKEY" in os.environ:
+            raise TestSkipped("unable to nest fakeroot")
         source = self.make_simple_package("source")
         other = self.make_simple_package("other")
         cl_contents = ("package (0.4-1) unstable; urgency=low\n  * foo\n"
@@ -390,7 +403,10 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertEquals("0.4-1.2", str(cl._blocks[0].version))
 
     def test_cmd_dailydeb_with_upstream_version_from_changelog(self):
+        if "FAKEROOTKEY" in os.environ:
+            raise TestSkipped("unable to nest fakeroot")
         self.make_simple_package("source")
+        self.make_simple_package()
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version {debupstream}-2\nsource 1\n")])
         out, err = self.run_bzr(
@@ -402,6 +418,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
 
     def test_cmd_dailydeb_with_append_version(self):
+        if "FAKEROOTKEY" in os.environ:
+            raise TestSkipped("unable to nest fakeroot")
         self.make_simple_package("source")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
@@ -479,6 +497,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             '--allow-fallback-to-native.\n', err)
 
     def test_cmd_dailydeb_with_orig_tarball(self):
+        if "FAKEROOTKEY" in os.environ:
+            raise TestSkipped("unable to nest fakeroot")
         self.make_simple_package("source")
         self.make_upstream_version("0.1", [("upstream/file", "content\n")])
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
@@ -490,6 +510,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertPathExists("working/package_0.1-1.diff.gz")
 
     def test_cmd_dailydeb_with_pristine_orig_gz_tarball(self):
+        if "FAKEROOTKEY" in os.environ:
+            raise TestSkipped("unable to nest fakeroot")
         self.requireFeature(PristineTarFeature)
         self.make_simple_package("source")
         pristine_tar_sha1 = self.make_upstream_version("0.1",
@@ -505,6 +527,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             pristine_tar_sha1)
 
     def test_cmd_dailydeb_with_pristine_orig_bz2_tarball(self):
+        if "FAKEROOTKEY" in os.environ:
+            raise TestSkipped("unable to nest fakeroot")
         self.requireFeature(PristineTarFeature)
         self.make_simple_quilt_package()
         pristine_tar_sha1 = self.make_upstream_version("0.1",
@@ -520,6 +544,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             pristine_tar_sha1)
 
     def test_cmd_dailydeb_force_native(self):
+        if "FAKEROOTKEY" in os.environ:
+            raise TestSkipped("unable to nest fakeroot")
         self.make_simple_quilt_package()
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version 1\nsource 2\n")])
@@ -530,6 +556,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             "working/test-1/debian/source/format")
 
     def test_cmd_dailydeb_force_native_empty_series(self):
+        if "FAKEROOTKEY" in os.environ:
+            raise TestSkipped("unable to nest fakeroot")
         source = self.make_simple_quilt_package()
         self.build_tree(['source/debian/patches/'])
         self.build_tree_contents([
@@ -546,6 +574,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.assertPathDoesNotExist("working/test-1/debian/patches")
 
     def test_cmd_dailydeb_force_native_apply_quilt(self):
+        if "FAKEROOTKEY" in os.environ:
+            raise TestSkipped("unable to nest fakeroot")
         source = self.make_simple_quilt_package()
         self.build_tree(["source/debian/patches/"])
         patch = dedent(
