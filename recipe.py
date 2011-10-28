@@ -187,7 +187,7 @@ class DebVersionVariable(BranchSubstitutionVariable):
 
 class DebUpstreamBaseVariable(DebUpstreamVariable):
 
-    basename = "{debupstream-base}"
+    basename = "debupstream-base"
     version_regex = lazy_regex.lazy_compile(r'([~+])(svn[0-9]+|bzr[0-9]+|git[0-9a-f]+)')
 
     def get(self):
