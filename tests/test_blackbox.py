@@ -218,7 +218,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree_contents([("source/debian/rules",
                     "#!/usr/bin/make -f\nclean:\n"),
                 ("source/debian/control",
-                    "Source: foo\nMaintainer: maint maint@maint.org\n")])
+                    "Source: foo\nMaintainer: maint maint@maint.org\n\n"
+                    "Package: foo\nArchitecture: all\n")])
         source.add(["a", "debian/", "debian/rules", "debian/control"])
         revid = source.commit("one")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
@@ -251,7 +252,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree_contents([("source/debian/rules",
                     "#!/usr/bin/make -f\nclean:\n"),
                 ("source/debian/control",
-                    "Source: foo\nMaintainer: maint maint@maint.org\n")])
+                    "Source: foo\nMaintainer: maint maint@maint.org\n\n"
+                    "Package: foo\nArchitecture: all\n")])
         source.add(["a", "debian/", "debian/rules", "debian/control"])
         source.commit("one")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
@@ -268,7 +270,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree_contents([("source/debian/rules",
                     "#!/usr/bin/make -f\nclean:\n"),
                 ("source/debian/control",
-                    "Source: foo\nMaintainer: maint maint@maint.org\n")])
+                    "Source: foo\nMaintainer: maint maint@maint.org\n"
+                    "\nPackage: foo\nArchitecture: all\n")])
         source.add(["a", "debian/", "debian/rules", "debian/control"])
         source.commit("one")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
@@ -321,7 +324,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             (os.path.join(path, "debian/rules"),
                 "#!/usr/bin/make -f\nclean:\n"),
             (os.path.join(path, "debian/control"),
-                "Source: package\nMaintainer: maint maint@maint.org\n"),
+                "Source: package\nMaintainer: maint maint@maint.org\n\n"
+                "Package: package\nArchitecture: all\n"),
             (os.path.join(path, "debian/changelog"),
                 cl_contents)
             ])
@@ -507,14 +511,48 @@ class BlackboxBuilderTests(TestCaseWithTransport):
     def test_cmd_dailydeb_with_pristine_orig_bz2_tarball(self):
         self.requireFeature(PristineTarFeature)
         self.make_simple_quilt_package()
-        pristine_tar_sha1 = self.make_upstream_version("0.1",
-            [("upstream/file", "content\n")], pristine_tar_format="bz2")
+        pristine_tar_sha1 = self.make_upstream_version("0.1", [
+            ("upstream/file", "content\n"),
+            ("upstream/a", "contents of source/a\n")],
+            pristine_tar_format="bz2")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version 0.1-1\nsource\n")])
+        wt = workingtree.WorkingTree.open("source")
+        self.build_tree([("source/upstream/")])
+        self.build_tree_contents([
+            ("source/upstream/file", "content\n"),
+            ("source/upstream/a", "contents of source/a\n")])
+        wt.add(["upstream", "upstream/file", "upstream/a"])
         out, err = self.run_bzr("dailydeb -q test.recipe working",
             retcode=0)
         self.assertPathExists("working/package_0.1.orig.tar.bz2")
         self.assertPathExists("working/package_0.1-1.debian.tar.gz")
+        self.assertEquals(
+            osutils.sha_file_by_name("working/package_0.1.orig.tar.bz2"),
+            pristine_tar_sha1)
+
+    def test_cmd_dailydeb_allow_fallback_to_native_with_orig_tarball(self):
+        self.requireFeature(PristineTarFeature)
+        self.make_simple_quilt_package()
+        pristine_tar_sha1 = self.make_upstream_version("0.1", [
+            ("upstream/file", "content\n"),
+            ("upstream/a", "contents of source/a\n")],
+            pristine_tar_format="bz2")
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
+                    "deb-version 0.1-1\nsource\n")])
+        wt = workingtree.WorkingTree.open("source")
+        self.build_tree([("source/upstream/")])
+        self.build_tree_contents([
+            ("source/upstream/file", "content\n"),
+            ("source/upstream/a", "contents of source/a\n")])
+        wt.add(["upstream", "upstream/file", "upstream/a"])
+        out, err = self.run_bzr(
+            "dailydeb --allow-fallback-to-native -q test.recipe working",
+            retcode=0)
+        self.assertPathExists("working/package_0.1.orig.tar.bz2")
+        self.assertPathExists("working/package_0.1-1.debian.tar.gz")
+        self.assertEquals("3.0 (quilt)\n",
+            open("source/debian/source/format", "r").read())
         self.assertEquals(
             osutils.sha_file_by_name("working/package_0.1.orig.tar.bz2"),
             pristine_tar_sha1)
@@ -610,7 +648,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source.commit("set source format")
 
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
-                    "deb-version 1\nsource\n")])
+                    "deb-version 1-1\nsource\n")])
         out, err = self.run_bzr(
             "dailydeb --allow-fallback-to-native -q test.recipe working", retcode=3)
         self.assertEquals(err, "bzr: ERROR: Unknown source format 2.0\n")
