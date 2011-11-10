@@ -671,33 +671,29 @@ class cmd_dailydeb(cmd_build):
                 working_basedir)
             # working_directory -> package_dir: after this debian stuff works.
             os.rename(working_directory, package_dir)
-            if no_build:
-                if manifest is not None:
-                    write_manifest_to_transport(manifest, base_branch,
-                        possible_transports)
-                return 0
-            current_format = get_source_format(package_dir)
-            if (package_version.debian_version is not None or
-                current_format == "3.0 (quilt)"):
-                # Non-native package
-                try:
-                    extract_upstream_tarball(base_branch.branch, package_name,
-                        package_version.upstream_version, working_basedir)
-                except errors.NoSuchTag, e:
-                    if not allow_fallback_to_native:
-                        raise errors.BzrCommandError(
-                            "Unable to find the upstream source. Import it "
-                            "as tag %s or build with "
-                            "--allow-fallback-to-native." % e.tag_name)
-                    else:
-                        force_native_format(package_dir, current_format)
             try:
-                build_source_package(package_dir,
-                        tgz_check=not allow_fallback_to_native)
-                if key_id is not None:
-                    sign_source_package(package_dir, key_id)
-                if dput is not None:
-                    dput_source_package(package_dir, dput)
+                current_format = get_source_format(package_dir)
+                if (package_version.debian_version is not None or
+                    current_format == "3.0 (quilt)"):
+                    # Non-native package
+                    try:
+                        extract_upstream_tarball(base_branch.branch, package_name,
+                            package_version.upstream_version, working_basedir)
+                    except errors.NoSuchTag, e:
+                        if not allow_fallback_to_native:
+                            raise errors.BzrCommandError(
+                                "Unable to find the upstream source. Import it "
+                                "as tag %s or build with "
+                                "--allow-fallback-to-native." % e.tag_name)
+                        else:
+                            force_native_format(package_dir, current_format)
+                if not no_build:
+                    build_source_package(package_dir,
+                            tgz_check=not allow_fallback_to_native)
+                    if key_id is not None:
+                        sign_source_package(package_dir, key_id)
+                    if dput is not None:
+                        dput_source_package(package_dir, dput)
             finally:
                 # package_dir -> working_directory
                 # FIXME: may fail in error unwind, masking the original exception.
