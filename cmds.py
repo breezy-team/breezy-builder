@@ -490,10 +490,13 @@ def debian_source_package_name(control_path):
     """Open a debian control file and extract the package name.
 
     """
-    with open(control_path, 'r') as f:
+    f = open(control_path, 'r')
+    try:
         control = deb822.Deb822(f)
         # Debian policy states package names are [a-z0-9][a-z0-9.+-]+ so ascii
         return control["Source"].encode("ascii")
+    finally:
+        f.close()
 
 
 def reconstruct_pristine_tar(dest, delta, dest_filename):
