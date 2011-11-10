@@ -55,7 +55,6 @@ from bzrlib.option import Option
 
 from bzrlib.plugins.builder.recipe import (
         BaseRecipeBranch,
-        DebUpstreamVariable,
         build_tree,
         RecipeParser,
         resolve_revisions,
@@ -182,10 +181,10 @@ def add_autobuild_changelog_entry(base_branch, basedir, package,
     if base_branch.format in (0.1, 0.2, 0.3):
         try:
             base_branch.substitute_changelog_vars(None, cl)
-        except SubstitutionUnavailable:
+        except SubstitutionUnavailable, e:
             raise errors.BzrCommandError("No previous changelog to "
                     "take the upstream version from as %s was "
-                    "used: %s." % (DebUpstreamVariable.name, reason))
+                    "used: %s: %s." % (e.name, e.reason, reason))
     # Use debian packaging environment variables
     # or default values if they don't exist
     if author_name is None or author_email is None:
@@ -333,12 +332,11 @@ def convert_3_0_quilt_to_native(path):
         f.close()
 
 
-def force_native_format(working_tree_path):
+def force_native_format(working_tree_path, current_format):
     """Make sure a package is a format that supports native packages.
 
     :param working_tree_path: Path to the package
     """
-    current_format = get_source_format(working_tree_path)
     if current_format == "3.0 (quilt)":
         convert_3_0_quilt_to_native(working_tree_path)
     elif current_format not in ("1.0", "3.0 (native)"):
@@ -675,7 +673,9 @@ class cmd_dailydeb(cmd_build):
                     write_manifest_to_transport(manifest, base_branch,
                         possible_transports)
                 return 0
-            if package_version.debian_version is not None:
+            current_format = get_source_format(package_dir)
+            if (package_version.debian_version is not None or
+                current_format == "3.0 (quilt)"):
                 # Non-native package
                 try:
                     extract_upstream_tarball(base_branch.branch, package_name,
@@ -686,8 +686,8 @@ class cmd_dailydeb(cmd_build):
                             "Unable to find the upstream source. Import it "
                             "as tag %s or build with "
                             "--allow-fallback-to-native." % e.tag_name)
-            if allow_fallback_to_native:
-                force_native_format(package_dir)
+                    else:
+                        force_native_format(package_dir, current_format)
             try:
                 build_source_package(package_dir,
                         tgz_check=not allow_fallback_to_native)
