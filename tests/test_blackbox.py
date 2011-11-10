@@ -26,13 +26,13 @@ from bzrlib import (
     )
 from bzrlib.branch import Branch
 from bzrlib.tests import (
-        TestCaseWithTransport,
-        TestSkipped,
-        )
-from bzrlib.tests.features import Feature
+    TestCaseWithTransport,
+    )
 
-
-from bzrlib.plugins.builder.tests import PristineTarFeature
+from bzrlib.plugins.builder.tests import (
+    Feature,
+    PristineTarFeature,
+    )
 
 try:
     from debian import changelog
