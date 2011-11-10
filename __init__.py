@@ -145,6 +145,16 @@ Format versions:
         resulting tree
 """
 
+from info import (
+    bzr_plugin_version as version_info,
+    )
+
+if version_info[3] == 'final':
+    version_string = '%d.%d.%d' % version_info[:3]
+else:
+    version_string = '%d.%d.%d%s%d' % version_info
+__version__ = version_string
+
 if __name__ == '__main__':
     import os
     import subprocess
