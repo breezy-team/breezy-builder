@@ -1036,7 +1036,8 @@ class BaseRecipeBranch(RecipeBranch):
             return
         revno_var = RevnoVariable(branch_name, branch, revid)
         self.deb_version = revno_var.replace(self.deb_version)
-        if self.format in (0.1, 0.2, 0.3):
+        if self.format < 0.4:
+            # The other variables were introduced in recipe format 0.4
             return
         svn_revno_var = SubversionRevnumVariable(branch_name, branch, revid)
         self.deb_version = svn_revno_var.replace(self.deb_version)
@@ -1066,7 +1067,8 @@ class BaseRecipeBranch(RecipeBranch):
         """
         debupstream_var = DebUpstreamVariable.from_changelog(branch_name, changelog)
         self.deb_version = debupstream_var.replace(self.deb_version)
-        if self.format in (0.1, 0.2, 0.3):
+        if self.format < 0.4:
+            # The other variables were introduced in recipe format 0.4
             return
         debupstreambase_var = DebUpstreamBaseVariable.from_changelog(
             branch_name, changelog)
