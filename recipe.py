@@ -84,10 +84,17 @@ class SubstitutionVariable(object):
         """Replace name with value."""
         raise NotImplementedError(self.replace)
 
+    @classmethod
+    def available_in(cls, format):
+        """Check if this variable is available in a particular format."""
+        raise NotImplementedError(cls.available_in)
+
 
 class SimpleSubstitutionVariable(SubstitutionVariable):
 
     name = None
+
+    minimum_format = None
 
     def replace(self, value):
         if not self.name in value:
@@ -96,6 +103,10 @@ class SimpleSubstitutionVariable(SubstitutionVariable):
 
     def get(self):
         raise NotImplementedError(self.value)
+
+    @classmethod
+    def available_in(self, format):
+        return (format >= self.minimum_format)
 
 
 class BranchSubstitutionVariable(SimpleSubstitutionVariable):
@@ -122,6 +133,8 @@ class TimeVariable(SimpleSubstitutionVariable):
 
     name = "{time}"
 
+    minimum_format = 0.1
+
     def __init__(self, time):
         self._time = time
 
@@ -133,6 +146,8 @@ class DateVariable(SimpleSubstitutionVariable):
 
     name = "{date}"
 
+    minimum_format = 0.1
+
     def __init__(self, time):
         self._time = time
 
@@ -143,6 +158,8 @@ class DateVariable(SimpleSubstitutionVariable):
 class DebUpstreamVariable(BranchSubstitutionVariable):
 
     basename = "debupstream"
+
+    minimum_format = 0.1
 
     def __init__(self, branch_name, version):
         super(DebUpstreamVariable, self).__init__(branch_name)
@@ -167,6 +184,8 @@ class DebVersionVariable(BranchSubstitutionVariable):
 
     basename = "debversion"
 
+    minimum_format = 0.4
+
     def __init__(self, branch_name, version):
         super(DebVersionVariable, self).__init__(branch_name)
         self._version = version
@@ -189,6 +208,7 @@ class DebUpstreamBaseVariable(DebUpstreamVariable):
 
     basename = "debupstream-base"
     version_regex = lazy_regex.lazy_compile(r'([~+])(svn[0-9]+|bzr[0-9]+|git[0-9a-f]+)')
+    minimum_format = 0.4
 
     def get(self):
         version = super(DebUpstreamBaseVariable, self).get()
@@ -200,6 +220,8 @@ class DebUpstreamBaseVariable(DebUpstreamVariable):
 
 class RevisionVariable(BranchSubstitutionVariable):
 
+    minimum_format = 0.1
+
     def __init__(self, branch_name, branch, revid):
         super(RevisionVariable, self).__init__(branch_name)
         self.branch = branch
@@ -209,6 +231,8 @@ class RevisionVariable(BranchSubstitutionVariable):
 class RevnoVariable(RevisionVariable):
 
     basename = "revno"
+
+    minimum_format = 0.1
 
     def get_revno(self):
         try:
@@ -235,6 +259,8 @@ class RevtimeVariable(RevisionVariable):
 
     basename = "revtime"
 
+    minimum_format = 0.4
+
     def get(self):
         rev = self.branch.repository.get_revision(self.revid)
         return time.strftime("%Y%m%d%H%M", time.gmtime(rev.timestamp))
@@ -243,6 +269,8 @@ class RevtimeVariable(RevisionVariable):
 class RevdateVariable(RevisionVariable):
 
     basename = "revdate"
+
+    minimum_format = 0.4
 
     def get(self):
         rev = self.branch.repository.get_revision(self.revid)
@@ -270,6 +298,8 @@ def extract_svn_revnum(rev):
 class SubversionRevnumVariable(RevisionVariable):
 
     basename = "svn-revno"
+
+    minimum_format = 0.4
 
     def get(self):
         rev = self.branch.repository.get_revision(self.revid)
@@ -304,6 +334,8 @@ class GitCommitVariable(RevisionVariable):
 
     basename = "git-commit"
 
+    minimum_format = 0.4
+
     def get(self):
         rev = self.branch.repository.get_revision(self.revid)
         try:
@@ -318,6 +350,8 @@ class GitCommitVariable(RevisionVariable):
 class LatestTagVariable(RevisionVariable):
 
     basename = "latest-tag"
+
+    minimum_format = 0.4
 
     def get(self):
         reverse_tag_dict = self.branch.tags.get_reverse_tag_dict()
@@ -359,14 +393,18 @@ def check_expanded_deb_version(base_branch):
             checked_version = checked_version.replace(
                 token.name, "")
     if "{" in checked_version:
-        available_tokens = [var.name for var in simple_vars]
+        available_tokens = [var.name for var in simple_vars if
+                            var.available_in(base_branch.format)]
         for var_kls in branch_vars:
+            if not var_kls.available_in(base_branch.format):
+                continue
             for name in base_branch.list_branch_names():
                 available_tokens.append(var_kls.determine_name(name))
             available_tokens.append(var_kls.determine_name(None))
         raise errors.BzrCommandError("deb-version not fully "
-                "expanded: %s. Valid substitutions are: %s"
-                % (base_branch.deb_version, available_tokens))
+                "expanded: %s. Valid substitutions in recipe format %s are: %s"
+                % (base_branch.deb_version, base_branch.format,
+                    available_tokens))
 
 
 class CommandFailedError(errors.BzrError):
@@ -1028,6 +1066,8 @@ class BaseRecipeBranch(RecipeBranch):
         """
         debupstream_var = DebUpstreamVariable.from_changelog(branch_name, changelog)
         self.deb_version = debupstream_var.replace(self.deb_version)
+        if self.format in (0.1, 0.2, 0.3):
+            return
         debupstreambase_var = DebUpstreamBaseVariable.from_changelog(
             branch_name, changelog)
         self.deb_version = debupstreambase_var.replace(self.deb_version)
