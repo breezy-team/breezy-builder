@@ -654,6 +654,33 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertEqual(source1_rev_id, base_branch.revid)
         self.assertEqual(source2_rev_id, merged_branch.revid)
 
+    def test_build_tree_implicit_dir(self):
+        # Branches nested into non-existant directories trigger creation of
+        # those directories.
+        source1 = self.make_source_branch("source1")
+        source2 = self.make_source_branch("source2")
+        source3 = self.make_source_branch("source3")
+        self.build_tree_contents([
+            ("source2/file", "new file"),
+            ("source3/yetanotherfile", "rugby")])
+        source2.add(["file"])
+        source2.commit("two")
+        source3.add(["yetanotherfile"])
+        source3.commit("three")
+        base_branch = BaseRecipeBranch("source1", "1", 0.4)
+        merged_branch_2 = RecipeBranch("merged", "source2")
+        # Merge source2 into path implicit/b
+        base_branch.nest_part_branch(merged_branch_2, ".",
+            target_subdir="implicit/b")
+        # Merge source3 into path implicit/moreimplicit/c
+        merged_branch_3 = RecipeBranch("merged", "source3")
+        base_branch.nest_part_branch(merged_branch_3, ".",
+            target_subdir="moreimplicit/another/c")
+        build_tree(base_branch, "target")
+        self.check_file_contents("target/implicit/b/file", "new file")
+        self.check_file_contents("target/moreimplicit/another/c/yetanotherfile",
+            "rugby")
+
     def test_build_tree_nest_part(self):
         """A recipe can specify a merge of just part of an unrelated tree."""
         source1 = self.make_source_branch("source1")

@@ -596,6 +596,14 @@ def nest_part_branch(child_branch, tree_to, br_to, subpath, target_subdir=None):
         try:
             if target_subdir is None:
                 target_subdir = os.path.basename(subpath)
+            # Create any missing parent directories
+            target_subdir_parent = os.path.dirname(target_subdir)
+            missing = []
+            while tree_to.path2id(target_subdir_parent) is None:
+                missing.append(target_subdir_parent)
+                target_subdir_parent = os.path.dirname(target_subdir_parent)
+            for path in reversed(missing):
+                tree_to.mkdir(path)
             merger = MergeIntoMerger(this_tree=tree_to, other_tree=other_tree,
                 other_branch=child_branch.branch, target_subdir=target_subdir,
                 source_subpath=subpath, other_rev_id=child_branch.revid)
