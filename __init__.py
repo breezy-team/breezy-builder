@@ -123,10 +123,31 @@ on various things when the recipe is processed:
   * {revno} will be the revno of the base branch (the first specified).
   * {revno:<branch name>} will be substituted with the revno for the
     branch named <branch name> in the recipe.
-  * {debupstream} will be replaced by the upstream portion of the version
-    number taken from debian/changelog in the final tree. If when the
-    tree is built the top of debian/changelog has a version number of
-    "1.0-1" then this would evaluate to "1.0".
+  * {debupstream}/{debupstream:<branch name>} will be replaced by the upstream
+    portion of the version number taken from debian/changelog in the branch.
+    For example, if debian/changelog has a version number of "1.0-1" then this
+    would evaluate to "1.0".
+  * {debupstream-base}/{debupstream-base:<branch name>} will be replaced by the
+    upstream portion of the version number taken from debian/changelog in the
+    branch, with any VCS markers stripped.  For example, if debian/changelog
+    has a version number of "1.0~bzr43-1" then this would evaluate to "1.0~".
+    For any upstream versions without a VCS marker, a "+" is added to the
+    version ("1.0-1" becomes "1.0+").
+  * {debversion}/{debversion:<branch name>} will be substituted with
+    the exact version string from debian/changelog in the branch.
+  * {revtime}/{revtime:<branch name>} will be substituted with the date and
+    time of the revision that was built, such as 201108191512.
+  * {revdate}/{revdate:<branch name>} will be substituted with the date
+    of the revision that was built, such as 20111222.
+  * {latest-tag}/{latest-tag:<branch name>} will be replaced with the
+    name of the tag found on the most recent revision in the
+    branch mainline that has a tag.
+  * {git-commit}/{git-commit:<branch name>} will be substituted with the last 7
+    characters of the SHA1 checksum of the revision that was built, if the
+    revision was imported from a Git repository.
+  * {svn-revno}/{svn-revno:<branch name>} will be substituted with the
+    Subversion revision number of the revision that was built, if the
+    revision was imported from a Subversion repository.
 
 Instruction syntax summary:
 
