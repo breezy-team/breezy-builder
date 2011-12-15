@@ -542,7 +542,8 @@ def _resolve_revisions_recurse(new_branch, substitute_branch_vars,
     new_branch.branch.lock_read()
     try:
         new_branch.resolve_revision_id()
-        substitute_branch_vars(new_branch.name, new_branch.branch, new_branch.revid)
+        if substitute_branch_vars is not None:
+            substitute_branch_vars(new_branch.name, new_branch.branch, new_branch.revid)
         if (if_changed_from is not None
                 and (new_branch.revspec is not None
                         or if_changed_from.revspec is not None)):
@@ -571,10 +572,11 @@ def _resolve_revisions_recurse(new_branch, substitute_branch_vars,
         new_branch.branch.unlock()
 
 
-def resolve_revisions(base_branch, if_changed_from=None):
+def resolve_revisions(base_branch, if_changed_from=None, substitute_branch_vars=None):
     """Resolve all the unknowns in base_branch.
 
-    This walks the RecipeBranch and substitutes in revnos and deb_version.
+    This walks the RecipeBranch and calls substitute_branch_vars for
+    each child branch.
 
     If if_changed_from is not None then it should be a second RecipeBranch
     to compare base_branch against. If the shape, or the revision ids differ
@@ -582,6 +584,8 @@ def resolve_revisions(base_branch, if_changed_from=None):
 
     :param base_branch: the RecipeBranch we plan to build.
     :param if_changed_from: the RecipeBranch that we want to compare against.
+    :param substitute_branch_vars: Callable called for
+        each branch with (name, bzr branch and last revision)
     :return: False if if_changed_from is not None, and the shape and revisions
         of the two branches don't differ. True otherwise.
     """
@@ -592,12 +596,10 @@ def resolve_revisions(base_branch, if_changed_from=None):
     if changed:
         if_changed_from_revisions = None
     changed_revisions = _resolve_revisions_recurse(base_branch,
-            base_branch.substitute_branch_vars,
+            substitute_branch_vars,
             if_changed_from=if_changed_from_revisions)
     if not changed:
         changed = changed_revisions
-    from bzrlib.plugins.builder.deb_version import check_expanded_deb_version
-    check_expanded_deb_version(base_branch)
     if if_changed_from is not None and not changed:
         return False
     return True
