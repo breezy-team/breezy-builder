@@ -600,6 +600,7 @@ class cmd_dailydeb(cmd_build):
             if_changed_from=None, package=None, distribution=None,
             dput=None, key_id=None, no_build=None, watch_ppa=False,
             append_version=None, safe=False, allow_fallback_to_native=False):
+        from bzrlib.plugins.builder.deb_util import target_from_dput
 
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
@@ -717,21 +718,4 @@ class cmd_dailydeb(cmd_build):
         if recipe_name.endswith(".recipe"):
             recipe_name = recipe_name[:-len(".recipe")]
         return package or recipe_name
-
-
-def target_from_dput(dput):
-    """Convert a dput specification to a LP API specification.
-
-    :param dput: A dput command spec like ppa:team-name.
-    :return: A LP API target like team-name/ppa.
-    """
-    ppa_prefix = 'ppa:'
-    if not dput.startswith(ppa_prefix):
-        raise errors.BzrCommandError('%r does not appear to be a PPA. '
-            'A dput target like \'%suser[/name]\' must be used.'
-            % (dput, ppa_prefix))
-    base, _, suffix = dput[len(ppa_prefix):].partition('/')
-    if not suffix:
-        suffix = 'ppa'
-    return base, suffix
 
