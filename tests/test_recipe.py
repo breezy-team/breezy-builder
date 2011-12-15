@@ -32,6 +32,8 @@ from bzrlib.plugins.builder.deb_version import (
         DebUpstreamVariable,
         DebVersionVariable,
         check_expanded_deb_version,
+        substitute_branch_vars,
+        substitute_time,
         )
 from bzrlib.plugins.builder.recipe import (
         BaseRecipeBranch,
@@ -972,7 +974,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
                 revspec="revid:%s" % revid)
         self.assertEqual(False, resolve_revisions(branch1,
             if_changed_from=branch2,
-            substitute_branch_vars=branch1.substitute_branch_vars))
+            substitute_branch_vars=substitute_branch_vars))
         self.assertEqual("source", branch1.url)
         self.assertEqual(revid, branch1.revid)
         self.assertEqual("1", branch1.revspec)
@@ -986,7 +988,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
                 revspec="revid:%s" % revid)
         self.assertEqual(False, resolve_revisions(branch1,
             if_changed_from=branch2,
-            substitute_branch_vars=branch1.substitute_branch_vars))
+            substitute_branch_vars=substitute_branch_vars))
         self.assertEqual("source", branch1.url)
         self.assertEqual(revid, branch1.revid)
         self.assertEqual(None, branch1.revspec)
@@ -1010,7 +1012,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         branch4.nest_branch("foo", branch5)
         self.assertEqual(False, resolve_revisions(branch1,
                 if_changed_from=branch4,
-                substitute_branch_vars=branch1.substitute_branch_vars))
+                substitute_branch_vars=substitute_branch_vars))
         self.assertEqual("source", branch1.url)
         self.assertEqual(revid, branch1.revid)
         self.assertEqual(None, branch1.revspec)
@@ -1024,7 +1026,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
                 revspec="revid:foo")
         self.assertEqual(True, resolve_revisions(branch1,
             if_changed_from=branch2,
-            substitute_branch_vars=branch1.substitute_branch_vars))
+            substitute_branch_vars=substitute_branch_vars))
         self.assertEqual("source", branch1.url)
         self.assertEqual(revid, branch1.revid)
         self.assertEqual("1", branch1.revspec)
@@ -1040,7 +1042,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         branch1.nest_branch("foo", branch3)
         self.assertEqual(True, resolve_revisions(branch1,
             if_changed_from=branch2,
-            substitute_branch_vars=branch1.substitute_branch_vars))
+            substitute_branch_vars=substitute_branch_vars))
         self.assertEqual("source", branch1.url)
         self.assertEqual(revid, branch1.revid)
         self.assertEqual("1", branch1.revspec)
@@ -1055,7 +1057,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         branch2.run_command("touch test2")
         self.assertEqual(True, resolve_revisions(branch1,
             if_changed_from=branch2,
-            substitute_branch_vars=branch1.substitute_branch_vars))
+            substitute_branch_vars=substitute_branch_vars))
         self.assertEqual("source", branch1.url)
 
     def test_unchanged_command(self):
@@ -1067,7 +1069,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         branch2.run_command("touch test1")
         self.assertEqual(False, resolve_revisions(branch1,
             if_changed_from=branch2,
-            substitute_branch_vars=branch1.substitute_branch_vars))
+            substitute_branch_vars=substitute_branch_vars))
         self.assertEqual("source", branch1.url)
 
     def test_substitute(self):
@@ -1079,7 +1081,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         branch2 = RecipeBranch("packaging", "source")
         branch1.nest_branch("debian", branch2)
         self.assertEqual(True, resolve_revisions(branch1,
-           substitute_branch_vars=branch1.substitute_branch_vars))
+           substitute_branch_vars=substitute_branch_vars))
         self.assertEqual("source", branch1.url)
         self.assertEqual(revid1, branch1.revid)
         self.assertEqual("1", branch1.revspec)
@@ -1093,7 +1095,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source.commit("two")
         branch1 = BaseRecipeBranch("source", "{debupstream}-{revno}", 0.2)
         resolve_revisions(branch1,
-            substitute_branch_vars=branch1.substitute_branch_vars)
+            substitute_branch_vars=substitute_branch_vars)
         self.assertEqual("{debupstream}-2", branch1.deb_version)
 
     def test_subsitute_not_fully_expanded(self):
@@ -1101,7 +1103,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source.commit("one")
         source.commit("two")
         branch1 = BaseRecipeBranch("source", "{revno:packaging}", 0.2)
-        resolve_revisions(branch1, substitute_branch_vars=branch1.substitute_branch_vars)
+        resolve_revisions(branch1, substitute_branch_vars=substitute_branch_vars)
         self.assertRaises(errors.BzrCommandError, check_expanded_deb_version, branch1)
 
     def test_substitute_svn_not_svn(self):
@@ -1111,7 +1113,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source.commit("two")
         branch1 = BaseRecipeBranch("source", "foo-{svn-revno}", 0.4)
         e = self.assertRaises(errors.BzrCommandError, resolve_revisions,
-            branch1, None, branch1.substitute_branch_vars)
+            branch1, None, substitute_branch_vars)
         self.assertTrue(str(e).startswith("unable to expand {svn-revno} "),
             e)
 
@@ -1122,7 +1124,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source.commit("two",
             rev_id="svn-v4:be7e6eca-30d4-0310-a8e5-ac0d63af7070:trunk:5344")
         branch1 = BaseRecipeBranch("source", "foo-{svn-revno}", 0.4)
-        resolve_revisions(branch1, substitute_branch_vars=branch1.substitute_branch_vars)
+        resolve_revisions(branch1, substitute_branch_vars=substitute_branch_vars)
         self.assertEqual("foo-5344", branch1.deb_version)
 
     def test_substitute_git_not_git(self):
@@ -1131,7 +1133,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source.commit("two")
         branch1 = BaseRecipeBranch("source", "foo-{git-commit}", 0.4)
         e = self.assertRaises(errors.BzrCommandError, resolve_revisions,
-            branch1, None, branch1.substitute_branch_vars)
+            branch1, None, substitute_branch_vars)
         self.assertTrue(str(e).startswith("unable to expand {git-commit} "),
             e)
 
@@ -1141,7 +1143,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
             rev_id="git-v1:a029d7b2cc83c26a53d8b2a24fa12c340fcfac58")
         branch1 = BaseRecipeBranch("source", "foo-{git-commit}", 0.4)
         resolve_revisions(branch1,
-            substitute_branch_vars=branch1.substitute_branch_vars)
+            substitute_branch_vars=substitute_branch_vars)
         self.assertEqual("foo-a029d7b", branch1.deb_version)
 
     def test_latest_tag(self):
@@ -1151,7 +1153,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source.commit("two")
         branch1 = BaseRecipeBranch("source", "foo-{latest-tag}", 0.4)
         resolve_revisions(branch1,
-            substitute_branch_vars=branch1.substitute_branch_vars)
+            substitute_branch_vars=substitute_branch_vars)
         self.assertEqual("foo-millbank", branch1.deb_version)
 
     def test_latest_tag_no_tag(self):
@@ -1161,7 +1163,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         branch1 = BaseRecipeBranch("source", "foo-{latest-tag}", 0.4)
         e = self.assertRaises(errors.BzrCommandError,
             resolve_revisions, branch1,
-            substitute_branch_vars=branch1.substitute_branch_vars)
+            substitute_branch_vars=substitute_branch_vars)
         self.assertTrue(str(e).startswith("No tags set on branch None mainline"),
             e)
 
@@ -1172,7 +1174,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source.commit("two", timestamp=1307708628, timezone=0)
         branch1 = BaseRecipeBranch("source", "foo-{revdate}", 0.4)
         resolve_revisions(branch1,
-                substitute_branch_vars=branch1.substitute_branch_vars)
+                substitute_branch_vars=substitute_branch_vars)
         self.assertEqual("foo-20110610", branch1.deb_version)
 
     def test_substitute_revtime(self):
@@ -1182,7 +1184,7 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         source.commit("two", timestamp=1307708628, timezone=0)
         branch1 = BaseRecipeBranch("source", "foo-{revtime}", 0.4)
         resolve_revisions(branch1,
-                substitute_branch_vars=branch1.substitute_branch_vars)
+                substitute_branch_vars=substitute_branch_vars)
         self.assertEqual("foo-201106101223", branch1.deb_version)
 
 
@@ -1366,37 +1368,37 @@ class RecipeBranchTests(TestCaseWithTransport):
     def test_substitute_time(self):
         time = datetime.datetime.utcfromtimestamp(1)
         base_branch = BaseRecipeBranch("base_url", "1-{time}", 0.2)
-        base_branch.substitute_time(time)
+        substitute_time(base_branch, time)
         self.assertEqual("1-197001010000", base_branch.deb_version)
-        base_branch.substitute_time(time)
+        substitute_time(base_branch, time)
         self.assertEqual("1-197001010000", base_branch.deb_version)
 
     def test_substitute_date(self):
         time = datetime.datetime.utcfromtimestamp(1)
         base_branch = BaseRecipeBranch("base_url", "1-{date}", 0.2)
-        base_branch.substitute_time(time)
+        substitute_time(base_branch, time)
         self.assertEqual("1-19700101", base_branch.deb_version)
-        base_branch.substitute_time(time)
+        substitute_time(base_branch, time)
         self.assertEqual("1-19700101", base_branch.deb_version)
 
     def test_substitute_branch_vars(self):
         base_branch = BaseRecipeBranch("base_url", "1", 0.2)
         wt = self.make_branch_and_tree("br")
         revid = wt.commit("acommit")
-        base_branch.substitute_branch_vars(None, wt.branch, revid)
+        substitute_branch_vars(base_branch, None, wt.branch, revid)
         self.assertEqual("1", base_branch.deb_version)
-        base_branch.substitute_branch_vars(None, wt.branch, revid)
-        self.assertEqual("1", base_branch.deb_version)
-        base_branch = BaseRecipeBranch("base_url", "{revno}", 0.2)
-        base_branch.substitute_branch_vars(None, wt.branch, revid)
+        substitute_branch_vars(base_branch, None, wt.branch, revid)
         self.assertEqual("1", base_branch.deb_version)
         base_branch = BaseRecipeBranch("base_url", "{revno}", 0.2)
-        base_branch.substitute_branch_vars("foo", wt.branch, revid)
+        substitute_branch_vars(base_branch, None, wt.branch, revid)
+        self.assertEqual("1", base_branch.deb_version)
+        base_branch = BaseRecipeBranch("base_url", "{revno}", 0.2)
+        substitute_branch_vars(base_branch, "foo", wt.branch, revid)
         self.assertEqual("{revno}", base_branch.deb_version)
-        base_branch.substitute_branch_vars("foo", wt.branch, revid)
+        substitute_branch_vars(base_branch, "foo", wt.branch, revid)
         self.assertEqual("{revno}", base_branch.deb_version)
         base_branch = BaseRecipeBranch("base_url", "{revno:foo}", 0.2)
-        base_branch.substitute_branch_vars("foo", wt.branch, revid)
+        substitute_branch_vars(base_branch, "foo", wt.branch, revid)
         self.assertEqual("1", base_branch.deb_version)
 
     def test_substitute_branch_vars_debupstream(self):
@@ -1411,12 +1413,12 @@ class RecipeBranchTests(TestCaseWithTransport):
         revid2 = wt.commit("with changelog")
         base_branch = BaseRecipeBranch("base_url", "{debupstream}", 0.4)
         # No changelog file, so no substitution
-        base_branch.substitute_branch_vars(None, wt.branch, revid1)
+        substitute_branch_vars(base_branch, None, wt.branch, revid1)
         self.assertEqual("{debupstream}", base_branch.deb_version)
-        base_branch.substitute_branch_vars(None, wt.branch, revid2)
+        substitute_branch_vars(base_branch, None, wt.branch, revid2)
         self.assertEqual("0.1", base_branch.deb_version)
         base_branch = BaseRecipeBranch("base_url", "{debupstream:tehname}", 0.4)
-        base_branch.substitute_branch_vars("tehname", wt.branch, revid2)
+        substitute_branch_vars(base_branch, "tehname", wt.branch, revid2)
         self.assertEqual("0.1", base_branch.deb_version)
 
     def test_substitute_branch_vars_debupstream_pre_0_4(self):
@@ -1431,7 +1433,7 @@ class RecipeBranchTests(TestCaseWithTransport):
         # In recipe format < 0.4 {debupstream} gets replaced from the resulting
         # tree, not from the branch vars.
         base_branch = BaseRecipeBranch("base_url", "{debupstream}", 0.2)
-        base_branch.substitute_branch_vars(None, wt.branch, revid)
+        substitute_branch_vars(base_branch, None, wt.branch, revid)
         self.assertEqual("{debupstream}", base_branch.deb_version)
 
     def test_list_branch_names(self):

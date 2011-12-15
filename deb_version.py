@@ -20,10 +20,24 @@ from bzrlib import (
 
 from bzrlib.plugins.builder.recipe import (
     BranchSubstitutionVariable,
+    DateVariable,
+    GitCommitVariable,
+    LatestTagVariable,
+    RevdateVariable,
+    RevtimeVariable,
+    RevnoVariable,
     SubstitutionUnavailable,
+    SubversionRevnumVariable,
+    TimeVariable,
     branch_vars,
     simple_vars,
     )
+try:
+    from debian import changelog
+except ImportError:
+    # In older versions of python-debian the main package was named 
+    # debian_bundle
+    from debian_bundle import changelog
 
 
 class DebUpstreamVariable(BranchSubstitutionVariable):
@@ -123,4 +137,69 @@ def check_expanded_deb_version(base_branch):
                     available_tokens))
 
 
+def substitute_branch_vars(base_branch, branch_name, branch, revid):
+    """Substitute the branch variables for the given branch name in deb_version.
 
+    Where deb_version has a place to substitute the revno for a branch
+    this will substitute it for the given branch name.
+
+    :param branch_name: the name of the RecipeBranch to substitute.
+    :param branch: Branch object for the branch
+    :param revid: Revision id in the branch for which to return the revno
+    """
+    if base_branch.deb_version is None:
+        return
+    revno_var = RevnoVariable(branch_name, branch, revid)
+    base_branch.deb_version = revno_var.replace(base_branch.deb_version)
+    if base_branch.format < 0.4:
+        # The other variables were introduced in recipe format 0.4
+        return
+    svn_revno_var = SubversionRevnumVariable(branch_name, branch, revid)
+    base_branch.deb_version = svn_revno_var.replace(base_branch.deb_version)
+    git_commit_var = GitCommitVariable(branch_name, branch, revid)
+    base_branch.deb_version = git_commit_var.replace(base_branch.deb_version)
+    latest_tag_var = LatestTagVariable(branch_name, branch, revid)
+    base_branch.deb_version = latest_tag_var.replace(base_branch.deb_version)
+    revdate_var = RevdateVariable(branch_name, branch, revid)
+    base_branch.deb_version = revdate_var.replace(base_branch.deb_version)
+    revtime_var = RevtimeVariable(branch_name, branch, revid)
+    base_branch.deb_version = revtime_var.replace(base_branch.deb_version)
+    tree = branch.repository.revision_tree(revid)
+    cl_file_id = tree.path2id("debian/changelog")
+    if cl_file_id is not None:
+        tree.lock_read()
+        try:
+            cl = changelog.Changelog(tree.get_file(cl_file_id))
+            substitute_changelog_vars(base_branch, branch_name, cl)
+        finally:
+            tree.unlock()
+
+
+def substitute_changelog_vars(base_branch, branch_name, changelog):
+    """Substitute variables related from a changelog.
+
+    :param branch_name: Branch name (None for root branch)
+    :param changelog: Changelog object to use
+    """
+    from bzrlib.plugins.builder.deb_version import DebUpstreamVariable, DebUpstreamBaseVariable, DebVersionVariable
+    debupstream_var = DebUpstreamVariable.from_changelog(branch_name, changelog)
+    base_branch.deb_version = debupstream_var.replace(base_branch.deb_version)
+    if base_branch.format < 0.4:
+        # The other variables were introduced in recipe format 0.4
+        return
+    debupstreambase_var = DebUpstreamBaseVariable.from_changelog(
+        branch_name, changelog)
+    base_branch.deb_version = debupstreambase_var.replace(base_branch.deb_version)
+    pkgversion_var = DebVersionVariable.from_changelog(branch_name, changelog)
+    base_branch.deb_version = pkgversion_var.replace(base_branch.deb_version)
+
+
+def substitute_time(base_branch, time):
+    """Substitute the time in to deb_version if needed.
+
+    :param time: a datetime.datetime with the desired time.
+    """
+    if base_branch.deb_version is None:
+        return
+    base_branch.deb_version = TimeVariable(time).replace(base_branch.deb_version)
+    base_branch.deb_version = DateVariable(time).replace(base_branch.deb_version)

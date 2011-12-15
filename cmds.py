@@ -195,17 +195,21 @@ class cmd_build(Command):
             if revspec is not None:
                 raise errors.BzrCommandError("--revision only supported when "
                     "building from branch")
-        time = datetime.datetime.utcnow()
-        base_branch.substitute_time(time)
         old_recipe = None
         if if_changed_from is not None:
             old_recipe = get_old_recipe(if_changed_from, possible_transports)
         # Save the unsubstituted version for dailydeb.
         self._template_version = base_branch.deb_version
         if base_branch.deb_version is not None:
-            from bzrlib.plugins.builder.deb_version import check_expanded_deb_version
+            from bzrlib.plugins.builder.deb_version import (
+                check_expanded_deb_version,
+                substitute_branch_vars,
+                substitute_time,
+                )
+            time = datetime.datetime.utcnow()
+            substitute_time(base_branch, time)
             changed = resolve_revisions(base_branch, if_changed_from=old_recipe,
-                substitute_branch_vars=base_branch.substitute_branch_vars)
+                substitute_branch_vars=substitute_branch_vars)
             check_expanded_deb_version(base_branch)
         else:
             changed = resolve_revisions(base_branch, if_changed_from=old_recipe)

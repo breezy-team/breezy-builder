@@ -30,6 +30,7 @@ from bzrlib import (
     trace,
     )
 
+from bzrlib.plugins.builder.deb_version import substitute_changelog_vars
 from bzrlib.plugins.builder.recipe import (
     SubstitutionUnavailable,
     )
@@ -185,7 +186,7 @@ def add_autobuild_changelog_entry(base_branch, basedir, package,
             distribution = DEFAULT_UBUNTU_DISTRIBUTION
     if base_branch.format in (0.1, 0.2, 0.3):
         try:
-            base_branch.substitute_changelog_vars(None, cl)
+            substitute_changelog_vars(base_branch, None, cl)
         except SubstitutionUnavailable, e:
             raise errors.BzrCommandError("No previous changelog to "
                     "take the upstream version from as %s was "

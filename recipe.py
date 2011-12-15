@@ -595,8 +595,13 @@ def resolve_revisions(base_branch, if_changed_from=None, substitute_branch_vars=
     if_changed_from_revisions = if_changed_from
     if changed:
         if_changed_from_revisions = None
+
+    if substitute_branch_vars is not None:
+        real_subsitute_branch_vars = lambda n, b, r: substitute_branch_vars(base_branch, n, b, r)
+    else:
+        real_subsitute_branch_vars = None
     changed_revisions = _resolve_revisions_recurse(base_branch,
-            substitute_branch_vars,
+            real_subsitute_branch_vars,
             if_changed_from=if_changed_from_revisions)
     if not changed:
         changed = changed_revisions
@@ -929,72 +934,6 @@ class BaseRecipeBranch(RecipeBranch):
         super(BaseRecipeBranch, self).__init__(None, url, revspec=revspec)
         self.deb_version = deb_version
         self.format = format
-
-    def substitute_branch_vars(self, branch_name, branch, revid):
-        """Substitute the branch variables for the given branch name in deb_version.
-
-        Where deb_version has a place to substitute the revno for a branch
-        this will substitute it for the given branch name.
-
-        :param branch_name: the name of the RecipeBranch to substitute.
-        :param branch: Branch object for the branch
-        :param revid: Revision id in the branch for which to return the revno
-        """
-        if self.deb_version is None:
-            return
-        revno_var = RevnoVariable(branch_name, branch, revid)
-        self.deb_version = revno_var.replace(self.deb_version)
-        if self.format < 0.4:
-            # The other variables were introduced in recipe format 0.4
-            return
-        svn_revno_var = SubversionRevnumVariable(branch_name, branch, revid)
-        self.deb_version = svn_revno_var.replace(self.deb_version)
-        git_commit_var = GitCommitVariable(branch_name, branch, revid)
-        self.deb_version = git_commit_var.replace(self.deb_version)
-        latest_tag_var = LatestTagVariable(branch_name, branch, revid)
-        self.deb_version = latest_tag_var.replace(self.deb_version)
-        revdate_var = RevdateVariable(branch_name, branch, revid)
-        self.deb_version = revdate_var.replace(self.deb_version)
-        revtime_var = RevtimeVariable(branch_name, branch, revid)
-        self.deb_version = revtime_var.replace(self.deb_version)
-        tree = branch.repository.revision_tree(revid)
-        cl_file_id = tree.path2id("debian/changelog")
-        if cl_file_id is not None:
-            from bzrlib.plugins.builder.deb_util import changelog
-            tree.lock_read()
-            try:
-                cl = changelog.Changelog(tree.get_file(cl_file_id))
-                self.substitute_changelog_vars(branch_name, cl)
-            finally:
-                tree.unlock()
-
-    def substitute_changelog_vars(self, branch_name, changelog):
-        """Substitute variables related from a changelog.
-
-        :param branch_name: Branch name (None for root branch)
-        :param changelog: Changelog object to use
-        """
-        from bzrlib.plugins.builder.deb_version import DebUpstreamVariable, DebUpstreamBaseVariable, DebVersionVariable
-        debupstream_var = DebUpstreamVariable.from_changelog(branch_name, changelog)
-        self.deb_version = debupstream_var.replace(self.deb_version)
-        if self.format < 0.4:
-            # The other variables were introduced in recipe format 0.4
-            return
-        debupstreambase_var = DebUpstreamBaseVariable.from_changelog(
-            branch_name, changelog)
-        self.deb_version = debupstreambase_var.replace(self.deb_version)
-        pkgversion_var = DebVersionVariable.from_changelog(branch_name, changelog)
-        self.deb_version = pkgversion_var.replace(self.deb_version)
-
-    def substitute_time(self, time):
-        """Substitute the time in to deb_version if needed.
-
-        :param time: a datetime.datetime with the desired time.
-        """
-        if self.deb_version is None:
-            return
-        self.deb_version = TimeVariable(time).replace(self.deb_version)
-        self.deb_version = DateVariable(time).replace(self.deb_version)
 
     def _add_child_branches_to_manifest(self, child_branches, indent_level):
         manifest = ""
