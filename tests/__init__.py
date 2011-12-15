@@ -46,6 +46,7 @@ def test_suite():
     testmod_names = [
             'blackbox',
             'deb_util',
+            'deb_version',
             'recipe',
             ]
     suite.addTest(loader.loadTestsFromModuleNames(["%s.test_%s" % (__name__, i)
