@@ -153,6 +153,33 @@ def get_recipe_from_location(location, possible_transports=None):
     return basename, recipe_transport.get(basename)
 
 
+def get_prepared_branch_from_location(location,
+        safe=False, possible_transports=None,
+        revspec=None):
+    """Common code to prepare a branch and do substitutions.
+
+    :param location: a path to a recipe file or branch to work from.
+    :param if_changed_from: an optional location of a manifest to
+        compare the recipe against.
+    :param safe: if True, reject recipes that would cause arbitrary code
+        execution.
+    :return: A tuple with (retcode, base_branch). If retcode is None
+        then the command execution should continue.
+    """
+    try:
+        base_branch = get_branch_from_recipe_location(location, safe=safe,
+            possible_transports=possible_transports)
+    except (_mod_transport.LateReadError, errors.ReadError):
+        # Presume unable to read means location is a directory rather than a file
+        base_branch = get_branch_from_branch_location(location,
+            possible_transports=possible_transports)
+    else:
+        if revspec is not None:
+            raise errors.BzrCommandError("--revision only supported when "
+                "building from branch")
+    return base_branch
+
+
 class cmd_build(Command):
     """Build a tree based on a branch or a recipe.
 
@@ -171,53 +198,6 @@ class cmd_build(Command):
             'revision',
                     ]
 
-    def _get_prepared_branch_from_location(self, location,
-            if_changed_from=None, safe=False, possible_transports=None,
-            revspec=None):
-        """Common code to prepare a branch and do substitutions.
-
-        :param location: a path to a recipe file or branch to work from.
-        :param if_changed_from: an optional location of a manifest to
-            compare the recipe against.
-        :param safe: if True, reject recipes that would cause arbitrary code
-            execution.
-        :return: A tuple with (retcode, base_branch). If retcode is None
-            then the command execution should continue.
-        """
-        try:
-            base_branch = get_branch_from_recipe_location(location, safe=safe,
-                possible_transports=possible_transports)
-        except (_mod_transport.LateReadError, errors.ReadError):
-            # Presume unable to read means location is a directory rather than a file
-            base_branch = get_branch_from_branch_location(location,
-                possible_transports=possible_transports)
-        else:
-            if revspec is not None:
-                raise errors.BzrCommandError("--revision only supported when "
-                    "building from branch")
-        old_recipe = None
-        if if_changed_from is not None:
-            old_recipe = get_old_recipe(if_changed_from, possible_transports)
-        # Save the unsubstituted version for dailydeb.
-        self._template_version = base_branch.deb_version
-        if base_branch.deb_version is not None:
-            from bzrlib.plugins.builder.deb_version import (
-                check_expanded_deb_version,
-                substitute_branch_vars,
-                substitute_time,
-                )
-            time = datetime.datetime.utcnow()
-            substitute_time(base_branch, time)
-            changed = resolve_revisions(base_branch, if_changed_from=old_recipe,
-                substitute_branch_vars=substitute_branch_vars)
-            check_expanded_deb_version(base_branch)
-        else:
-            changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
-        if not changed:
-            trace.note("Unchanged")
-            return 0, base_branch
-        return None, base_branch
-
     def run(self, location, working_directory, manifest=None,
             if_changed_from=None, revision=None):
         if revision is not None and len(revision) > 0:
@@ -228,11 +208,16 @@ class cmd_build(Command):
         else:
             revspec = None
         possible_transports = []
-        result, base_branch = self._get_prepared_branch_from_location(location,
-            if_changed_from=if_changed_from,
+        base_branch = get_prepared_branch_from_location(location,
             possible_transports=possible_transports, revspec=revspec)
-        if result is not None:
-            return result
+        if if_changed_from is not None:
+            old_recipe = get_old_recipe(if_changed_from, possible_transports)
+        else:
+            old_recipe = None
+        changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
+        if not changed:
+            trace.note("Unchanged")
+            return 0
         manifest_path = manifest or os.path.join(working_directory,
                         "bzr-builder.manifest")
         build_tree(base_branch, working_directory)
@@ -240,7 +225,7 @@ class cmd_build(Command):
             possible_transports)
 
 
-class cmd_dailydeb(cmd_build):
+class cmd_dailydeb(Command):
     """Build a deb based on a 'recipe' or from a branch.
 
     See "bzr help builder" for more information on what a recipe is.
@@ -313,6 +298,11 @@ class cmd_dailydeb(cmd_build):
             sign_source_package,
             target_from_dput,
             )
+        from bzrlib.plugins.builder.deb_version import (
+            check_expanded_deb_version,
+            substitute_branch_vars,
+            substitute_time,
+            )
 
         if dput is not None and key_id is None:
             raise errors.BzrCommandError("You must specify --key-id if you "
@@ -326,11 +316,25 @@ class cmd_dailydeb(cmd_build):
                 target_from_dput(dput)
 
         possible_transports = []
-        result, base_branch = self._get_prepared_branch_from_location(location,
-            if_changed_from=if_changed_from, safe=safe,
+        base_branch = get_prepared_branch_from_location(location, safe=safe,
             possible_transports=possible_transports)
-        if result is not None:
-            return result
+        # Save the unsubstituted version
+        template_version = base_branch.deb_version
+        if if_changed_from is not None:
+            old_recipe = get_old_recipe(if_changed_from, possible_transports)
+        else:
+            old_recipe = None
+        if base_branch.deb_version is not None:
+            time = datetime.datetime.utcnow()
+            substitute_time(base_branch, time)
+            changed = resolve_revisions(base_branch, if_changed_from=old_recipe,
+                substitute_branch_vars=substitute_branch_vars)
+            check_expanded_deb_version(base_branch)
+        else:
+            changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
+        if not changed:
+            trace.note("Unchanged")
+            return 0
         if working_basedir is None:
             temp_dir = tempfile.mkdtemp(prefix="bzr-builder-")
             working_basedir = temp_dir
@@ -339,12 +343,12 @@ class cmd_dailydeb(cmd_build):
             if not os.path.exists(working_basedir):
                 os.makedirs(working_basedir)
         package_name = self._calculate_package_name(location, package)
-        if self._template_version is None:
+        if template_version is None:
             working_directory = os.path.join(working_basedir,
                 "%s-direct" % (package_name,))
         else:
             working_directory = os.path.join(working_basedir,
-                "%s-%s" % (package_name, self._template_version))
+                "%s-%s" % (package_name, template_version))
         try:
             # we want to use a consistent package_dir always to support
             # updates in place, but debuild etc want PACKAGE-UPSTREAMVERSION

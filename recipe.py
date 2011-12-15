@@ -304,6 +304,7 @@ branch_vars = [RevnoVariable, SubversionRevnumVariable,
     RevtimeVariable]
 simple_vars = [TimeVariable, DateVariable]
 
+
 class CommandFailedError(errors.BzrError):
 
     _fmt = "The command \"%(command)s\" failed."
