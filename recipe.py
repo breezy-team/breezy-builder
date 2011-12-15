@@ -39,11 +39,6 @@ except ImportError:
 
 
 try:
-    from debian import changelog
-except ImportError:
-    from debian_bundle import changelog
-
-try:
     MergeIntoMerger = merge.MergeIntoMerger
 except (AttributeError, NameError):
     from bzrlib.plugins.builder.backports import MergeIntoMerger
@@ -963,6 +958,7 @@ class BaseRecipeBranch(RecipeBranch):
         tree = branch.repository.revision_tree(revid)
         cl_file_id = tree.path2id("debian/changelog")
         if cl_file_id is not None:
+            from bzrlib.plugins.builder.deb_util import changelog
             tree.lock_read()
             try:
                 cl = changelog.Changelog(tree.get_file(cl_file_id))

@@ -13,12 +13,6 @@
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-try:
-    from debian import changelog
-except ImportError:
-    from debian_bundle import changelog
-
-
 from bzrlib import (
     errors,
     lazy_regex,
