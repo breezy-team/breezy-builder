@@ -27,18 +27,20 @@ from bzrlib.tests import (
         TestCaseInTempDir,
         TestCaseWithTransport,
         )
+from bzrlib.plugins.builder.deb_version import (
+        DebUpstreamBaseVariable,
+        DebUpstreamVariable,
+        DebVersionVariable,
+        )
 from bzrlib.plugins.builder.recipe import (
         BaseRecipeBranch,
         build_tree,
-        DebUpstreamBaseVariable,
-        DebUpstreamVariable,
         ensure_basedir,
         InstructionParseError,
         ForbiddenInstructionError,
         MERGE_INSTRUCTION,
         NEST_INSTRUCTION,
         NEST_PART_INSTRUCTION,
-        DebVersionVariable,
         pull_or_branch,
         RecipeParser,
         RecipeBranch,

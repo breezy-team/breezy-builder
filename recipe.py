@@ -22,7 +22,6 @@ from bzrlib import (
     branch as _mod_branch,
     bzrdir,
     errors,
-    lazy_regex,
     merge,
     revision,
     revisionspec,
@@ -153,69 +152,6 @@ class DateVariable(SimpleSubstitutionVariable):
 
     def get(self):
         return self._time.strftime("%Y%m%d")
-
-
-class DebUpstreamVariable(BranchSubstitutionVariable):
-
-    basename = "debupstream"
-
-    minimum_format = 0.1
-
-    def __init__(self, branch_name, version):
-        super(DebUpstreamVariable, self).__init__(branch_name)
-        self._version = version
-
-    @classmethod
-    def from_changelog(cls, branch_name, changelog):
-        if len(changelog._blocks) > 0:
-            return cls(branch_name, changelog._blocks[0].version)
-        else:
-            return cls(branch_name, None)
-
-    def get(self):
-        if self._version is None:
-            raise SubstitutionUnavailable(self.name,
-                "No previous changelog to take the upstream version from")
-        # Should we include the epoch?
-        return self._version.upstream_version
-
-
-class DebVersionVariable(BranchSubstitutionVariable):
-
-    basename = "debversion"
-
-    minimum_format = 0.4
-
-    def __init__(self, branch_name, version):
-        super(DebVersionVariable, self).__init__(branch_name)
-        self._version = version
-
-    @classmethod
-    def from_changelog(cls, branch_name, changelog):
-        if len(changelog._blocks) > 0:
-            return cls(branch_name, changelog._blocks[0].version)
-        else:
-            return cls(branch_name, None)
-
-    def get(self):
-        if self._version is None:
-            raise SubstitutionUnavailable(self.name,
-                "No previous changelog to take the version from")
-        return str(self._version)
-
-
-class DebUpstreamBaseVariable(DebUpstreamVariable):
-
-    basename = "debupstream-base"
-    version_regex = lazy_regex.lazy_compile(r'([~+])(svn[0-9]+|bzr[0-9]+|git[0-9a-f]+)')
-    minimum_format = 0.4
-
-    def get(self):
-        version = super(DebUpstreamBaseVariable, self).get()
-        version = self.version_regex.sub("\\1", version)
-        if version[-1] not in ("~", "+"):
-            version += "+"
-        return version
 
 
 class RevisionVariable(BranchSubstitutionVariable):
@@ -368,44 +304,10 @@ class LatestTagVariable(RevisionVariable):
             self.branch.unlock()
 
 
-ok_to_preserve = [DebUpstreamVariable, DebUpstreamBaseVariable,
-    DebVersionVariable]
-# The variables that don't require substitution in their name
-simple_vars = [TimeVariable, DateVariable]
 branch_vars = [RevnoVariable, SubversionRevnumVariable,
-    GitCommitVariable, LatestTagVariable, DebVersionVariable,
-    DebUpstreamBaseVariable, DebUpstreamVariable, RevdateVariable,
+    GitCommitVariable, LatestTagVariable, RevdateVariable,
     RevtimeVariable]
-
-
-def check_expanded_deb_version(base_branch):
-    checked_version = base_branch.deb_version
-    if checked_version is None:
-        return
-    for token in ok_to_preserve:
-        if issubclass(token, BranchSubstitutionVariable):
-            for name in base_branch.list_branch_names():
-                checked_version = checked_version.replace(
-                    token.determine_name(name), "")
-            checked_version = checked_version.replace(
-                    token.determine_name(None), "")
-        else:
-            checked_version = checked_version.replace(
-                token.name, "")
-    if "{" in checked_version:
-        available_tokens = [var.name for var in simple_vars if
-                            var.available_in(base_branch.format)]
-        for var_kls in branch_vars:
-            if not var_kls.available_in(base_branch.format):
-                continue
-            for name in base_branch.list_branch_names():
-                available_tokens.append(var_kls.determine_name(name))
-            available_tokens.append(var_kls.determine_name(None))
-        raise errors.BzrCommandError("deb-version not fully "
-                "expanded: %s. Valid substitutions in recipe format %s are: %s"
-                % (base_branch.deb_version, base_branch.format,
-                    available_tokens))
-
+simple_vars = [TimeVariable, DateVariable]
 
 class CommandFailedError(errors.BzrError):
 
@@ -699,6 +601,7 @@ def resolve_revisions(base_branch, if_changed_from=None):
             if_changed_from=if_changed_from_revisions)
     if not changed:
         changed = changed_revisions
+    from bzrlib.plugins.builder.deb_version import check_expanded_deb_version
     check_expanded_deb_version(base_branch)
     if if_changed_from is not None and not changed:
         return False
@@ -1073,6 +976,7 @@ class BaseRecipeBranch(RecipeBranch):
         :param branch_name: Branch name (None for root branch)
         :param changelog: Changelog object to use
         """
+        from bzrlib.plugins.builder.deb_version import DebUpstreamVariable, DebUpstreamBaseVariable, DebVersionVariable
         debupstream_var = DebUpstreamVariable.from_changelog(branch_name, changelog)
         self.deb_version = debupstream_var.replace(self.deb_version)
         if self.format < 0.4:
