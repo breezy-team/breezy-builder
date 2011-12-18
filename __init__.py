@@ -166,7 +166,9 @@ Format versions:
         resulting tree
 """
 
-from info import (
+from __future__ import absolute_import
+
+from bzrlib.plugins.builder.info import (
     bzr_plugin_version as version_info,
     )
 
