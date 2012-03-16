@@ -178,16 +178,6 @@ else:
     version_string = '%d.%d.%d%s%d' % version_info
 __version__ = version_string
 
-if __name__ == '__main__':
-    import os
-    import subprocess
-    import sys
-    dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plugins")
-    retcode = subprocess.call("bzr selftest -s bzrlib.plugins.builder",
-            shell=True, env={"BZR_PLUGIN_PATH": dir})
-    sys.exit(retcode)
-
-
 from bzrlib.commands import plugin_cmds
 plugin_cmds.register_lazy("cmd_build", [], "bzrlib.plugins.builder.cmds")
 plugin_cmds.register_lazy("cmd_dailydeb", [], "bzrlib.plugins.builder.cmds")
