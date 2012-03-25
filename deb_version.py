@@ -88,16 +88,21 @@ class DebVersionVariable(BranchSubstitutionVariable):
                 "No previous changelog to take the version from")
         return str(self._version)
 
+version_regex = lazy_regex.lazy_compile(
+    r'([~+])(svn[0-9]+|bzr[0-9]+|git[0-9a-f]+)')
+
+def version_extract_base(version):
+    return version_regex.sub("\\1", version)
+
 
 class DebUpstreamBaseVariable(DebUpstreamVariable):
 
     basename = "debupstream-base"
-    version_regex = lazy_regex.lazy_compile(r'([~+])(svn[0-9]+|bzr[0-9]+|git[0-9a-f]+)')
     minimum_format = 0.4
 
     def get(self):
         version = super(DebUpstreamBaseVariable, self).get()
-        version = self.version_regex.sub("\\1", version)
+        version = version_extract_base(version)
         if version[-1] not in ("~", "+"):
             version += "+"
         return version
@@ -169,7 +174,7 @@ def substitute_branch_vars(base_branch, branch_name, branch, revid):
     if cl_file_id is not None:
         tree.lock_read()
         try:
-            cl = changelog.Changelog(tree.get_file(cl_file_id))
+            cl = changelog.Changelog(tree.get_file_text(cl_file_id))
             substitute_changelog_vars(base_branch, branch_name, cl)
         finally:
             tree.unlock()

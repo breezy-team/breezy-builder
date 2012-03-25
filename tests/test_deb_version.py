@@ -29,6 +29,7 @@ from bzrlib.plugins.builder.deb_version import (
     DebVersionVariable,
     SubstitutionUnavailable,
     check_expanded_deb_version,
+    version_extract_base,
     substitute_branch_vars,
     substitute_time,
     )
@@ -311,6 +312,24 @@ class DebUpstreamVariableTests(TestCase):
         var = DebUpstreamBaseVariable.from_changelog(None,
             self.write_changelog("2.4+bzr343"))
         self.assertEquals("2.4+", var.get())
+
+
+class VersionExtractBaseTests(TestCase):
+
+    def test_simple_extract(self):
+        self.assertEquals("2.4", version_extract_base("2.4"))
+
+    def test_with_bzr(self):
+        self.assertEquals("2.4+", version_extract_base("2.4+bzr32"))
+        self.assertEquals("2.4~", version_extract_base("2.4~bzr32"))
+
+    def test_with_git(self):
+        self.assertEquals("2.4+", version_extract_base("2.4+git20101010"))
+        self.assertEquals("2.4~", version_extract_base("2.4~gitaabbccdd"))
+
+    def test_with_svn(self):
+        self.assertEquals("2.4+", version_extract_base("2.4+svn45"))
+        self.assertEquals("2.4~", version_extract_base("2.4~svn45"))
 
 
 class DebVersionVariableTests(TestCase):
