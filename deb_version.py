@@ -88,10 +88,14 @@ class DebVersionVariable(BranchSubstitutionVariable):
                 "No previous changelog to take the version from")
         return str(self._version)
 
+dfsg_regex = lazy_regex.lazy_compile(
+    r'[+.]*dfsg[.]*[0-9]+')
+
 version_regex = lazy_regex.lazy_compile(
     r'([~+])(svn[0-9]+|bzr[0-9]+|git[0-9a-f]+)')
 
 def version_extract_base(version):
+    version = dfsg_regex.sub("", version)
     return version_regex.sub("\\1", version)
 
 

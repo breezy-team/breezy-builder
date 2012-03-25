@@ -318,6 +318,7 @@ class VersionExtractBaseTests(TestCase):
 
     def test_simple_extract(self):
         self.assertEquals("2.4", version_extract_base("2.4"))
+        self.assertEquals("2.4+foobar", version_extract_base("2.4+foobar"))
 
     def test_with_bzr(self):
         self.assertEquals("2.4+", version_extract_base("2.4+bzr32"))
@@ -330,6 +331,12 @@ class VersionExtractBaseTests(TestCase):
     def test_with_svn(self):
         self.assertEquals("2.4+", version_extract_base("2.4+svn45"))
         self.assertEquals("2.4~", version_extract_base("2.4~svn45"))
+
+    def test_with_dfsg(self):
+        self.assertEquals("2.4+", version_extract_base("2.4+bzr32+dfsg1"))
+        self.assertEquals("2.4~", version_extract_base("2.4~bzr32+dfsg.1"))
+        self.assertEquals("2.4~", version_extract_base("2.4~bzr32.dfsg.1"))
+        self.assertEquals("2.4~", version_extract_base("2.4~bzr32dfsg.1"))
 
 
 class DebVersionVariableTests(TestCase):
