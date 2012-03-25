@@ -734,7 +734,7 @@ class BuildTreeTests(TestCaseWithTransport):
         self.assertPathExists("target")
         tree = workingtree.WorkingTree.open("target")
         last_revid = tree.last_revision()
-        previous_revid = tree.branch.revision_history()[-2]
+        previous_revid = tree.branch.repository.get_revision(tree.branch.last_revision()).parent_ids[0]
         last_revtree = tree.branch.repository.revision_tree(last_revid)
         previous_revtree = tree.branch.repository.revision_tree(previous_revid)
         self.assertEqual([previous_revid, source3_rev_id],
