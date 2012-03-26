@@ -337,6 +337,7 @@ class VersionExtractBaseTests(TestCase):
         self.assertEquals("2.4~", version_extract_base("2.4~bzr32+dfsg.1"))
         self.assertEquals("2.4~", version_extract_base("2.4~bzr32.dfsg.1"))
         self.assertEquals("2.4~", version_extract_base("2.4~bzr32dfsg.1"))
+        self.assertEquals("1.6~", version_extract_base("1.6~git20120320.dfsg.1"))
 
 
 class DebVersionVariableTests(TestCase):
