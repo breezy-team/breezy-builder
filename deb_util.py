@@ -112,8 +112,16 @@ def extract_upstream_tarball(branch, package, version, dest_dir):
     :param version: Package version
     :param dest_dir: Destination directory
     """
-    tag_name = "upstream-%s" % version
-    revid = branch.tags.lookup_tag(tag_name)
+    tag_names = ["upstream-%s" % version, "upstream/%s" % version]
+    for tag_name in tag_names:
+        try:
+            revid = branch.tags.lookup_tag(tag_name)
+        except errors.NoSuchTag:
+            pass
+        else:
+            break
+    else:
+        raise errors.NoSuchTag(tag_names[0])
     tree = branch.repository.revision_tree(revid)
     rev = branch.repository.get_revision(revid)
     if 'deb-pristine-delta' in rev.properties:
