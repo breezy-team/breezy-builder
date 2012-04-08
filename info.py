@@ -14,4 +14,4 @@
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-bzr_plugin_version = (0, 7, 2, 'dev', 0)
+bzr_plugin_version = (0, 7, 3, 'final', 0)
