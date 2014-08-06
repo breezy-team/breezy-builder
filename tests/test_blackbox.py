@@ -485,8 +485,10 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         source = self.make_simple_package("source")
         self.build_tree(["source/debian/source/"])
         self.build_tree_contents([
-            ("source/debian/source/format", "3.0 (quilt)\n")])
-        source.add(["debian/source", "debian/source/format"])
+            ("source/debian/source/format", "3.0 (quilt)\n"),
+            ("source/debian/source/options", 'compression = "gzip"\n')])
+        source.add([
+            "debian/source", "debian/source/format", "debian/source/options"])
         source.commit("set source format")
         return source
 
