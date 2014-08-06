@@ -359,7 +359,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         new_cl_contents = ("package (1) unstable; urgency=low\n\n"
                 "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
         actual_cl_contents = self._get_file_contents(
-            "working/test-1/debian/changelog")
+            "working/package-1/debian/changelog")
         self.assertStartsWith(actual_cl_contents, new_cl_contents)
         for fn in os.listdir("working"):
             self.assertFalse(fn.endswith(".changes"))

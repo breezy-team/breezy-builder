@@ -412,9 +412,11 @@ class cmd_dailydeb(Command):
                     if dput is not None:
                         dput_source_package(package_dir, dput)
             finally:
-                # package_dir -> working_directory
-                # FIXME: may fail in error unwind, masking the original exception.
-                os.rename(package_dir, working_directory)
+                if not no_build:
+                    # package_dir -> working_directory
+                    # FIXME: may fail in error unwind, masking the
+                    # original exception.
+                    os.rename(package_dir, working_directory)
             # Note that this may write a second manifest.
             if manifest is not None:
                 write_manifest_to_transport(manifest, base_branch,
