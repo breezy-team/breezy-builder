@@ -381,7 +381,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
     def test_cmd_dailydeb_with_version_from_changelog(self):
         self.requireFeature(NotUnderFakeRootFeature)
         self.make_simple_package("source")
-        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.4 "
+        self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version {debversion}-2\nsource 1\n")])
         out, err = self.run_bzr(
             "dailydeb --allow-fallback-to-native -q test.recipe working")

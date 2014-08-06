@@ -69,7 +69,7 @@ class DebVersionVariable(BranchSubstitutionVariable):
 
     basename = "debversion"
 
-    minimum_format = 0.4
+    minimum_format = 0.3
 
     def __init__(self, branch_name, version):
         super(DebVersionVariable, self).__init__(branch_name)
@@ -102,7 +102,7 @@ def version_extract_base(version):
 class DebUpstreamBaseVariable(DebUpstreamVariable):
 
     basename = "debupstream-base"
-    minimum_format = 0.4
+    minimum_format = 0.3
 
     def get(self):
         version = super(DebUpstreamBaseVariable, self).get()
@@ -193,7 +193,7 @@ def substitute_changelog_vars(base_branch, branch_name, changelog):
     from bzrlib.plugins.builder.deb_version import DebUpstreamVariable, DebUpstreamBaseVariable, DebVersionVariable
     debupstream_var = DebUpstreamVariable.from_changelog(branch_name, changelog)
     base_branch.deb_version = debupstream_var.replace(base_branch.deb_version)
-    if base_branch.format < 0.4:
+    if base_branch.format < 0.3:
         # The other variables were introduced in recipe format 0.4
         return
     debupstreambase_var = DebUpstreamBaseVariable.from_changelog(
