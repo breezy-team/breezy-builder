@@ -18,9 +18,9 @@ import signal
 import subprocess
 import time
 
-from bzrlib import (
+from breezy import (
     branch as _mod_branch,
-    bzrdir,
+    controldir,
     errors,
     merge,
     revision,
@@ -33,7 +33,7 @@ from bzrlib import (
     )
 
 try:
-    from bzrlib.errors import NoWhoami
+    from breezy.errors import NoWhoami
 except ImportError:
     NoWhoami = object()
 
@@ -41,7 +41,7 @@ except ImportError:
 try:
     MergeIntoMerger = merge.MergeIntoMerger
 except (AttributeError, NameError):
-    from bzrlib.plugins.builder.backports import MergeIntoMerger
+    from breezy.plugins.builder.backports import MergeIntoMerger
 
 
 def subprocess_setup():
@@ -360,7 +360,7 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
     if br_to is None:
         # We do a "branch"
         ensure_basedir(to_transport)
-        dir = br_from.bzrdir.sprout(to_transport.base, revision_id,
+        dir = br_from.controldir.sprout(to_transport.base, revision_id,
                                     possible_transports=possible_transports,
                                     accelerator_tree=accelerator_tree,
                                     source_branch=br_from,
@@ -374,7 +374,7 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
             tree_to = dir.create_workingtree()
         br_to = tree_to.branch
         created_br_to = True
-        tag._merge_tags_if_possible(br_from, br_to)
+        br_from.tags.merge_to(br_to.tags)
         created_tree_to = True
     else:
         # We do a "pull"
@@ -385,7 +385,7 @@ def pull_or_branch(tree_to, br_to, br_from, to_transport, revision_id,
         else:
             br_to.pull(br_from, stop_revision=revision_id,
                     possible_transports=possible_transports)
-            tree_to = br_to.bzrdir.create_workingtree()
+            tree_to = br_to.controldir.create_workingtree()
             # Ugh, we have to assume that the caller replaces their reference
             # to the branch with the one we return.
             br_to.unlock()
@@ -426,7 +426,7 @@ def merge_branch(child_branch, tree_to, br_to, possible_transports=None):
                 possible_transports=possible_transports)
     child_branch.branch.lock_read()
     try:
-        tag._merge_tags_if_possible(child_branch.branch, br_to)
+        child_branch.branch.tags.merge_to(br_to.tags)
         if child_branch.revspec is not None:
             merge_revspec = revisionspec.RevisionSpec.from_string(
                     child_branch.revspec)
@@ -443,11 +443,11 @@ def merge_branch(child_branch, tree_to, br_to, possible_transports=None):
             merge_revid = child_branch.branch.last_revision()
         child_branch.revid = merge_revid
         try:
-            merger = merge.Merger.from_revision_ids(None, tree_to, merge_revid,
+            merger = merge.Merger.from_revision_ids(tree_to, merge_revid,
                     other_branch=child_branch.branch, tree_branch=br_to)
         except errors.UnrelatedBranches:
             # Let's just try and hope for the best.
-            merger = merge.Merger.from_revision_ids(None, tree_to, merge_revid,
+            merger = merge.Merger.from_revision_ids(tree_to, merge_revid,
                     other_branch=child_branch.branch, tree_branch=br_to,
                     base=revision.NULL_REVISION)
         merger.merge_type = merge.Merge3Merger
@@ -620,7 +620,7 @@ def _build_inner_tree(base_branch, target_path, possible_transports=None):
     to_transport = transport.get_transport(target_path,
             possible_transports=possible_transports)
     try:
-        tree_to, br_to = bzrdir.BzrDir.open_tree_or_branch(target_path)
+        tree_to, br_to = controldir.ControlDir.open_tree_or_branch(target_path)
         # Should we commit any changes in the tree here? If we don't
         # then they will get folded up in to the first merge.
     except errors.NotBranchError:

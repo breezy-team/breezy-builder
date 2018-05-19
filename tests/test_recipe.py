@@ -15,16 +15,16 @@
 
 import os
 
-from bzrlib import (
+from breezy import (
         errors,
         transport,
         workingtree,
         )
-from bzrlib.tests import (
+from breezy.tests import (
         TestCaseInTempDir,
         TestCaseWithTransport,
         )
-from bzrlib.plugins.builder.recipe import (
+from breezy.plugins.builder.recipe import (
         BaseRecipeBranch,
         build_tree,
         ensure_basedir,
@@ -594,7 +594,7 @@ class BuildTreeTests(TestCaseWithTransport):
     def test_build_tree_merged(self):
         source1 = self.make_source_branch("source1")
         source1_rev_id = source1.last_revision()
-        source2 = source1.bzrdir.sprout("source2").open_workingtree()
+        source2 = source1.controldir.sprout("source2").open_workingtree()
         self.build_tree_contents([("source2/a", "other change")])
         source2_rev_id = source2.commit("one")
         base_branch = BaseRecipeBranch("source1", "1", 0.2)
@@ -682,8 +682,7 @@ class BuildTreeTests(TestCaseWithTransport):
         # Merge just 'b' from source2; 'a' is untouched.
         base_branch.nest_part_branch(merged_branch, "b")
         build_tree(base_branch, "target")
-        file_id = source1.path2id("a")
-        self.check_file_contents("target/a", source1.get_file_text(file_id))
+        self.check_file_contents("target/a", source1.get_file_text('a'))
         self.check_file_contents("target/b", "new file")
         self.assertNotInWorkingTree("not-b", "target")
         self.assertEqual(source1_rev_id, base_branch.revid)
@@ -719,10 +718,10 @@ class BuildTreeTests(TestCaseWithTransport):
     def test_build_tree_merge_twice(self):
         source1 = self.make_source_branch("source1")
         source1_rev_id = source1.last_revision()
-        source2 = source1.bzrdir.sprout("source2").open_workingtree()
+        source2 = source1.controldir.sprout("source2").open_workingtree()
         self.build_tree_contents([("source2/a", "other change")])
         source2_rev_id = source2.commit("one")
-        source3 = source2.bzrdir.sprout("source3").open_workingtree()
+        source3 = source2.controldir.sprout("source3").open_workingtree()
         self.build_tree_contents([("source3/a", "third change")])
         source3_rev_id = source3.commit("one")
         base_branch = BaseRecipeBranch("source1", "1", 0.2)
@@ -748,7 +747,7 @@ class BuildTreeTests(TestCaseWithTransport):
 
     def test_build_tree_merged_with_conflicts(self):
         source1 = self.make_source_branch("source1")
-        source2 = source1.bzrdir.sprout("source2").open_workingtree()
+        source2 = source1.controldir.sprout("source2").open_workingtree()
         self.build_tree_contents([("source2/a", "other change\n")])
         source2_rev_id = source2.commit("one")
         self.build_tree_contents([("source1/a", "trunk change\n")])
@@ -775,7 +774,7 @@ class BuildTreeTests(TestCaseWithTransport):
     def test_build_tree_with_revspecs(self):
         source1 = self.make_source_branch("source1")
         source1_rev_id = source1.last_revision()
-        source2 = source1.bzrdir.sprout("source2").open_workingtree()
+        source2 = source1.controldir.sprout("source2").open_workingtree()
         self.build_tree_contents([("source2/a", "other change\n")])
         source2_rev_id = source2.commit("one")
         self.build_tree_contents([("source2/a", "unwanted change\n")])
@@ -868,7 +867,7 @@ class BuildTreeTests(TestCaseWithTransport):
         tree_to, br_to = pull_or_branch(None, None, source.branch,
                 to_transport, first_rev_id)
         tree_to.unlock()
-        tree_to.bzrdir.destroy_workingtree()
+        tree_to.controldir.destroy_workingtree()
         self.build_tree(["source/b"])
         source.add(["b"])
         rev_id = source.commit("two")

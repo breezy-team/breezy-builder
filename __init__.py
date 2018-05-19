@@ -168,7 +168,7 @@ Format versions:
 
 from __future__ import absolute_import
 
-from bzrlib.plugins.builder.info import (
+from breezy.plugins.builder.info import (
     bzr_plugin_version as version_info,
     )
 
@@ -178,14 +178,14 @@ else:
     version_string = '%d.%d.%d%s%d' % version_info
 __version__ = version_string
 
-from bzrlib.commands import plugin_cmds
-plugin_cmds.register_lazy("cmd_build", [], "bzrlib.plugins.builder.cmds")
-plugin_cmds.register_lazy("cmd_dailydeb", [], "bzrlib.plugins.builder.cmds")
+from breezy.commands import plugin_cmds
+plugin_cmds.register_lazy("cmd_build", [], "breezy.plugins.builder.cmds")
+plugin_cmds.register_lazy("cmd_dailydeb", [], "breezy.plugins.builder.cmds")
 
 
 def test_suite():
     from unittest import TestSuite
-    from bzrlib.plugins.builder import tests
+    from breezy.plugins.builder import tests
     result = TestSuite()
     result.addTest(tests.test_suite())
     return result

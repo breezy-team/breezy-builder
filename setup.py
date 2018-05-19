@@ -15,8 +15,8 @@ if __name__ == '__main__':
           author_email="james.westby@canonical.com",
           license="GNU GPL v3",
           url="http://launchpad.net/bzr-builder",
-          packages=['bzrlib.plugins.builder',
-                    'bzrlib.plugins.builder.tests',
+          packages=['breezy.plugins.builder',
+                    'breezy.plugins.builder.tests',
                    ],
-          package_dir={'bzrlib.plugins.builder': '.'},
+          package_dir={'breezy.plugins.builder': '.'},
          )

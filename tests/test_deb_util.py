@@ -13,8 +13,8 @@
 # You should have received a copy of the GNU General Public License along 
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from bzrlib.plugins.builder.deb_util import target_from_dput
-from bzrlib.tests import (
+from breezy.plugins.builder.deb_util import target_from_dput
+from breezy.tests import (
         TestCase,
         )
 

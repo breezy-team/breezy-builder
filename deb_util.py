@@ -23,15 +23,15 @@ import shutil
 import signal
 import subprocess
 
-from bzrlib import (
+from breezy import (
     errors,
     export as _mod_export,
     osutils,
     trace,
     )
 
-from bzrlib.plugins.builder.deb_version import substitute_changelog_vars
-from bzrlib.plugins.builder.recipe import (
+from breezy.plugins.builder.deb_version import substitute_changelog_vars
+from breezy.plugins.builder.recipe import (
     SubstitutionUnavailable,
     )
 
@@ -48,7 +48,7 @@ try:
 except AttributeError:
     # Implementation of get_maintainer was added after 0.1.18 so import same
     # function from backports module if python-debian doesn't have it.
-    from bzrlib.plugins.builder.backports import get_maintainer
+    from breezy.plugins.builder.backports import get_maintainer
 
 # The default distribution used by add_autobuild_changelog_entry()
 DEFAULT_UBUNTU_DISTRIBUTION = "lucid"

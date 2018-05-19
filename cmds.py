@@ -21,18 +21,18 @@ import os
 import shutil
 import tempfile
 
-from bzrlib import (
+from breezy import (
     errors,
     lazy_regex,
     trace,
     transport as _mod_transport,
     urlutils,
     )
-from bzrlib.branch import Branch
-from bzrlib.commands import Command
-from bzrlib.option import Option
+from breezy.branch import Branch
+from breezy.commands import Command
+from breezy.option import Option
 
-from bzrlib.plugins.builder.recipe import (
+from breezy.plugins.builder.recipe import (
     BaseRecipeBranch,
     build_tree,
     RecipeParser,
@@ -285,7 +285,7 @@ class cmd_dailydeb(Command):
                 "is required for 'bzr dailydeb'. Install the "
                 "python-debian package.")
 
-        from bzrlib.plugins.builder.deb_util import (
+        from breezy.plugins.builder.deb_util import (
             add_autobuild_changelog_entry,
             build_source_package,
             calculate_package_dir,
@@ -298,7 +298,7 @@ class cmd_dailydeb(Command):
             sign_source_package,
             target_from_dput,
             )
-        from bzrlib.plugins.builder.deb_version import (
+        from breezy.plugins.builder.deb_version import (
             check_expanded_deb_version,
             substitute_branch_vars,
             substitute_time,
@@ -425,7 +425,7 @@ class cmd_dailydeb(Command):
             if temp_dir is not None:
                 shutil.rmtree(temp_dir)
         if watch_ppa:
-            from bzrlib.plugins.builder.ppa import watch
+            from breezy.plugins.builder.ppa import watch
             (owner, archive) = target_from_dput(dput)
             if not watch(owner, archive, package_name, base_branch.deb_version):
                 return 2

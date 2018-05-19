@@ -16,14 +16,14 @@
 import datetime
 import textwrap
 
-from bzrlib import (
+from breezy import (
     errors,
     )
-from bzrlib.tests import (
+from breezy.tests import (
     TestCase,
     TestCaseWithTransport,
     )
-from bzrlib.plugins.builder.deb_version import (
+from breezy.plugins.builder.deb_version import (
     DebUpstreamBaseVariable,
     DebUpstreamVariable,
     DebVersionVariable,
@@ -33,7 +33,7 @@ from bzrlib.plugins.builder.deb_version import (
     substitute_branch_vars,
     substitute_time,
     )
-from bzrlib.plugins.builder.recipe import (
+from breezy.plugins.builder.recipe import (
     BaseRecipeBranch,
     RecipeBranch,
     resolve_revisions,

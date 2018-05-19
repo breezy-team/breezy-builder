@@ -15,15 +15,15 @@
 
 import os
 from unittest import TestSuite
-from bzrlib.tests import (
+from breezy.tests import (
     TestUtil,
     )
 try:
-    from bzrlib.tests.features import (
+    from breezy.tests.features import (
         Feature,
         )
 except ImportError: # bzr < 2.5
-    from bzrlib.tests import (
+    from breezy.tests import (
         Feature,
         )
 

@@ -15,7 +15,7 @@
 
 """Copies/backports features from more recent versions of packages
 
-This allows bzr-builder to continue to work with older bzrlib and python-debian
+This allows bzr-builder to continue to work with older breezy and python-debian
 versions while using features from newer versions.
 """
 
@@ -29,11 +29,11 @@ import pwd
 import re
 import socket
 
-from bzrlib.merge import (
+from breezy.merge import (
     Merger,
     Merge3Merger,
     )
-from bzrlib import (
+from breezy import (
     errors,
     generate_ids,
     osutils,
@@ -42,7 +42,7 @@ from bzrlib import (
     ui,
     )
 
-# Backport of bzrlib.merge.MergeIntoMerger, introduced in bzr 2.2rc1.
+# Backport of breezy.merge.MergeIntoMerger, introduced in bzr 2.2rc1.
 # (Also backports PathNotInTree, _MergeTypeParameterizer, MergeIntoMergeType)
 class PathNotInTree(errors.BzrError):
 
@@ -151,11 +151,11 @@ class MergeIntoMergeType(Merge3Merger):
         finally:
             child_pb.finished()
         if self.change_reporter is not None:
-            from bzrlib import delta
+            from breezy import delta
             delta.report_changes(
                 self.tt.iter_changes(), self.change_reporter)
         self.cook_conflicts(fs_conflicts)
-        from bzrlib import trace
+        from breezy import trace
         for conflict in self.cooked_conflicts:
             trace.warning(conflict)
 

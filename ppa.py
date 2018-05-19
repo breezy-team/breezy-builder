@@ -16,7 +16,7 @@
 
 import time
 
-from bzrlib import (
+from breezy import (
     errors,
     trace,
     )

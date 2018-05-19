@@ -19,17 +19,17 @@ import signal
 import subprocess
 from textwrap import dedent
 
-from bzrlib import (
+from breezy import (
     export as _mod_export,
     osutils,
     workingtree,
     )
-from bzrlib.branch import Branch
-from bzrlib.tests import (
+from breezy.branch import Branch
+from breezy.tests import (
     TestCaseWithTransport,
     )
 
-from bzrlib.plugins.builder.tests import (
+from breezy.plugins.builder.tests import (
     Feature,
     PristineTarFeature,
     )
@@ -111,17 +111,17 @@ class BlackboxBuilderTests(TestCaseWithTransport):
 
     def test_cmd_builder_requires_recipe_file_argument(self):
         err = self.run_bzr("build", retcode=3)[1]
-        self.assertEqual("bzr: ERROR: command 'build' requires argument "
+        self.assertEqual("brz: ERROR: command 'build' requires argument "
                 "LOCATION\n", err)
 
     def test_cmd_builder_requires_working_dir_argument(self):
         err = self.run_bzr("build recipe", retcode=3)[1]
-        self.assertEqual("bzr: ERROR: command 'build' requires argument "
+        self.assertEqual("brz: ERROR: command 'build' requires argument "
                 "WORKING_DIRECTORY\n", err)
 
     def test_cmd_builder_nonexistant_recipe(self):
         err = self.run_bzr("build recipe working", retcode=3)[1]
-        self.assertEqual("bzr: ERROR: Specified recipe does not exist: "
+        self.assertEqual("brz: ERROR: Specified recipe does not exist: "
                 "recipe\n", err)
 
     def test_cmd_builder_simple_recipe(self):
@@ -470,7 +470,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "deb-version $\nsource 1\n"),
                     ])
         err = self.run_bzr("dailydeb -q test.recipe working", retcode=3)[1]
-        self.assertContainsRe(err, "bzr: ERROR: Invalid deb-version: \\$: "
+        self.assertContainsRe(err, "brz: ERROR: Invalid deb-version: \\$: "
             "(Could not parse version: \\$|Invalid version string '\\$')\n")
 
     def test_cmd_dailydeb_with_safe(self):
@@ -501,7 +501,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
             retcode=3)
         self.assertEquals("", out)
         self.assertEquals(
-            'bzr: ERROR: Unable to find the upstream source. '
+            'brz: ERROR: Unable to find the upstream source. '
             'Import it as tag upstream-1 or build with '
             '--allow-fallback-to-native.\n', err)
 
@@ -666,7 +666,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         out, err = self.run_bzr(
             "dailydeb --allow-fallback-to-native -q test.recipe working",
             retcode=3)
-        self.assertContainsRe(err, "bzr: ERROR: Failed to apply quilt patches")
+        self.assertContainsRe(err, "brz: ERROR: Failed to apply quilt patches")
 
     def test_unknown_source_format(self):
         source = self.make_simple_package("source")
@@ -680,4 +680,4 @@ class BlackboxBuilderTests(TestCaseWithTransport):
                     "deb-version 1-1\nsource\n")])
         out, err = self.run_bzr(
             "dailydeb --allow-fallback-to-native -q test.recipe working", retcode=3)
-        self.assertEquals(err, "bzr: ERROR: Unknown source format 2.0\n")
+        self.assertEquals(err, "brz: ERROR: Unknown source format 2.0\n")
