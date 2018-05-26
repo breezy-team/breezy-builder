@@ -5,8 +5,6 @@ addons:
     packages: python-all-dev subunit python-apt python-testtools devscripts
 sudo: false
 cache: pip
-git:
-  depth: false
 
 python:
   - 2.7
