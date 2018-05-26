@@ -2,7 +2,7 @@ language: python
 addons:
   apt:
     update: true
-    packages: python-all-dev subunit python-apt python-testtools devscripts
+    packages: python-all-dev subunit python-apt python-testtools devscripts libapt-pkg-dev
 sudo: false
 cache: pip
 
