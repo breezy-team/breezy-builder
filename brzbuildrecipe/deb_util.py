@@ -43,12 +43,7 @@ except ImportError:
     from debian_bundle import changelog, deb822
 
 
-try:
-    get_maintainer = changelog.get_maintainer
-except AttributeError:
-    # Implementation of get_maintainer was added after 0.1.18 so import same
-    # function from backports module if python-debian doesn't have it.
-    from .backports import get_maintainer
+get_maintainer = changelog.get_maintainer
 
 # The default distribution used by add_autobuild_changelog_entry()
 DEFAULT_UBUNTU_DISTRIBUTION = "lucid"
@@ -58,34 +53,14 @@ class MissingDependency(errors.BzrError):
     pass
 
 
-def target_from_dput(dput):
-    """Convert a dput specification to a LP API specification.
-
-    :param dput: A dput command spec like ppa:team-name.
-    :return: A LP API target like team-name/ppa.
-    """
-    ppa_prefix = 'ppa:'
-    if not dput.startswith(ppa_prefix):
-        raise errors.BzrCommandError('%r does not appear to be a PPA. '
-            'A dput target like \'%suser[/name]\' must be used.'
-            % (dput, ppa_prefix))
-    base, _, suffix = dput[len(ppa_prefix):].partition('/')
-    if not suffix:
-        suffix = 'ppa'
-    return base, suffix
-
-
 def debian_source_package_name(control_path):
     """Open a debian control file and extract the package name.
 
     """
-    f = open(control_path, 'r')
-    try:
+    with open(control_path, 'r') as f:
         control = deb822.Deb822(f)
         # Debian policy states package names are [a-z0-9][a-z0-9.+-]+ so ascii
         return control["Source"].encode("ascii")
-    finally:
-        f.close()
 
 
 def reconstruct_pristine_tar(dest, delta, dest_filename):
@@ -339,11 +314,8 @@ def convert_3_0_quilt_to_native(path):
             success_exit_codes=(0, 2))
     if os.path.exists(patches_dir):
         shutil.rmtree(patches_dir)
-    f = open(os.path.join(path, "debian", "source", "format"), 'w')
-    try:
+    with open(os.path.join(path, "debian", "source", "format"), 'w') as f:
         f.write("3.0 (native)\n")
-    finally:
-        f.close()
 
 
 def force_native_format(working_tree_path, current_format):
@@ -356,24 +328,3 @@ def force_native_format(working_tree_path, current_format):
     elif current_format not in ("1.0", "3.0 (native)"):
         raise errors.BzrCommandError("Unknown source format %s" %
                                      current_format)
-
-
-def sign_source_package(basedir, key_id):
-    command = ["/usr/bin/debsign", "-S", "-k%s" % key_id]
-    _run_command(command, basedir,
-        "Signing the source package",
-        "Signing the package failed",
-        not_installed_msg="debsign is not installed, please install "
-            "the devscripts package.")
-
-
-def dput_source_package(basedir, target):
-    command = ["/usr/bin/debrelease", "-S", "--dput", target]
-    _run_command(command, basedir,
-        "Uploading the source package",
-        "Uploading the package failed",
-        not_installed_msg="debrelease is not installed, please "
-            "install the devscripts package.")
-
-
-

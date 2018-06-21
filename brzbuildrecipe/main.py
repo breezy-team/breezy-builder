@@ -15,6 +15,7 @@
 
 """Subcommands provided by bzr-builder."""
 
+import argparse
 from StringIO import StringIO
 import datetime
 import os
@@ -180,7 +181,7 @@ def get_prepared_branch_from_location(location,
     return base_branch
 
 
-class cmd_build(Command):
+def build():
     """Build a tree based on a branch or a recipe.
 
     Pass the path of a recipe file or a branch to build and the directory to
@@ -188,44 +189,50 @@ class cmd_build(Command):
 
     See "bzr help builder" for more information on what a recipe is.
     """
-    takes_args = ["location", "working_directory"]
-    takes_options = [
-            Option('manifest', type=str, argname="path",
-                   help="Path to write the manifest to."),
-            Option('if-changed-from', type=str, argname="path",
-                   help="Only build if the outcome would be different "
-                        "to that specified in the specified manifest."),
-            'revision',
-                    ]
+    parser = argparse.ArgumentParser(
+        description="Construct a Debian source tree based on a recipe.")
+    parser.add_argument(
+        "location", metavar="LOCATION", type=argparse.FileType("r"),
+        help="The file system path to the recipe.")
+    parser.add_argument(
+        "working_basedir", metavar="WORKING-BASEDIR", nargs="?", help=(
+            "The path to a working directory.  If not specified, use a "
+            "temporary directory."))
+    parser.add_argument(
+        "--manifest", metavar="PATH", help="Path to write the manifest to.")
+    parser.add_argument(
+        "--if-changed-from", metavar="PATH", help=(
+            "Only build if the outcome would be different to that "
+            "specified in this manifest."))
 
-    def run(self, location, working_directory, manifest=None,
-            if_changed_from=None, revision=None):
-        if revision is not None and len(revision) > 0:
-            if len(revision) != 1:
-                raise errors.BzrCommandError("only a single revision can be "
-                    "specified")
-            revspec = revision[0]
-        else:
-            revspec = None
-        possible_transports = []
-        base_branch = get_prepared_branch_from_location(location,
-            possible_transports=possible_transports, revspec=revspec)
-        if if_changed_from is not None:
-            old_recipe = get_old_recipe(if_changed_from, possible_transports)
-        else:
-            old_recipe = None
-        changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
-        if not changed:
-            trace.note("Unchanged")
-            return 0
-        manifest_path = manifest or os.path.join(working_directory,
-                        "bzr-builder.manifest")
-        build_tree(base_branch, working_directory)
-        write_manifest_to_transport(manifest_path, base_branch,
-            possible_transports)
+    args = parser.parse_args()
+
+    if revision is not None and len(revision) > 0:
+        if len(revision) != 1:
+            raise errors.BzrCommandError("only a single revision can be "
+                "specified")
+        revspec = revision[0]
+    else:
+        revspec = None
+    possible_transports = []
+    base_branch = get_prepared_branch_from_location(args.location,
+        possible_transports=possible_transports, revspec=revspec)
+    if args.if_changed_from is not None:
+        old_recipe = get_old_recipe(args.if_changed_from, possible_transports)
+    else:
+        old_recipe = None
+    changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
+    if not changed:
+        trace.note("Unchanged")
+        return 0
+    manifest_path = args.manifest or os.path.join(args.working_basedir,
+                    "bzr-builder.manifest")
+    build_tree(base_branch, working_directory)
+    write_manifest_to_transport(manifest_path, base_branch,
+        possible_transports)
 
 
-class cmd_dailydeb(Command):
+def dailydeb():
     """Build a deb based on a 'recipe' or from a branch.
 
     See "bzr help builder" for more information on what a recipe is.
@@ -234,206 +241,177 @@ class cmd_dailydeb(Command):
     directory will be used and it will be removed when the command
     finishes.
     """
+    parser = argparse.ArgumentParser(
+        description="Construct a Debian source tree based on a recipe.")
+    parser.add_argument(
+        "location", metavar="LOCATION", type=argparse.FileType("r"),
+        help="The file system path to the recipe.")
+    parser.add_argument(
+        "working_basedir", metavar="WORKING-BASEDIR", nargs="?", help=(
+            "The path to a working directory.  If not specified, use a "
+            "temporary directory."))
+    parser.add_argument(
+        "--if-changed-from", metavar="PATH", help=(
+            "Only build if the outcome would be different to that "
+            "specified in this manifest."))
+    parser.add_argument(
+        "--manifest", metavar="PATH", help="Path to write the manifest to.")
+    parser.add_argument(
+        "--package", help=(
+            "The package name to use in the changelog entry.  If not "
+            "specified then the package from the previous changelog entry "
+            "will be used, so it must be specified if there is no changelog."))
+    parser.add_argument(
+        "--distribution", help=(
+            "The distribution to target.  If not specified then the same "
+            "distribution as the last entry in debian/changelog will be "
+            "used."))
+    parser.add_argument(
+        "--no-build", action="store_false", default=True, dest="build",
+        help="Just ready the source package and don't actually build it.")
+    parser.add_argument(
+        "--append-version", help=(
+            "Append the specified string to the end of the version used in "
+            "debian/changelog."))
+    parser.add_argument(
+        "--safe", action="store_true", default=False,
+        help="Error if the recipe would cause arbitrary code execution.")
+    parser.add_argument(
+        "--allow-fallback-to-native", action="store_true", default=False,
+        help=(
+            "Allow falling back to a native package if the upstream tarball "
+            "cannot be found."))
 
-    takes_options = cmd_build.takes_options + [
-                Option("package", type=str,
-                       help="The package name to use in the changelog entry. "
-                            "If not specified then the package from the "
-                            "previous changelog entry will be used, so it "
-                            "must be specified if there is no changelog."),
-                Option("distribution", type=str,
-                        help="The distribution to target. If not specified "
-                             "then the same distribution as the last entry "
-                             "in debian/changelog will be used."),
-                Option("dput", type=str, argname="target",
-                        help="dput the built package to the specified "
-                        "dput target."),
-                Option("key-id", type=str, short_name="k",
-                       help="Sign the packages with the specified GnuPG key. "
-                            "Must be specified if you use --dput."),
-                Option("no-build",
-                       help="Just ready the source package and don't "
-                            "actually build it."),
-                Option("watch-ppa", help="Watch the PPA the package was "
-                    "dput to and exit with 0 only if it builds and "
-                    "publishes successfully."),
-                Option("append-version", type=str, help="Append the "
-                        "specified string to the end of the version used "
-                        "in debian/changelog."),
-                Option("safe", help="Error if the recipe would cause"
-                       " arbitrary code execution."),
-                Option("allow-fallback-to-native",
-                    help="Allow falling back to a native package if the upstream "
-                         "tarball can not be found."),
-            ]
+    args = parser.parse_args()
 
-    takes_args = ["location", "working_basedir?"]
+    import debian
+    from .deb_util import (
+        add_autobuild_changelog_entry,
+        build_source_package,
+        calculate_package_dir,
+        changelog,
+        debian_source_package_name,
+        extract_upstream_tarball,
+        force_native_format,
+        get_source_format,
+        )
+    from .deb_version import (
+        check_expanded_deb_version,
+        substitute_branch_vars,
+        substitute_time,
+        )
 
-    def run(self, location, working_basedir=None, manifest=None,
-            if_changed_from=None, package=None, distribution=None,
-            dput=None, key_id=None, no_build=None, watch_ppa=False,
-            append_version=None, safe=False, allow_fallback_to_native=False):
+    possible_transports = []
+    base_branch = get_prepared_branch_from_location(args.location, safe=args.safe,
+        possible_transports=possible_transports)
+    # Save the unsubstituted version
+    template_version = base_branch.deb_version
+    if args.if_changed_from is not None:
+        old_recipe = get_old_recipe(args.if_changed_from, possible_transports)
+    else:
+        old_recipe = None
+    if base_branch.deb_version is not None:
+        time = datetime.datetime.utcnow()
+        substitute_time(base_branch, time)
+        changed = resolve_revisions(base_branch, if_changed_from=old_recipe,
+            substitute_branch_vars=substitute_branch_vars)
+        check_expanded_deb_version(base_branch)
+    else:
+        changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
+    if not changed:
+        trace.note("Unchanged")
+        return 0
+    if args.working_basedir is None:
+        temp_dir = tempfile.mkdtemp(prefix="bzr-builder-")
+        args.working_basedir = temp_dir
+    else:
+        temp_dir = None
+        if not os.path.exists(args.working_basedir):
+            os.makedirs(args.working_basedir)
+    package_name = _calculate_package_name(args.location, args.package)
+    if template_version is None:
+        working_directory = os.path.join(args.working_basedir,
+            "%s-direct" % (package_name,))
+    else:
+        working_directory = os.path.join(args.working_basedir,
+            "%s-%s" % (package_name, template_version))
+    try:
+        # we want to use a consistent package_dir always to support
+        # updates in place, but debuild etc want PACKAGE-UPSTREAMVERSION
+        # on disk, so we build_tree with the unsubstituted version number
+        # and do a final rename-to step before calling into debian build
+        # tools. We then rename the working dir back.
+        manifest_path = os.path.join(working_directory, "debian",
+            "bzr-builder.manifest")
+        build_tree(base_branch, working_directory)
+        control_path = os.path.join(working_directory, "debian", "control")
+        if not os.path.exists(control_path):
+            if args.package is None:
+                raise errors.BzrCommandError("No control file to "
+                        "take the package name from, and --package not "
+                        "specified.")
+        else:
+            args.package = debian_source_package_name(control_path)
+        write_manifest_to_transport(manifest_path, base_branch,
+            possible_transports)
+        autobuild = (base_branch.deb_version is not None)
+        if autobuild:
+            # Add changelog also substitutes {debupstream}.
+            add_autobuild_changelog_entry(base_branch, working_directory,
+                args.package, distribution=args.distribution,
+                append_version=args.append_version)
+        else:
+            if args.append_version:
+                raise errors.BzrCommandError("--append-version only "
+                    "supported for autobuild recipes (with a 'deb-version' "
+                    "header)")
+        with open(os.path.join(working_directory, "debian", "changelog")) as cl_f:
+            contents = cl_f.read()
+        cl = changelog.Changelog(file=contents)
+        package_name = cl.package
+        package_version = cl.version
+        package_dir = calculate_package_dir(package_name, package_version,
+            args.working_basedir)
+        # working_directory -> package_dir: after this debian stuff works.
+        os.rename(working_directory, package_dir)
         try:
-            try:
-                import debian
-            except ImportError:
-                # In older versions of python-debian the main package was named 
-                # debian_bundle
-                import debian_bundle
-        except ImportError:
-            raise errors.BzrCommandError("The 'debian' python module "
-                "is required for 'bzr dailydeb'. Install the "
-                "python-debian package.")
-
-        from .deb_util import (
-            add_autobuild_changelog_entry,
-            build_source_package,
-            calculate_package_dir,
-            changelog,
-            debian_source_package_name,
-            dput_source_package,
-            extract_upstream_tarball,
-            force_native_format,
-            get_source_format,
-            sign_source_package,
-            target_from_dput,
-            )
-        from .deb_version import (
-            check_expanded_deb_version,
-            substitute_branch_vars,
-            substitute_time,
-            )
-
-        if dput is not None and key_id is None:
-            raise errors.BzrCommandError("You must specify --key-id if you "
-                    "specify --dput.")
-        if watch_ppa:
-            if not dput:
-                raise errors.BzrCommandError(
-                    "cannot watch a ppa without doing dput.")
-            else:
-                # Check we can calculate a PPA url.
-                target_from_dput(dput)
-
-        possible_transports = []
-        base_branch = get_prepared_branch_from_location(location, safe=safe,
-            possible_transports=possible_transports)
-        # Save the unsubstituted version
-        template_version = base_branch.deb_version
-        if if_changed_from is not None:
-            old_recipe = get_old_recipe(if_changed_from, possible_transports)
-        else:
-            old_recipe = None
-        if base_branch.deb_version is not None:
-            time = datetime.datetime.utcnow()
-            substitute_time(base_branch, time)
-            changed = resolve_revisions(base_branch, if_changed_from=old_recipe,
-                substitute_branch_vars=substitute_branch_vars)
-            check_expanded_deb_version(base_branch)
-        else:
-            changed = resolve_revisions(base_branch, if_changed_from=old_recipe)
-        if not changed:
-            trace.note("Unchanged")
-            return 0
-        if working_basedir is None:
-            temp_dir = tempfile.mkdtemp(prefix="bzr-builder-")
-            working_basedir = temp_dir
-        else:
-            temp_dir = None
-            if not os.path.exists(working_basedir):
-                os.makedirs(working_basedir)
-        package_name = self._calculate_package_name(location, package)
-        if template_version is None:
-            working_directory = os.path.join(working_basedir,
-                "%s-direct" % (package_name,))
-        else:
-            working_directory = os.path.join(working_basedir,
-                "%s-%s" % (package_name, template_version))
-        try:
-            # we want to use a consistent package_dir always to support
-            # updates in place, but debuild etc want PACKAGE-UPSTREAMVERSION
-            # on disk, so we build_tree with the unsubstituted version number
-            # and do a final rename-to step before calling into debian build
-            # tools. We then rename the working dir back.
-            manifest_path = os.path.join(working_directory, "debian",
-                "bzr-builder.manifest")
-            build_tree(base_branch, working_directory)
-            control_path = os.path.join(working_directory, "debian", "control")
-            if not os.path.exists(control_path):
-                if package is None:
-                    raise errors.BzrCommandError("No control file to "
-                            "take the package name from, and --package not "
-                            "specified.")
-            else:
-                package = debian_source_package_name(control_path)
-            write_manifest_to_transport(manifest_path, base_branch,
-                possible_transports)
-            autobuild = (base_branch.deb_version is not None)
-            if autobuild:
-                # Add changelog also substitutes {debupstream}.
-                add_autobuild_changelog_entry(base_branch, working_directory,
-                    package, distribution=distribution,
-                    append_version=append_version)
-            else:
-                if append_version:
-                    raise errors.BzrCommandError("--append-version only "
-                        "supported for autobuild recipes (with a 'deb-version' "
-                        "header)")
-            with open(os.path.join(working_directory, "debian", "changelog")) as cl_f:
-                contents = cl_f.read()
-            cl = changelog.Changelog(file=contents)
-            package_name = cl.package
-            package_version = cl.version
-            package_dir = calculate_package_dir(package_name, package_version,
-                working_basedir)
-            # working_directory -> package_dir: after this debian stuff works.
-            os.rename(working_directory, package_dir)
-            try:
-                current_format = get_source_format(package_dir)
-                if (package_version.debian_version is not None or
-                    current_format == "3.0 (quilt)"):
-                    # Non-native package
-                    try:
-                        extract_upstream_tarball(base_branch.branch, package_name,
-                            package_version.upstream_version, working_basedir)
-                    except errors.NoSuchTag, e:
-                        if not allow_fallback_to_native:
-                            raise errors.BzrCommandError(
-                                "Unable to find the upstream source. Import it "
-                                "as tag %s or build with "
-                                "--allow-fallback-to-native." % e.tag_name)
-                        else:
-                            force_native_format(package_dir, current_format)
-                if not no_build:
-                    build_source_package(package_dir,
-                            tgz_check=not allow_fallback_to_native)
-                    if key_id is not None:
-                        sign_source_package(package_dir, key_id)
-                    if dput is not None:
-                        dput_source_package(package_dir, dput)
-            finally:
-                if not no_build:
-                    # package_dir -> working_directory
-                    # FIXME: may fail in error unwind, masking the
-                    # original exception.
-                    os.rename(package_dir, working_directory)
-            # Note that this may write a second manifest.
-            if manifest is not None:
-                write_manifest_to_transport(manifest, base_branch,
-                    possible_transports)
+            current_format = get_source_format(package_dir)
+            if (package_version.debian_version is not None or
+                current_format == "3.0 (quilt)"):
+                # Non-native package
+                try:
+                    extract_upstream_tarball(base_branch.branch, package_name,
+                        package_version.upstream_version, args.working_basedir)
+                except errors.NoSuchTag as e:
+                    if not args.allow_fallback_to_native:
+                        raise errors.BzrCommandError(
+                            "Unable to find the upstream source. Import it "
+                            "as tag %s or build with "
+                            "--allow-fallback-to-native." % e.tag_name)
+                    else:
+                        force_native_format(package_dir, current_format)
+            if not args.no_build:
+                build_source_package(package_dir,
+                        tgz_check=not args.allow_fallback_to_native)
         finally:
-            if temp_dir is not None:
-                shutil.rmtree(temp_dir)
-        if watch_ppa:
-            from .ppa import watch
-            (owner, archive) = target_from_dput(dput)
-            if not watch(owner, archive, package_name, base_branch.deb_version):
-                return 2
+            if not args.no_build:
+                # package_dir -> working_directory
+                # FIXME: may fail in error unwind, masking the
+                # original exception.
+                os.rename(package_dir, working_directory)
+        # Note that this may write a second manifest.
+        if args.manifest is not None:
+            write_manifest_to_transport(args.manifest, base_branch,
+                possible_transports)
+    finally:
+        if temp_dir is not None:
+            shutil.rmtree(temp_dir)
 
-    def _calculate_package_name(self, recipe_location, package):
-        """Calculate the directory name that should be used while debuilding."""
-        recipe_name = urlutils.basename(recipe_location)
-        if recipe_name.endswith(".recipe"):
-            recipe_name = recipe_name[:-len(".recipe")]
-        return package or recipe_name
+
+def _calculate_package_name(recipe_location, package):
+    """Calculate the directory name that should be used while debuilding."""
+    recipe_name = urlutils.basename(recipe_location)
+    if recipe_name.endswith(".recipe"):
+        recipe_name = recipe_name[:-len(".recipe")]
+    return package or recipe_name
 
