@@ -1,4 +1,4 @@
-# bzr-builder: a bzr plugin to constuct trees based on recipes
+# brz-builder: a brz plugin to constuct trees based on recipes
 # Copyright 2009 Canonical Ltd.
 
 # This program is free software: you can redistribute it and/or modify it 
@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License along 
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""The bzr-builder plugin allows you to construct a branch from a 'recipe'.
+"""brz-build-recipe allows you to construct a branch from a 'recipe'.
 
 The recipe is a series of pointers to branches and instructions for how they
 should be combined. There are two ways to combine branches, by merging, and
@@ -68,7 +68,7 @@ a revisionspec to the line. For instance::
 
 will nest the revision pointed to by the "1.0" tag of that branch. The format
 for the revisionspec is identical to that taken by the "--revision" argument
-to many bzr commands. See "bzr help revisionspec" for details.
+to many brz commands. See "brz help revisionspec" for details.
 
 You can also merge specific subdirectories from a branch with a "nest-part"
 line like
@@ -96,7 +96,7 @@ assembling the recipe, so commands that require it should be avoided.
 
 You can then build this branch by running::
 
-  bzr build foo.recipe working-dir
+  brz build foo.recipe working-dir
 
 (assuming you saved it as foo.recipe in your current directory).
 
@@ -104,11 +104,11 @@ Once the command finished it will have placed the result in "working-dir".
 
 It is also possible to produce Debian source packages from a recipe, assuming
 that one of the branches in the recipe contains some appropriate packaging.
-You can do this using the "bzr dailydeb" command, which takes the same
+You can do this using the "brz dailydeb" command, which takes the same
 arguments as "build". Only this time in the working dir you will find a source
 package and a directory containing the code that the packages was built from
 once it is done. Also take a look at the "--key-id" and "--dput" arguments to
-have "bzr dailydeb" sign and upload the source package somewhere.
+have "brz dailydeb" sign and upload the source package somewhere.
 
 To build Debian source package that you desire you should make sure that
 "deb-version" is set to an appropriate value on the first line of your
@@ -130,7 +130,7 @@ on various things when the recipe is processed:
   * {debupstream-base}/{debupstream-base:<branch name>} will be replaced by the
     upstream portion of the version number taken from debian/changelog in the
     branch, with any VCS markers stripped.  For example, if debian/changelog
-    has a version number of "1.0~bzr43-1" then this would evaluate to "1.0~".
+    has a version number of "1.0~brz43-1" then this would evaluate to "1.0~".
     For any upstream versions without a VCS marker, a "+" is added to the
     version ("1.0-1" becomes "1.0+").
   * {debversion}/{debversion:<branch name>} will be substituted with
@@ -168,24 +168,10 @@ Format versions:
 
 from __future__ import absolute_import
 
-from breezy.plugins.builder.info import (
-    bzr_plugin_version as version_info,
-    )
-
-if version_info[3] == 'final':
-    version_string = '%d.%d.%d' % version_info[:3]
-else:
-    version_string = '%d.%d.%d%s%d' % version_info
-__version__ = version_string
-
-from breezy.commands import plugin_cmds
-plugin_cmds.register_lazy("cmd_build", [], "breezy.plugins.builder.cmds")
-plugin_cmds.register_lazy("cmd_dailydeb", [], "breezy.plugins.builder.cmds")
-
 
 def test_suite():
     from unittest import TestSuite
-    from breezy.plugins.builder import tests
+    from . import tests
     result = TestSuite()
     result.addTest(tests.test_suite())
     return result

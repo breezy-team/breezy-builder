@@ -18,14 +18,9 @@ from unittest import TestSuite
 from breezy.tests import (
     TestUtil,
     )
-try:
-    from breezy.tests.features import (
-        Feature,
-        )
-except ImportError: # bzr < 2.5
-    from breezy.tests import (
-        Feature,
-        )
+from breezy.tests.features import (
+    Feature,
+    )
 
 
 class _PristineTarFeature(Feature):

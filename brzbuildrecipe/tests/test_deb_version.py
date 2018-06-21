@@ -23,7 +23,7 @@ from breezy.tests import (
     TestCase,
     TestCaseWithTransport,
     )
-from breezy.plugins.builder.deb_version import (
+from ..deb_version import (
     DebUpstreamBaseVariable,
     DebUpstreamVariable,
     DebVersionVariable,
@@ -33,7 +33,7 @@ from breezy.plugins.builder.deb_version import (
     substitute_branch_vars,
     substitute_time,
     )
-from breezy.plugins.builder.recipe import (
+from ..recipe import (
     BaseRecipeBranch,
     RecipeBranch,
     resolve_revisions,

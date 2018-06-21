@@ -30,8 +30,8 @@ from breezy import (
     trace,
     )
 
-from breezy.plugins.builder.deb_version import substitute_changelog_vars
-from breezy.plugins.builder.recipe import (
+from .deb_version import substitute_changelog_vars
+from .recipe import (
     SubstitutionUnavailable,
     )
 
@@ -48,7 +48,7 @@ try:
 except AttributeError:
     # Implementation of get_maintainer was added after 0.1.18 so import same
     # function from backports module if python-debian doesn't have it.
-    from breezy.plugins.builder.backports import get_maintainer
+    from .backports import get_maintainer
 
 # The default distribution used by add_autobuild_changelog_entry()
 DEFAULT_UBUNTU_DISTRIBUTION = "lucid"

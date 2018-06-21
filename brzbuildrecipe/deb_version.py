@@ -18,7 +18,7 @@ from breezy import (
     lazy_regex,
     )
 
-from breezy.plugins.builder.recipe import (
+from .recipe import (
     BranchSubstitutionVariable,
     DateVariable,
     GitCommitVariable,
@@ -186,7 +186,7 @@ def substitute_changelog_vars(base_branch, branch_name, changelog):
     :param branch_name: Branch name (None for root branch)
     :param changelog: Changelog object to use
     """
-    from breezy.plugins.builder.deb_version import DebUpstreamVariable, DebUpstreamBaseVariable, DebVersionVariable
+    from .deb_version import DebUpstreamVariable, DebUpstreamBaseVariable, DebVersionVariable
     debupstream_var = DebUpstreamVariable.from_changelog(branch_name, changelog)
     base_branch.deb_version = debupstream_var.replace(base_branch.deb_version)
     if base_branch.format < 0.3:

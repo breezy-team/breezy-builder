@@ -29,7 +29,7 @@ from breezy.tests import (
     TestCaseWithTransport,
     )
 
-from breezy.plugins.builder.tests import (
+from . import (
     Feature,
     PristineTarFeature,
     )

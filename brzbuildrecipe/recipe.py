@@ -41,7 +41,7 @@ except ImportError:
 try:
     MergeIntoMerger = merge.MergeIntoMerger
 except (AttributeError, NameError):
-    from breezy.plugins.builder.backports import MergeIntoMerger
+    from .backports import MergeIntoMerger
 
 
 def subprocess_setup():

@@ -24,7 +24,7 @@ from breezy.tests import (
         TestCaseInTempDir,
         TestCaseWithTransport,
         )
-from breezy.plugins.builder.recipe import (
+from ..recipe import (
         BaseRecipeBranch,
         build_tree,
         ensure_basedir,
