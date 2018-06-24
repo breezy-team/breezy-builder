@@ -5,7 +5,7 @@ from setuptools import setup
 version = (0, 7, 4, 'dev', 0)
 version_string = ".".join([str(x) for x in version])
 
-setup(name="brz-builder",
+setup(name="brz-build-recipe",
       version=version_string,
       description="Turn a recipe in to a bzr branch",
       author="James Westby",
