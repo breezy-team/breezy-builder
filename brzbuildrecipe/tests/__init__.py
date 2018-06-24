@@ -40,7 +40,6 @@ def test_suite():
     suite = TestSuite()
     testmod_names = [
             'blackbox',
-            'deb_util',
             'deb_version',
             'recipe',
             ]

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-from distutils.core import setup
+from setuptools import setup
 
 version = (0, 7, 4, 'dev', 0)
 version_string = ".".join([str(x) for x in version])

@@ -26,8 +26,8 @@ except ImportError:
     # Support running from the build tree.
     sys.path.insert(0, os.path.join(sys.path[0], os.pardir))
 
-from brzbuildrecipe.main import dailydeb
+from brzbuildrecipe.dailydeb import main
 
 
 if __name__ == "__main__":
-    sys.exit(dailydeb())
+    sys.exit(main())
