@@ -371,8 +371,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.make_simple_package("source")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
-        out, err = self.run_dailydeb("test.recipe "
-                "--manifest manifest --no-build working")
+        out, err = self.run_dailydeb(
+                "--manifest manifest --no-build test.recipe working")
         new_cl_contents = ("package (1) unstable; urgency=low\n\n"
                 "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
         actual_cl_contents = self._get_file_contents(
@@ -387,8 +387,8 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.make_simple_package("source")
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.1 "
                     "deb-version 1\nsource 1\n")])
-        out, err = self.run_dailydeb("test.recipe "
-                "--manifest manifest --if-changed-from bar working")
+        out, err = self.run_dailydeb("test.recipe working "
+                "--manifest=manifest --if-changed-from=bar")
         new_cl_contents = ("package (1) unstable; urgency=low\n\n"
                 "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
         actual_cl_contents = self._get_file_contents(
@@ -401,7 +401,7 @@ class BlackboxBuilderTests(TestCaseWithTransport):
         self.build_tree_contents([("test.recipe", "# bzr-builder format 0.3 "
                     "deb-version {debversion}-2\nsource 1\n")])
         out, err = self.run_dailydeb(
-            "--allow-fallback-to-native test.recipe working")
+            "test.recipe working --allow-fallback-to-native")
         new_cl_contents = ("package (0.1-2) unstable; urgency=low\n\n"
                 "  * Auto build.\n\n -- M. Maintainer <maint@maint.org>  ")
         cl = changelog.Changelog(self._get_file_contents(
