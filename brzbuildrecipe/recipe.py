@@ -433,7 +433,7 @@ def merge_branch(child_branch, tree_to, br_to, possible_transports=None):
             try:
                 merge_revid = merge_revspec.as_revision_id(
                     child_branch.branch)
-            except errors.InvalidRevisionSpec, e:
+            except errors.InvalidRevisionSpec as e:
                 # Give the user a hint if they didn't mean to speciy
                 # a revspec.
                 e.extra = (". Did you not mean to specify a revspec "

@@ -170,7 +170,7 @@ def add_autobuild_changelog_entry(base_branch, basedir, package,
     if base_branch.format in (0.1, 0.2, 0.3):
         try:
             substitute_changelog_vars(base_branch, None, cl)
-        except SubstitutionUnavailable, e:
+        except SubstitutionUnavailable as e:
             raise errors.BzrCommandError("No previous changelog to "
                     "take the upstream version from as %s was "
                     "used: %s: %s." % (e.name, e.reason, reason))
@@ -193,7 +193,7 @@ def add_autobuild_changelog_entry(base_branch, basedir, package,
         version += append_version
     try:
         changelog.Version(version)
-    except (changelog.VersionError, ValueError), e:
+    except (changelog.VersionError, ValueError) as e:
         raise errors.BzrCommandError("Invalid deb-version: %s: %s"
                 % (version, e))
     cl.new_block(package=package, version=version,
@@ -248,7 +248,7 @@ def _run_command(command, basedir, msg, error_msg,
     try:
         proc = subprocess.Popen(command, cwd=basedir,
                 stdin=subprocess.PIPE, preexec_fn=subprocess_setup, **kwargs)
-    except OSError, e:
+    except OSError as e:
         if e.errno != errno.ENOENT:
             raise
         if not_installed_msg is None:
