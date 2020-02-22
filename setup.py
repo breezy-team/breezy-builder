@@ -12,11 +12,10 @@ setup(name="brz-build-recipe",
       author_email="james.westby@canonical.com",
       license="GNU GPL v3",
       url="http://launchpad.net/brz-builder",
-      packages=['brzbuildrecipe',
-                'brzbuildrecipe.tests',
-               ],
-      scripts = ['bin/brz-build-daily-recipe', 'bin/brz-build-recipe'],
+      packages=[
+          'brzbuildrecipe',
+          'brzbuildrecipe.tests'],
+      scripts=['bin/brz-build-daily-recipe', 'bin/brz-build-recipe'],
       package_dir={'brzbuildrecipe': 'brzbuildrecipe'},
       install_requires=['breezy', 'python-debian', 'python-dateutil'],
-      test_requires=['fixtures', 'testtools'],
-     )
+      test_requires=['fixtures', 'testtools'],)

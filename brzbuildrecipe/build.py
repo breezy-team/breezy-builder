@@ -1,39 +1,25 @@
 # bzr-builder: a bzr plugin to constuct trees based on recipes
 # Copyright 2009 Canonical Ltd.
 
-# This program is free software: you can redistribute it and/or modify it 
-# under the terms of the GNU General Public License version 3, as published 
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 3, as published
 # by the Free Software Foundation.
 
-# This program is distributed in the hope that it will be useful, but 
-# WITHOUT ANY WARRANTY; without even the implied warranties of 
-# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR 
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranties of
+# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR
 # PURPOSE.  See the GNU General Public License for more details.
 
-# You should have received a copy of the GNU General Public License along 
+# You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Subcommands provided by bzr-builder."""
 
 import argparse
-from StringIO import StringIO
-import datetime
 import os
-import shutil
 import sys
-import tempfile
 
 import breezy.bzr
-
-from breezy import (
-    errors,
-    lazy_regex,
-    transport as _mod_transport,
-    urlutils,
-    )
-from breezy.branch import Branch
-from breezy.commands import Command
-from breezy.option import Option
 
 from .main import (
     get_prepared_branch_from_location,
@@ -42,14 +28,11 @@ from .main import (
     )
 
 from .recipe import (
-    BaseRecipeBranch,
     build_tree,
-    RecipeParser,
     resolve_revisions,
-    SAFE_INSTRUCTIONS,
     )
 
-import breezy.plugins.launchpad
+import breezy.plugins.launchpad  # noqa: F401
 
 
 def main():
@@ -85,8 +68,9 @@ def main():
     else:
         revspec = None
     possible_transports = []
-    base_branch = get_prepared_branch_from_location(args.location,
-        possible_transports=possible_transports, revspec=revspec)
+    base_branch = get_prepared_branch_from_location(
+        args.location, possible_transports=possible_transports,
+        revspec=revspec)
     if args.if_changed_from is not None:
         old_recipe = get_old_recipe(args.if_changed_from, possible_transports)
     else:
@@ -95,11 +79,12 @@ def main():
     if not changed:
         sys.stderr.write("Unchanged\n")
         return 0
-    manifest_path = args.manifest or os.path.join(args.working_basedir,
-                    "bzr-builder.manifest")
+    manifest_path = args.manifest or os.path.join(
+        args.working_basedir, "bzr-builder.manifest")
     build_tree(base_branch, args.working_basedir)
-    write_manifest_to_transport(manifest_path, base_branch,
-        possible_transports)
+    write_manifest_to_transport(
+        manifest_path, base_branch, possible_transports)
+
 
 if __name__ == '__main__':
     try:

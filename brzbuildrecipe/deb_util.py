@@ -1,16 +1,16 @@
 # bzr-builder: a bzr plugin to constuct trees based on recipes
 # Copyright 2009-2011 Canonical Ltd.
 
-# This program is free software: you can redistribute it and/or modify it 
-# under the terms of the GNU General Public License version 3, as published 
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 3, as published
 # by the Free Software Foundation.
 
-# This program is distributed in the hope that it will be useful, but 
-# WITHOUT ANY WARRANTY; without even the implied warranties of 
-# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR 
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranties of
+# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR
 # PURPOSE.  See the GNU General Public License for more details.
 
-# You should have received a copy of the GNU General Public License along 
+# You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Debian-specific utility functions."""
@@ -35,15 +35,7 @@ from .recipe import (
     SubstitutionUnavailable,
     )
 
-try:
-    from debian import changelog, deb822
-except ImportError:
-    # In older versions of python-debian the main package was named 
-    # debian_bundle
-    from debian_bundle import changelog, deb822
-
-
-get_maintainer = changelog.get_maintainer
+from debian import changelog, deb822
 
 # The default distribution used by add_autobuild_changelog_entry()
 DEFAULT_UBUNTU_DISTRIBUTION = "lucid"
@@ -59,8 +51,7 @@ def debian_source_package_name(control_path):
     """
     with open(control_path, 'r') as f:
         control = deb822.Deb822(f)
-        # Debian policy states package names are [a-z0-9][a-z0-9.+-]+ so ascii
-        return control["Source"].encode("ascii")
+        return control["Source"]
 
 
 def reconstruct_pristine_tar(dest, delta, dest_filename):
@@ -72,7 +63,8 @@ def reconstruct_pristine_tar(dest, delta, dest_filename):
     """
     command = ["pristine-tar", "gentar", "-",
                os.path.abspath(dest_filename)]
-    _run_command(command, dest,
+    _run_command(
+        command, dest,
         "Reconstructing pristine tarball",
         "Generating tar from delta failed",
         not_installed_msg="pristine-tar is not installed",
@@ -112,21 +104,22 @@ def extract_upstream_tarball(branch, package, version, dest_dir):
         dest = os.path.join(dest_dir, "orig")
         try:
             _mod_export.export(tree, dest, format='dir')
-            reconstruct_pristine_tar(dest, delta,
-                os.path.join(dest_dir, dest_filename))
+            reconstruct_pristine_tar(
+                dest, delta, os.path.join(dest_dir, dest_filename))
         finally:
             if os.path.exists(dest):
                 shutil.rmtree(dest)
     else:
         # Default to .tar.gz
         dest_filename = "%s_%s.orig.tar.gz" % (package, version)
-        _mod_export.export(tree, os.path.join(dest_dir, dest_filename),
-                per_file_timestamps=True)
+        _mod_export.export(
+            tree, os.path.join(dest_dir, dest_filename),
+            per_file_timestamps=True)
 
 
-def add_autobuild_changelog_entry(base_branch, basedir, package,
-        distribution=None, author_name=None, author_email=None,
-        append_version=None):
+def add_autobuild_changelog_entry(
+        base_branch, basedir, package, distribution=None, author_name=None,
+        author_email=None, append_version=None):
     """Add a new changelog entry for an autobuild.
 
     :param base_branch: Recipe base branch
@@ -160,7 +153,7 @@ def add_autobuild_changelog_entry(base_branch, basedir, package,
         if file_found:
             if len(contents.strip()) > 0:
                 reason = ("debian/changelog didn't contain any "
-                         "parseable stanzas")
+                          "parseable stanzas")
             else:
                 reason = "debian/changelog was empty"
         else:
@@ -171,13 +164,14 @@ def add_autobuild_changelog_entry(base_branch, basedir, package,
         try:
             substitute_changelog_vars(base_branch, None, cl)
         except SubstitutionUnavailable as e:
-            raise errors.BzrCommandError("No previous changelog to "
-                    "take the upstream version from as %s was "
-                    "used: %s: %s." % (e.name, e.reason, reason))
+            raise errors.BzrCommandError(
+                "No previous changelog to "
+                "take the upstream version from as %s was "
+                "used: %s: %s." % (e.name, e.reason, reason))
     # Use debian packaging environment variables
     # or default values if they don't exist
     if author_name is None or author_email is None:
-        author_name, author_email = get_maintainer()
+        author_name, author_email = changelog.get_maintainer()
         # The python-debian package breaks compatibility at version 0.1.20 by
         # switching to expecting (but not checking for) unicode rather than
         # bytestring inputs. Detect this and decode environment if needed.
@@ -194,17 +188,15 @@ def add_autobuild_changelog_entry(base_branch, basedir, package,
     try:
         changelog.Version(version)
     except (changelog.VersionError, ValueError) as e:
-        raise errors.BzrCommandError("Invalid deb-version: %s: %s"
-                % (version, e))
-    cl.new_block(package=package, version=version,
-            distributions=distribution, urgency="low",
-            changes=['', '  * Auto build.', ''],
-            author=author, date=date)
-    cl_f = open(cl_path, 'wb')
-    try:
+        raise errors.BzrCommandError(
+            "Invalid deb-version: %s: %s" % (version, e))
+    cl.new_block(
+        package=package, version=version,
+        distributions=distribution, urgency="low",
+        changes=['', '  * Auto build.', ''],
+        author=author, date=date)
+    with open(cl_path, 'w') as cl_f:
         cl.write_to_open_file(cl_f)
-    finally:
-        cl_f.close()
 
 
 def calculate_package_dir(package_name, package_version, working_basedir):
@@ -215,13 +207,15 @@ def calculate_package_dir(package_name, package_version, working_basedir):
     :param package_name: Package name
     :param working_basedir: Base directory
     """
-    package_basedir = "%s-%s" % (package_name, package_version.upstream_version)
+    package_basedir = "%s-%s" % (
+        package_name, package_version.upstream_version)
     package_dir = os.path.join(working_basedir, package_basedir)
     return package_dir
 
 
-def _run_command(command, basedir, msg, error_msg,
-        not_installed_msg=None, env=None, success_exit_codes=None, indata=None):
+def _run_command(
+        command, basedir, msg, error_msg, not_installed_msg=None, env=None,
+        success_exit_codes=None, indata=None):
     """ Run a command in a subprocess.
 
     :param command: list with command and parameters
@@ -230,7 +224,8 @@ def _run_command(command, basedir, msg, error_msg,
     :param not_installed_msg: the message to display if the command
         isn't available.
     :param env: Optional environment to use rather than os.environ.
-    :param success_exit_codes: Exit codes to consider succesfull, defaults to [0].
+    :param success_exit_codes:
+        Exit codes to consider succesfull, defaults to [0].
     :param indata: Data to write to standard input
     """
     def subprocess_setup():
@@ -246,8 +241,9 @@ def _run_command(command, basedir, msg, error_msg,
         kwargs["env"] = env
     trace.mutter("running: %r", command)
     try:
-        proc = subprocess.Popen(command, cwd=basedir,
-                stdin=subprocess.PIPE, preexec_fn=subprocess_setup, **kwargs)
+        proc = subprocess.Popen(
+            command, cwd=basedir, stdin=subprocess.PIPE,
+            preexec_fn=subprocess_setup, **kwargs)
     except OSError as e:
         if e.errno != errno.ENOENT:
             raise
@@ -271,11 +267,11 @@ def build_source_package(basedir, tgz_check=True):
     else:
         command.append("--no-tgz-check")
     command.extend(["-i", "-I", "-S", "-uc", "-us"])
-    _run_command(command, basedir,
-        "Building the source package",
+    _run_command(
+        command, basedir, "Building the source package",
         "Failed to build the source package",
         not_installed_msg="debuild is not installed, please install "
-            "the devscripts package.")
+        "the devscripts package.")
 
 
 def get_source_format(path):
@@ -297,7 +293,7 @@ def get_source_format(path):
 def convert_3_0_quilt_to_native(path):
     """Convert a package in 3.0 (quilt) format to 3.0 (native).
 
-    This applies all patches in the package and updates the 
+    This applies all patches in the package and updates the
     debian/source/format file.
 
     :param path: Path to the package on disk
@@ -306,7 +302,8 @@ def convert_3_0_quilt_to_native(path):
     patches_dir = os.path.join(path, "debian", "patches")
     series_file = os.path.join(patches_dir, "series")
     if os.path.exists(series_file):
-        _run_command(["quilt", "push", "-a", "-v"], path,
+        _run_command(
+            ["quilt", "push", "-a", "-v"], path,
             "Applying quilt patches",
             "Failed to apply quilt patches",
             not_installed_msg="quilt is not installed, please install it.",

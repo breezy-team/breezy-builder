@@ -41,7 +41,9 @@ def watch(owner_name, archive_name, package_name, version):
     archive = owner.getPPAByName(name=archive_name)
     end_states = ['FAILEDTOBUILD', 'FULLYBUILT']
     important_arches = ['amd64', 'i386', 'armel']
-    trace.note("Waiting for version %s of %s to build." % (version, package_name))
+    trace.note(
+        "Waiting for version %s of %s to build." % (
+            version, package_name))
     start = time.time()
     while True:
         sourceRecords = list(archive.getPublishedSources(
@@ -49,9 +51,10 @@ def watch(owner_name, archive_name, package_name, version):
         if not sourceRecords:
             if time.time() - 900 > start:
                 # Over 15 minutes and no source yet, upload FAIL.
-                raise errors.BzrCommandError("No source record in %s/%s for "
-                    "package %s=%s after 15 minutes." % (owner_name,
-                        archive_name, package_name, version))
+                raise errors.BzrCommandError(
+                    "No source record in %s/%s for "
+                    "package %s=%s after 15 minutes." % (
+                        owner_name, archive_name, package_name, version))
                 return False
             trace.note("Source not available yet - waiting.")
             time.sleep(60)
@@ -80,13 +83,13 @@ def watch(owner_name, archive_name, package_name, version):
             extra = ' on ' + ', '.join(missing)
         else:
             extra = ''
-        trace.note("%s is still in %s%s" % (pkg.display_name,
-                    buildSummaries['status'], extra))
+        trace.note("%s is still in %s%s" % (
+            pkg.display_name, buildSummaries['status'], extra))
         time.sleep(60)
     trace.note("%s is now %s" % (pkg.display_name, buildSummaries['status']))
     result = True
     if pkg.status.lower() != 'published':
-        result = False # should this perhaps keep waiting?
+        result = False  # should this perhaps keep waiting?
     if buildSummaries['status'] != 'FULLYBUILT':
         if buildSummaries['status'] == 'NEEDSBUILD':
             # We're stopping early cause the important_arches are built.

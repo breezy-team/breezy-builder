@@ -1,13 +1,13 @@
 # bzr-builder: a bzr plugin to constuct trees based on recipes
 # Copyright 2009-2011 Canonical Ltd.
 
-# This program is free software: you can redistribute it and/or modify it 
-# under the terms of the GNU General Public License version 3, as published 
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 3, as published
 # by the Free Software Foundation.
 
-# This program is distributed in the hope that it will be useful, but 
-# WITHOUT ANY WARRANTY; without even the implied warranties of 
-# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR 
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranties of
+# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR
 # PURPOSE.  See the GNU General Public License for more details.
 
 # You should have received a copy of the GNU General Public License along
@@ -32,12 +32,8 @@ from .recipe import (
     branch_vars,
     simple_vars,
     )
-try:
-    from debian import changelog
-except ImportError:
-    # In older versions of python-debian the main package was named 
-    # debian_bundle
-    from debian_bundle import changelog
+
+from debian import changelog
 
 
 class DebUpstreamVariable(BranchSubstitutionVariable):
@@ -59,7 +55,8 @@ class DebUpstreamVariable(BranchSubstitutionVariable):
 
     def get(self):
         if self._version is None:
-            raise SubstitutionUnavailable(self.name,
+            raise SubstitutionUnavailable(
+                self.name,
                 "No previous changelog to take the upstream version from")
         # Should we include the epoch?
         return self._version.upstream_version
@@ -84,15 +81,19 @@ class DebVersionVariable(BranchSubstitutionVariable):
 
     def get(self):
         if self._version is None:
-            raise SubstitutionUnavailable(self.name,
+            raise SubstitutionUnavailable(
+                self.name,
                 "No previous changelog to take the version from")
         return str(self._version)
+
 
 dfsg_regex = lazy_regex.lazy_compile(
     r'[+.]*dfsg[.]*[0-9]+')
 
+
 version_regex = lazy_regex.lazy_compile(
     r'([~+])(svn[0-9]+|bzr[0-9]+|git[0-9a-f]+)')
+
 
 def version_extract_base(version):
     version = dfsg_regex.sub("", version)
@@ -112,9 +113,10 @@ class DebUpstreamBaseVariable(DebUpstreamVariable):
         return version
 
 
-ok_to_preserve = [DebUpstreamVariable, DebUpstreamBaseVariable,
-    DebVersionVariable]
-deb_branch_vars = [DebVersionVariable, DebUpstreamBaseVariable, DebUpstreamVariable]
+ok_to_preserve = [
+    DebUpstreamVariable, DebUpstreamBaseVariable, DebVersionVariable]
+deb_branch_vars = [
+    DebVersionVariable, DebUpstreamBaseVariable, DebUpstreamVariable]
 
 
 def check_expanded_deb_version(base_branch):
@@ -140,7 +142,8 @@ def check_expanded_deb_version(base_branch):
             for name in base_branch.list_branch_names():
                 available_tokens.append(var_kls.determine_name(name))
             available_tokens.append(var_kls.determine_name(None))
-        raise errors.BzrCommandError("deb-version not fully "
+        raise errors.BzrCommandError(
+                "deb-version not fully "
                 "expanded: %s. Valid substitutions in recipe format %s are: %s"
                 % (base_branch.deb_version, base_branch.format,
                     available_tokens))
@@ -186,15 +189,18 @@ def substitute_changelog_vars(base_branch, branch_name, changelog):
     :param branch_name: Branch name (None for root branch)
     :param changelog: Changelog object to use
     """
-    from .deb_version import DebUpstreamVariable, DebUpstreamBaseVariable, DebVersionVariable
-    debupstream_var = DebUpstreamVariable.from_changelog(branch_name, changelog)
+    from .deb_version import (
+        DebUpstreamVariable, DebUpstreamBaseVariable, DebVersionVariable)
+    debupstream_var = DebUpstreamVariable.from_changelog(
+        branch_name, changelog)
     base_branch.deb_version = debupstream_var.replace(base_branch.deb_version)
     if base_branch.format < 0.3:
         # The other variables were introduced in recipe format 0.4
         return
     debupstreambase_var = DebUpstreamBaseVariable.from_changelog(
         branch_name, changelog)
-    base_branch.deb_version = debupstreambase_var.replace(base_branch.deb_version)
+    base_branch.deb_version = debupstreambase_var.replace(
+        base_branch.deb_version)
     pkgversion_var = DebVersionVariable.from_changelog(branch_name, changelog)
     base_branch.deb_version = pkgversion_var.replace(base_branch.deb_version)
 
@@ -206,5 +212,6 @@ def substitute_time(base_branch, time):
     """
     if base_branch.deb_version is None:
         return
-    base_branch.deb_version = TimeVariable(time).replace(base_branch.deb_version)
-    base_branch.deb_version = DateVariable(time).replace(base_branch.deb_version)
+    for var_kls in [TimeVariable, DateVariable]:
+        base_branch.deb_version = var_kls(time).replace(
+            base_branch.deb_version)

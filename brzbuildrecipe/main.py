@@ -1,66 +1,55 @@
 # bzr-builder: a bzr plugin to constuct trees based on recipes
 # Copyright 2009 Canonical Ltd.
 
-# This program is free software: you can redistribute it and/or modify it 
-# under the terms of the GNU General Public License version 3, as published 
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 3, as published
 # by the Free Software Foundation.
 
-# This program is distributed in the hope that it will be useful, but 
-# WITHOUT ANY WARRANTY; without even the implied warranties of 
-# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR 
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranties of
+# MERCHANTABILITY, SATISFACTORY QUALITY, or FITNESS FOR A PARTICULAR
 # PURPOSE.  See the GNU General Public License for more details.
 
-# You should have received a copy of the GNU General Public License along 
+# You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Subcommands provided by bzr-builder."""
 
-import argparse
-from StringIO import StringIO
-import datetime
-import os
-import shutil
-import tempfile
+from io import StringIO
 
 from breezy import (
     errors,
     lazy_regex,
-    trace,
     transport as _mod_transport,
-    urlutils,
     )
 from breezy.branch import Branch
-from breezy.commands import Command
-from breezy.option import Option
 
 from .recipe import (
     BaseRecipeBranch,
-    build_tree,
     RecipeParser,
-    resolve_revisions,
     SAFE_INSTRUCTIONS,
     )
 
-import breezy.plugins.launchpad
+import breezy.plugins.launchpad  # noqa: F401
 
 
-def write_manifest_to_transport(location, base_branch,
-        possible_transports=None):
+def write_manifest_to_transport(
+        location, base_branch, possible_transports=None):
     """Write a manifest to disk.
 
     :param location: Location to write to
     :param base_branch: Recipe base branch
     """
-    child_transport = _mod_transport.get_transport(location,
-        possible_transports=possible_transports)
+    child_transport = _mod_transport.get_transport(
+        location, possible_transports=possible_transports)
     base_transport = child_transport.clone('..')
     base_transport.create_prefix()
     basename = base_transport.relpath(child_transport.base)
-    base_transport.put_bytes(basename, str(base_branch))
+    base_transport.put_bytes(basename, str(base_branch).encode())
 
 
-def get_branch_from_recipe_location(recipe_location, safe=False,
-        possible_transports=None):
+def get_branch_from_recipe_location(
+        recipe_location, safe=False, possible_transports=None):
     """Return the base branch for the specified recipe.
 
     :param recipe_location: The URL of the recipe file to retrieve.
@@ -72,10 +61,11 @@ def get_branch_from_recipe_location(recipe_location, safe=False,
     else:
         permitted_instructions = None
     try:
-        (basename, f) = get_recipe_from_location(recipe_location, possible_transports)
+        (basename, f) = get_recipe_from_location(
+            recipe_location, possible_transports)
     except errors.NoSuchFile:
-        raise errors.BzrCommandError("Specified recipe does not exist: "
-                "%s" % recipe_location)
+        raise errors.BzrCommandError(
+            "Specified recipe does not exist: %s" % recipe_location)
     try:
         parser = RecipeParser(f, filename=recipe_location)
     finally:
@@ -83,26 +73,27 @@ def get_branch_from_recipe_location(recipe_location, safe=False,
     return parser.parse(permitted_instructions=permitted_instructions)
 
 
-def get_branch_from_branch_location(branch_location, possible_transports=None,
-        revspec=None):
+def get_branch_from_branch_location(
+        branch_location, possible_transports=None, revspec=None):
     """Return the base branch for the branch location.
 
     :param branch_location: The URL of the branch to retrieve.
     """
     # Make sure it's actually a branch
     Branch.open(branch_location)
-    return BaseRecipeBranch(branch_location, None,
-        RecipeParser.NEWEST_VERSION, revspec=revspec)
+    return BaseRecipeBranch(
+        branch_location, None, RecipeParser.NEWEST_VERSION, revspec=revspec)
 
 
 def get_old_recipe(if_changed_from, possible_transports=None):
     try:
-        (basename, f) = get_recipe_from_location(if_changed_from, possible_transports)
+        (basename, f) = get_recipe_from_location(
+            if_changed_from, possible_transports)
     except errors.NoSuchFile:
         return None
     try:
-        old_recipe = RecipeParser(f,
-                filename=if_changed_from).parse()
+        old_recipe = RecipeParser(
+            f, filename=if_changed_from).parse()
     finally:
         f.close()
     return old_recipe
@@ -125,13 +116,13 @@ def get_recipe_from_launchpad(username, recipe_name, location):
     try:
         person = lp.people[username]
     except KeyError:
-        raise errors.NoSuchFile(location,
-            "No such Launchpad user %s" % username)
+        raise errors.NoSuchFile(
+            location, "No such Launchpad user %s" % username)
     recipe = person.getRecipe(name=recipe_name)
     if recipe is None:
-        raise errors.NoSuchFile(location,
-            "Launchpad user %s has no recipe %s" % (
-            username, recipe_name))
+        raise errors.NoSuchFile(
+            location, "Launchpad user %s has no recipe %s" % (
+                username, recipe_name))
     return recipe.recipe_text
 
 
@@ -145,18 +136,18 @@ def get_recipe_from_location(location, possible_transports=None):
     m = launchpad_recipe_re.match(location)
     if m:
         (username, recipe_name) = m.groups()
-        text = get_recipe_from_launchpad(username, recipe_name,
-            location)
+        text = get_recipe_from_launchpad(
+            username, recipe_name, location)
         return (recipe_name, StringIO(text))
-    child_transport = _mod_transport.get_transport(location,
-        possible_transports=possible_transports)
+    child_transport = _mod_transport.get_transport(
+        location, possible_transports=possible_transports)
     recipe_transport = child_transport.clone('..')
     basename = recipe_transport.relpath(child_transport.base)
-    return basename, recipe_transport.get(basename)
+    return basename, StringIO(recipe_transport.get_bytes(basename).decode())
 
 
-def get_prepared_branch_from_location(location,
-        safe=False, possible_transports=None,
+def get_prepared_branch_from_location(
+        location, safe=False, possible_transports=None,
         revspec=None):
     """Common code to prepare a branch and do substitutions.
 
@@ -169,15 +160,15 @@ def get_prepared_branch_from_location(location,
         then the command execution should continue.
     """
     try:
-        base_branch = get_branch_from_recipe_location(location, safe=safe,
-            possible_transports=possible_transports)
-    except (_mod_transport.LateReadError, errors.ReadError):
-        # Presume unable to read means location is a directory rather than a file
-        base_branch = get_branch_from_branch_location(location,
-            possible_transports=possible_transports)
+        base_branch = get_branch_from_recipe_location(
+            location, safe=safe, possible_transports=possible_transports)
+    except errors.ReadError:
+        # Presume unable to read means location is a directory rather than a
+        # file
+        base_branch = get_branch_from_branch_location(
+            location, possible_transports=possible_transports)
     else:
         if revspec is not None:
-            raise errors.BzrCommandError("--revision only supported when "
-                "building from branch")
+            raise errors.BzrCommandError(
+                "--revision only supported when building from branch")
     return base_branch
-
