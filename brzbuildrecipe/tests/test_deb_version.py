@@ -48,7 +48,8 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         revid = source.commit("one")
         branch1 = BaseRecipeBranch("source", "{revno}", 0.2, revspec="1")
         branch2 = BaseRecipeBranch(
-            "source", "{revno}", 0.2, revspec="revid:%s" % revid)
+            "source", "{revno}", 0.2,
+            revspec="revid:%s" % revid.decode('utf-8'))
         self.assertEqual(False, resolve_revisions(
             branch1, if_changed_from=branch2,
             substitute_branch_vars=substitute_branch_vars))
@@ -62,7 +63,8 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         revid = source.commit("one")
         branch1 = BaseRecipeBranch("source", "{revno}", 0.2)
         branch2 = BaseRecipeBranch(
-            "source", "{revno}", 0.2, revspec="revid:%s" % revid)
+            "source", "{revno}", 0.2,
+            revspec="revid:%s" % revid.decode('utf-8'))
         self.assertEqual(False, resolve_revisions(
             branch1, if_changed_from=branch2,
             substitute_branch_vars=substitute_branch_vars))
@@ -80,9 +82,14 @@ class ResolveRevisionsTests(TestCaseWithTransport):
         branch2.nest_branch("bar", branch3)
         branch1.nest_branch("foo", branch2)
         branch4 = BaseRecipeBranch(
-            "source", "{revno}", 0.2, revspec="revid:%s" % revid)
-        branch5 = RecipeBranch("nested1", "source", revspec="revid:%s" % revid)
-        branch6 = RecipeBranch("nested2", "source", revspec="revid:%s" % revid)
+            "source", "{revno}", 0.2,
+            revspec="revid:%s" % revid.decode('utf-8'))
+        branch5 = RecipeBranch(
+            "nested1", "source",
+            revspec="revid:%s" % revid.decode('utf-8'))
+        branch6 = RecipeBranch(
+            "nested2", "source",
+            revspec="revid:%s" % revid.decode('utf-8'))
         branch5.nest_branch("bar", branch6)
         branch4.nest_branch("foo", branch5)
         self.assertEqual(False, resolve_revisions(

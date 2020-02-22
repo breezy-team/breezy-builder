@@ -526,9 +526,9 @@ class BlackboxBuilderTests(TestCaseWithTransport):
               "deb-version 1\nsource 1\n")])
         out, err = self.run_dailydeb("test.recipe working")
         new_cl_contents = (
-            "package (1) unstable; urgency=low\n\n"
-            "  * Auto build.\n\n"
-            " -- Micha\xe2\x97\x88 Sawicz <maint@maint.org>  ")
+            u"package (1) unstable; urgency=low\n\n"
+            u"  * Auto build.\n\n"
+            u" -- Micha\u25c8 Sawicz <maint@maint.org>  ")
         actual_cl_contents = self._get_file_contents(
             "working/test-1/debian/changelog")
         self.assertStartsWith(actual_cl_contents, new_cl_contents)

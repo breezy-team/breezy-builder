@@ -273,7 +273,7 @@ class GitCommitVariable(RevisionVariable):
                 "unable to expand %s for %r in %r: "
                 "not a Git revision" % (
                     self.name, self.revid, self.branch))
-        return commit_sha[:7]
+        return commit_sha[:7].decode('utf-8')
 
 
 class LatestTagVariable(RevisionVariable):
