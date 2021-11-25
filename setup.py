@@ -17,5 +17,5 @@ setup(name="brz-build-recipe",
           'brzbuildrecipe.tests'],
       scripts=['bin/brz-build-daily-recipe', 'bin/brz-build-recipe'],
       package_dir={'brzbuildrecipe': 'brzbuildrecipe'},
-      install_requires=['breezy', 'python-debian', 'python-dateutil'],
+      install_requires=['breezy', 'python-debian'],
       test_requires=['fixtures', 'testtools'],)
